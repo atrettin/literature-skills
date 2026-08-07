@@ -132,6 +132,16 @@ The conversion pipeline has no unit tests. To exercise it end to end, ingest a
 real paper and then run `check_references.py`. `pyrightconfig.json` configures
 the type checks.
 
+[TUNING.md](TUNING.md) lists the numbers that decide how good an answer is. They
+do not decide whether the answer is correct. Three examples:
+
+- how far the search widens when it finds little,
+- which cross-encoder puts the results in order,
+- how much of a paper one chapter holds.
+
+Nobody measured these numbers. Each one is a judgement. Read that file before
+you change one. Add a row to it when you introduce another.
+
 ## What a paper ends up as
 
 ```

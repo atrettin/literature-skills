@@ -35,6 +35,14 @@ you could not verify, and keep it visible.
 - `README.md` documents the skills, their scripts and their commands. When you
   change something that `README.md` describes, update `README.md` in the same
   change.
+- `TUNING.md` lists the parameters that decide how good an answer is. Such a
+  parameter does not decide whether the answer is correct. A threshold, a limit,
+  a weight, a word list and a choice of model are all of this kind. When you add
+  one, add its row to `TUNING.md` in the same change. Say what the parameter
+  does. Say what changes when its value moves. You choose the value by
+  judgement, so write that. Never report a number as measured when nobody
+  measured it. Something outside this repository fixes some numbers, such as the
+  rate limit of an API. Put those in the last section of that file.
 - The arXiv API and the INSPIRE-HEP API both limit their rate. Call them from
   one agent at a time. Do not spawn sub-agents that call these APIs in parallel,
   and do not ingest several papers at the same time. A rate limit that you hit

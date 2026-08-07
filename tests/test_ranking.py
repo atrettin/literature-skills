@@ -58,6 +58,21 @@ def test_coverage_does_not_match_on_a_short_prefix() -> None:
     assert missing == ["ion"]
 
 
+def test_the_prefix_match_begins_at_four_letters() -> None:
+    """The boundary `MIN_PREFIX` names, stated as a relationship and not a value.
+
+    Four letters are a stem worth trusting; three are a coincidence. Both halves
+    are here so that changing `MIN_PREFIX` fails a test that says what changed.
+    """
+    assert rerank.MIN_PREFIX == 4
+
+    _, four = rerank.coverage(["kaon"], "", "kaons in the final state")
+    _, three = rerank.coverage(["pio"], "", "pion production")
+
+    assert four == []
+    assert three == ["pio"]
+
+
 def test_coverage_of_no_terms_is_zero_rather_than_an_error() -> None:
     assert rerank.coverage([], "a title", "an abstract") == (0.0, [])
 
