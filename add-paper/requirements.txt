@@ -1,0 +1,5 @@
+# Dependencies of the add-paper scripts only.
+# Nothing in the neutrino_factory package imports these, so they are not in
+# pyproject.toml. The scripts use urllib and xml from the standard library for
+# the arXiv API, so no HTTP client is needed here.
+TexSoup>=0.3.3

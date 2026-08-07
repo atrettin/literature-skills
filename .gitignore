@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
+
+# Never let a paper's content into this repository — it is copyrighted, and
+# this repo is the part that may be shared.
+literature/
+*.pdf
+*.eps
