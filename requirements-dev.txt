@@ -1,0 +1,9 @@
+# Development only. The skills themselves need nothing from this file.
+#
+# Install into the .venv of the clone, which is what the scripts are run with
+# while the skills are developed here:
+#
+#     .venv/bin/python -m pip install -r requirements-dev.txt
+
+pytest>=8.0
+pyright>=1.1.390

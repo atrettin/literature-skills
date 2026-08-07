@@ -288,12 +288,14 @@ def merge(store: list[dict], incoming: list[dict], slug: str) -> tuple[list[dict
     return records, rewrites, counts
 
 
-def mark_held(records: list[dict], root: Path) -> int:
-    """Point every record at the paper directory holding that work in full.
+def held_index(root: Path) -> dict[str, str]:
+    """Map each identifier of a paper held in full to the directory holding it.
 
-    Matched on the arXiv identifier and DOI written in each INDEX.md, not on
-    the tag, so a paper whose directory name differs from its reference tag is
-    still recognised.
+    Keys are the `arxiv:` and `doi:` forms of `identity_keys`, read from the
+    INDEX.md of every paper, so a caller with a DOI or an arXiv identifier in
+    hand can ask whether the collection already holds that work. A root that
+    does not exist holds nothing, which is an answer rather than an error: a
+    project may have no collection yet.
     """
     held: dict[str, str] = {}
     for index_file in sorted(root.glob("*/INDEX.md")):
@@ -303,6 +305,17 @@ def mark_held(records: list[dict], root: Path) -> int:
             held["arxiv:" + normalize_arxiv(match.group(1))] = slug
         for match in re.finditer(r"^\|\s*DOI\s*\|\s*\[([^\]]+)\]", text, flags=re.MULTILINE):
             held["doi:" + normalize_doi(match.group(1))] = slug
+    return held
+
+
+def mark_held(records: list[dict], root: Path) -> int:
+    """Point every record at the paper directory holding that work in full.
+
+    Matched on the arXiv identifier and DOI written in each INDEX.md, not on
+    the tag, so a paper whose directory name differs from its reference tag is
+    still recognised.
+    """
+    held = held_index(root)
 
     changed = 0
     for record in records:

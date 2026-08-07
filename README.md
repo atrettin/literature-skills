@@ -13,6 +13,7 @@ it.
 | [init-literature](init-literature/SKILL.md) | Starts an empty collection in a project: creates `literature/` with its index, and makes git ignore it. |
 | [add-paper](add-paper/SKILL.md) | Finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, asks INSPIRE-HEP where it was published, resolves its bibliography, and indexes the result. |
 | [use-literature](use-literature/SKILL.md) | How to find and read a paper already in the collection. |
+| [find-papers](find-papers/SKILL.md) | Searches arXiv by the subject of a paper's abstract, ranks the hits against the question with a local cross-encoder, and marks the ones the collection already holds. |
 
 ## Installing
 
@@ -22,7 +23,7 @@ with no per-project setup:
 ```bash
 git clone <this repo> ~/work/software/literature-skills
 
-for s in add-paper use-literature init-literature; do
+for s in add-paper use-literature init-literature find-papers; do
     ln -s ~/work/software/literature-skills/$s ~/.claude/skills/$s
 done
 ```
@@ -52,6 +53,21 @@ install degrades rather than fails:
 | `rsvg-convert` (librsvg) | SVG | `brew install librsvg` |
 | Pillow | raster formats, and the cropping step for everything | in `requirements.txt` |
 
+`find-papers` has one dependency of its own, and it is optional:
+
+```bash
+<project>/.venv/bin/python -m pip install -r ~/work/software/literature-skills/find-papers/requirements.txt
+```
+
+It installs [FlashRank](https://github.com/PrithivirajDamodaran/FlashRank). That
+package runs a cross-encoder on ONNX Runtime and not on torch, so it costs about
+60 MB. It downloads a 21 MB model on first use and keeps it in
+`~/.cache/flashrank`.
+
+The search answers without it. The results are then ordered by how many of the
+question's words each abstract carries. Every report names the order that
+produced it, so a reader always knows which of the two they have.
+
 ## The scripts
 
 Every script is a standalone command line tool, and `--help` gives its full
@@ -67,6 +83,7 @@ developed here.
 | Script | Does |
 |---|---|
 | `arxiv_search.py --title … --author … --year …` | finds the paper on arXiv and prints the candidates |
+| `arxiv_discover.py --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, and marks the ones the collection holds |
 | `arxiv_fetch.py <arxiv-id> --slug <dir>` | ingests one paper: source, chapters, figures, bibliography |
 | `convert_figures.py <paper-dir>` | converts the figures of a paper again |
 | `check_references.py` | asserts that every `[cite: …]` and `[ref: …]` in the collection still resolves |
@@ -79,9 +96,41 @@ Two options of `arxiv_fetch.py` matter while the conversion is worked on:
 keeps the extracted TeX to compare the output against. `--force` overwrites a
 paper directory that exists.
 
-There is no test suite. To exercise the pipeline end to end, ingest a real paper
-and then run `check_references.py`. `pyrightconfig.json` configures the type
-checks.
+## Developing
+
+```bash
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+.venv/bin/python -m pyright
+```
+
+The tests cover the three parts that fail quietly: the queries the scripts send
+to arXiv, the ranking, and the answers the collection gives about a paper.
+
+They call no network. `tests/data/` holds the arXiv responses they run against.
+`tests/data/collection_fixture/` holds the collection they check against. That
+directory is not called `literature`, because git ignores every directory of
+that name.
+
+One group of tests does call arXiv. It is deselected by default:
+
+```bash
+.venv/bin/python -m pytest -m network
+```
+
+Those tests assert what the queries depend on at arXiv:
+
+- A quoted phrase finds far fewer papers than the same words joined with `AND`.
+- An unknown field returns no results and no error.
+- A category excludes its subcategories.
+
+Each of these can change at arXiv rather than here, and arXiv reports none of
+them as a failure. Run this group when a search returns the wrong kind of
+answer.
+
+The conversion pipeline has no unit tests. To exercise it end to end, ingest a
+real paper and then run `check_references.py`. `pyrightconfig.json` configures
+the type checks.
 
 ## What a paper ends up as
 

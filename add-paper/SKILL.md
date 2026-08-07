@@ -45,6 +45,11 @@ $PY $SKILL/scripts/arxiv_search.py \
 Give at least one of the three options. Give more options for a better result.
 The script prints JSON. The top-level `match` field tells you what to do next.
 
+This search finds a paper that you can name. The `find-papers` skill searches by
+subject instead, and answers with the papers whose abstracts are about a
+question. Use that one when the user asks for papers on a topic rather than for
+one paper.
+
 **Search for one paper at a time.** arXiv rate-limits by client and answers
 concurrent queries with `HTTP 429`. The script already waits 3 seconds between
 its own requests, which is enough — but only while a single search runs. Never

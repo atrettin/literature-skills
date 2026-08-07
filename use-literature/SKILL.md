@@ -149,8 +149,12 @@ is the row numbered 3, or 3a and 3b when the paper drew it as panels.
 1. Search the references first: `$PY $LOOKUP --search "<author or title word>"`.
    A paper the collection does not hold may still be cited by one that it does,
    and the answer gives you the arXiv identifier to fetch it by.
-2. Otherwise tell the user that the database has no paper on the subject.
-3. Offer the `add-paper` skill.
+2. Search arXiv with the `find-papers` skill. It searches abstracts rather than
+   titles, so it finds a paper on the subject of the question, and it marks the
+   results the collection already holds. Use it when the question names a
+   subject; `$LOOKUP` above answers when you have a name or a title.
+3. Otherwise tell the user that the database has no paper on the subject.
+4. Offer the `add-paper` skill.
 
 You may add a cited work yourself, without asking, when answering the question
 needs the source rather than the citing paper's summary of it — a number you

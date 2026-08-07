@@ -163,12 +163,13 @@ def main() -> int:
             if needle in haystack(record):
                 take(record)
 
-    found.sort(
-        key=lambda record: (
-            -(record.get("citation_count") if isinstance(record.get("citation_count"), int) else -1),
-            record.get("tag") or "",
-        )
-    )
+    def most_cited_first(record: dict) -> tuple[int, str]:
+        # A record with no count sorts after every record that has one, however
+        # small: an unknown count is not a count of zero.
+        count = record.get("citation_count")
+        return (-count if isinstance(count, int) else 1, record.get("tag") or "")
+
+    found.sort(key=most_cited_first)
 
     print(json.dumps({
         "found": len(found),

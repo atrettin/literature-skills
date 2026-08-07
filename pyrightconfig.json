@@ -1,6 +1,8 @@
 {
-  "include": ["add-paper/scripts"],
+  "include": ["add-paper/scripts", "tests"],
   "extraPaths": ["add-paper/scripts"],
+  "venvPath": ".",
+  "venv": ".venv",
   "pythonVersion": "3.10",
   "typeCheckingMode": "standard",
   "reportMissingImports": "error"
