@@ -181,7 +181,7 @@ def crop_and_shrink(target: Path) -> None:
                 scale = MAX_PIXELS / longest
                 image = image.resize(
                     (max(int(image.width * scale), 1), max(int(image.height * scale), 1)),
-                    Image.LANCZOS,
+                    Image.Resampling.LANCZOS,
                 )
             image.save(target, format="PNG")
     except Exception:

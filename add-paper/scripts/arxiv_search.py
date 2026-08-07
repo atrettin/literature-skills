@@ -286,7 +286,7 @@ def truncate(text: str, limit: int = SUMMARY_CHARS) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--title", help="paper title, exact or partial")
     parser.add_argument("--author", help="one author name; the surname is what matters")
     parser.add_argument(

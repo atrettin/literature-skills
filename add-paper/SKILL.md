@@ -12,17 +12,28 @@ Two scripts do the mechanical work. You do the reading and the summaries.
 
 ## Before you start
 
-1. Run `.venv/bin/python -c "import TexSoup"` in the repository root.
-2. If the command fails, run
-   `.venv/bin/python -m pip install -r .claude/skills/add-paper/requirements.txt`.
-3. Run every command from the repository root.
+This skill is installed once and used from any project, so nothing below can
+assume a fixed path. Two shorthands are used throughout:
+
+- **`$SKILL`** — this skill's own directory. The line *"Base directory for this
+  skill"*, printed when the skill loads, gives it. The scripts live in
+  `$SKILL/scripts/`.
+- **`$PY`** — the project's Python. Use `.venv/bin/python` when the project has
+  a virtual environment, otherwise `python3`.
+
+Then:
+
+1. Run `$PY -c "import TexSoup, PIL"`.
+2. If that fails, run `$PY -m pip install -r $SKILL/requirements.txt`.
+3. Run every command from the root of the project, so that `literature/`
+   resolves.
 
 ## Step 1. Search arXiv
 
 Run the search script with the information that the user gave you:
 
 ```bash
-.venv/bin/python .claude/skills/add-paper/scripts/arxiv_search.py \
+$PY $SKILL/scripts/arxiv_search.py \
     --title "<title>" --author "<author>" --year <year>
 ```
 
@@ -97,7 +108,7 @@ year of the arXiv submission, not the year of the journal. Example:
 ## Step 4. Fetch the paper
 
 ```bash
-.venv/bin/python .claude/skills/add-paper/scripts/arxiv_fetch.py <arxiv_id> \
+$PY $SKILL/scripts/arxiv_fetch.py <arxiv_id> \
     --slug <slug>
 ```
 
@@ -120,7 +131,7 @@ keeps the figure either way.
 paper that was ingested before this step existed:
 
 ```bash
-.venv/bin/python .claude/skills/add-paper/scripts/convert_figures.py \
+$PY $SKILL/scripts/convert_figures.py \
     literature/<slug>
 ```
 

@@ -28,6 +28,7 @@ import tarfile
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -985,8 +986,6 @@ def write_figures_index(records: list[dict], figures_dir: Path) -> None:
 
 def fetch_metadata_by_id(arxiv_id: str) -> dict:
     """Query the arXiv API for a single paper's metadata."""
-    import urllib.parse
-
     params = urllib.parse.urlencode({"id_list": arxiv_id, "max_results": 1})
     url = "http://export.arxiv.org/api/query?%s" % params
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
@@ -1005,7 +1004,7 @@ def fetch_metadata_by_id(arxiv_id: str) -> dict:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("arxiv_id", help="arXiv identifier, for example 1706.03621")
     parser.add_argument("--slug", required=True, help="directory name under the literature root")
     parser.add_argument("--literature-root", type=Path, default=Path("literature"))

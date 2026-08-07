@@ -1,0 +1,7 @@
+{
+  "include": ["add-paper/scripts"],
+  "extraPaths": ["add-paper/scripts"],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "standard",
+  "reportMissingImports": "error"
+}

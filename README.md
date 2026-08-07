@@ -1,46 +1,50 @@
-# claude-skills
+# literature-skills
 
-Claude Code skills for building and reading a local literature database of
-physics papers.
+Claude Code skills for building and reading a local database of scientific
+papers, stored as plain text that both humans and agents can read.
 
-The database itself is **not** version controlled anywhere — the papers are
-copyrighted. This repository holds only the skills and their scripts.
+The papers themselves are **never** version controlled — they are copyrighted.
+This repository holds only the skills and their scripts. A project's
+`literature/` directory stays out of git, and `init-literature` makes sure of
+it.
 
 | Skill | What it does |
 |---|---|
+| [init-literature](init-literature/SKILL.md) | Starts an empty collection in a project: creates `literature/` with its index, and makes git ignore it. |
 | [add-paper](add-paper/SKILL.md) | Finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, and indexes the result. |
-| [use-literature](use-literature/SKILL.md) | How to find and read a paper already in the database. |
+| [use-literature](use-literature/SKILL.md) | How to find and read a paper already in the collection. |
 
-## Installing into a project
+## Installing
 
-The skills are picked up from a project's `.claude/skills/` directory. Symlink
-them in rather than copying, so every project runs the same version:
+Install once per machine, at the user level, and every project sees the skills
+with no per-project setup:
 
 ```bash
-git clone <this repo> ~/work/software/claude-skills
+git clone <this repo> ~/work/software/literature-skills
 
-cd <your project>
-mkdir -p .claude/skills
-ln -s ~/work/software/claude-skills/add-paper      .claude/skills/add-paper
-ln -s ~/work/software/claude-skills/use-literature .claude/skills/use-literature
+for s in add-paper use-literature init-literature; do
+    ln -s ~/work/software/literature-skills/$s ~/.claude/skills/$s
+done
 ```
 
-Project-specific skills stay as ordinary directories alongside the symlinks.
+They are symlinks, so `git pull` in the clone updates every project at once, and
+an edit in the clone takes effect immediately.
 
-The project needs a `literature/` directory for the papers to land in, and
-should ignore it in its own `.gitignore`.
+To install for one project only, symlink into that project's `.claude/skills/`
+instead of `~/.claude/skills/`.
 
 ## Requirements
 
-Python packages, into the project's virtual environment:
+The skills run their scripts with the Python of whichever project they are used
+from. Install the dependencies there:
 
 ```bash
-pip install -r add-paper/requirements.txt
+<project>/.venv/bin/python -m pip install -r ~/work/software/literature-skills/add-paper/requirements.txt
 ```
 
 External tools, needed only for the figure conversion. A figure whose converter
-is missing is kept in its original format and reported as a warning, so a
-partial install degrades rather than fails:
+is missing keeps its original format and is reported as a warning, so a partial
+install degrades rather than fails:
 
 | Tool | Handles | Install (macOS) |
 |---|---|---|
@@ -48,7 +52,7 @@ partial install degrades rather than fails:
 | `rsvg-convert` (librsvg) | SVG | `brew install librsvg` |
 | Pillow | raster formats, and the cropping step for everything | in `requirements.txt` |
 
-## Layout a paper ends up with
+## What a paper ends up as
 
 ```
 literature/<first-author>_<year>_<keywords>/
@@ -57,3 +61,6 @@ literature/<first-author>_<year>_<keywords>/
 ├── figures/<name>.png        cropped PNGs, embedded in the chapters
 └── figures_raw/              the arXiv originals, never deleted
 ```
+
+Chapters are written to render in a Markdown preview: display maths as
+`$$ … $$`, figures as centred `<img>` blocks with their captions beneath.

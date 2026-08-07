@@ -1,5 +1,12 @@
-# Dependencies of the add-paper scripts only.
-# Nothing in the neutrino_factory package imports these, so they are not in
-# pyproject.toml. The scripts use urllib and xml from the standard library for
-# the arXiv API, so no HTTP client is needed here.
+# Dependencies of the add-paper scripts. Install them into the Python
+# environment of whichever project the skill is used from; no project needs
+# them at runtime, so they do not belong in that project's own dependencies.
+# The arXiv API is reached with urllib and xml from the standard library, so
+# no HTTP client is needed here.
+
+# Parses the TeX source into sections.
 TexSoup>=0.3.3
+
+# Crops the converted figures, and converts the raster ones. Without it the
+# figures are still produced, but keep their original whitespace.
+Pillow>=10.0
