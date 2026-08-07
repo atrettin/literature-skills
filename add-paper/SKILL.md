@@ -164,7 +164,7 @@ is missing is copied over unconverted and reported as a warning — the paper
 keeps the figure either way.
 
 `convert_figures.py` does this work and also runs on its own, to convert a
-paper that was ingested before this step existed:
+paper whose `figures/` holds anything other than cropped PNGs:
 
 ```bash
 $PY $SKILL/scripts/convert_figures.py \
@@ -210,6 +210,23 @@ as text:
 - Figures are embedded as a centred `<img>` pointing at `../figures/<name>.png`,
   with the caption beneath. HTML rather than Markdown, because the images need
   a width.
+- Equations, figures, tables and sections are numbered as the conversion meets
+  them, and each one that the paper labelled gets an `<a id="...">` anchor named
+  after that label. The paper's own `\ref` commands become links to those
+  anchors: `eq. ([6](#eq-ckmt))` in the same chapter,
+  `Section [4](04_partially_conserved_axial_vector_current.md#sec-pcac)` across
+  chapters. An equation carries its number in the maths itself, as `\tag{6}` or,
+  in a multi-row `align`, as `\qquad (6)` on each numbered row.
+
+The numbers are counted afresh, not read off the published paper, so a paper
+that renumbers by hand can come out a little different. The link still reaches
+the right object. Section numbers are the collection's chapter numbers, which
+count `Front matter` as chapter 1 when there is one, so they can sit one above
+the numbers printed in the paper.
+
+The manifest's `labels` block says what each label resolved to.
+`unresolved_refs` names the labels that resolved to nothing — those keep their
+`[ref: label]` marker in the text, and a warning says how many there were.
 
 Read the `warnings` field of the manifest. Tell the user about each warning.
 A `parser` value of `fallback` means that TexSoup did not parse the source.
@@ -311,6 +328,12 @@ page.
 If `check_references.py` reports anything under `unresolved`, say so — a
 citation in a chapter is naming a record that does not exist, and the claim it
 supports cannot be traced until it does.
+
+`dangling_refs` is the same check for the papers' internal cross-references: a
+link to an equation, figure or section anchor that is not there, or a
+`[ref: label]` the conversion could not resolve. It does not fail the run. A
+paper ingested before cross-references were linked reports one entry per
+reference it holds; re-fetching it is what fixes that.
 
 `reference_lookup.py` reads the store the merge just wrote, and is how anything
 downstream resolves a tag. `REFERENCES.md` is the view beside it, for a person

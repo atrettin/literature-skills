@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Turn a paper's bibliography into records that a citation can point at.
 
-A citation in a converted chapter used to read `[cite: Lipari:2002at]` and stop
-there: the key is the citing author's private label and nothing in the
-collection could say what it meant. This module reads the bibliography that
-arXiv ships alongside the TeX, works out which publication each key names, and
-asks INSPIRE-HEP and Crossref for the exact title, authors, year, journal and
-DOI.
+A citation in a converted chapter reads `[cite: Lipari:2002at]`, and the key on
+its own is the citing author's private label that nothing in the collection can
+interpret. This module reads the bibliography that arXiv ships alongside the
+TeX, works out which publication each key names, and asks INSPIRE-HEP and
+Crossref for the exact title, authors, year, journal and DOI.
 
 The LaTeX key is the only thing that maps a `\\cite` to a publication — INSPIRE
 cannot do it, because its own reference labels are bibliography *numbers*, not

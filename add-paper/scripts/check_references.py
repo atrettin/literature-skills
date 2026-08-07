@@ -14,10 +14,13 @@ What it reports:
     duplicate    one work holds two records, so its citations are split
     orphan       a record nothing cites any more
     stale        a record points at a paper directory that is not there
+    dangling ref a link to an equation, figure or section that is not there
 
 Exit status is 1 when anything unresolved, duplicated or stale was found.
-Orphans and unverified rows are reported but do not fail: an orphan is what a
-re-ingested paper leaves behind, and an unverified row is honest about itself.
+Orphans, unverified rows and dangling cross-references are reported but do not
+fail: an orphan is what a re-ingested paper leaves behind, an unverified row is
+honest about itself, and a cross-reference the paper's own source never defined
+cannot be made to resolve.
 
 Usage:
     check_references.py
@@ -38,6 +41,11 @@ import reference_store  # noqa: E402
 from arxiv_search import collapse_whitespace  # noqa: E402
 
 CITE_TAG = re.compile(r"\[cite:\s*([^\]]*)\]")
+# A cross-reference the conversion could not resolve keeps its marker.
+REF_TAG = re.compile(r"\[ref:\s*([^\]]*)\]")
+# `[5](03_model.md#eq-ckmt)` and `[5](#eq-ckmt)` for a target in the same file.
+REF_LINK = re.compile(r"\]\(([^)#]*)#([^)\s]+)\)")
+ANCHOR = re.compile(r'<a id="([^"]*)"></a>')
 
 
 def read_citations(root: Path) -> dict[str, list[str]]:
@@ -53,6 +61,42 @@ def read_citations(root: Path) -> dict[str, list[str]]:
                 if tag:
                     found[tag].append(str(path.relative_to(root)))
     return found
+
+
+def read_cross_references(root: Path) -> list[dict]:
+    """Every cross-reference in the collection that lands nowhere.
+
+    A chapter links to its own equations, figures and sections by anchor:
+    `eq. ([5](03_model.md#eq-ckmt))`. Nothing keeps a link and the anchor it
+    names in step, and a `[ref: label]` marker still standing means the label
+    had no target when the paper was converted.
+    """
+    anchors: dict[Path, set[str]] = {}
+    texts: dict[Path, str] = {}
+    for path in sorted(root.rglob("*.md")):
+        if path.parent == root:
+            continue
+        texts[path] = path.read_text(encoding="utf-8", errors="replace")
+        anchors[path.resolve()] = set(ANCHOR.findall(texts[path]))
+
+    broken = []
+    for path, text in texts.items():
+        where = str(path.relative_to(root))
+        for label in REF_TAG.findall(text):
+            broken.append(
+                {"in": where, "label": collapse_whitespace(label), "why": "no target"}
+            )
+        for target, anchor in REF_LINK.findall(text):
+            if "://" in target:
+                continue  # a fragment on someone else's site
+            destination = (path.parent / target).resolve() if target else path.resolve()
+            if destination not in anchors:
+                broken.append({"in": where, "link": target + "#" + anchor,
+                               "why": "no such file"})
+            elif anchor not in anchors[destination]:
+                broken.append({"in": where, "link": target + "#" + anchor,
+                               "why": "no such anchor"})
+    return broken
 
 
 def check(root: Path) -> dict:
@@ -87,6 +131,7 @@ def check(root: Path) -> dict:
         ),
         "orphans": sorted(tag for tag in tags if tag and tag not in cited),
         "unverified": sum(1 for record in store if not record.get("verified")),
+        "dangling_refs": read_cross_references(root),
     }
 
 

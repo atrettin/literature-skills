@@ -9,8 +9,8 @@ A paper directory ends up with two figure folders:
 The originals are kept so a conversion can be redone — with a different
 resolution, or a better tool — without downloading the paper again.
 
-Used by arxiv_fetch.py during ingestion, and runnable on its own to convert
-papers that were ingested before this step existed:
+Used by arxiv_fetch.py during ingestion, and runnable on its own to convert a
+paper whose figures/ holds anything other than cropped PNGs:
 
     convert_figures.py literature/<slug> [...]
     convert_figures.py --all literature

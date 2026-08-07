@@ -481,7 +481,7 @@ CITE_TAG = re.compile(r"\[cite:\s*([^\]]*)\]")
 
 
 def apply_cite_tags(text: str, key_tags: dict[str, list[str]]) -> str:
-    """Put reference tags where the paper's own LaTeX keys used to be.
+    """Put reference tags in place of the paper's own LaTeX keys.
 
     `[cite: Lipari:2002at,Katori:2016yel]` becomes
     `[cite: lipari_2002_..., katori_2018_...]`, each tag naming a row of
@@ -508,10 +508,10 @@ def drop_bibliography(body: str) -> str:
     """Take the reference list out of the document.
 
     A paper that types its bibliography out in the TeX leaves it after the last
-    \\section, so it lands in that chapter — which is how a chapter on cross
-    sections came to end in "F.A. Brieva and J.R. Rook, Nuclear Physics A291".
+    \\section, so left alone it lands in that chapter, and a chapter on cross
+    sections ends in "F.A. Brieva and J.R. Rook, Nuclear Physics A291".
     references.py has already read it by the time this runs, and the entries
-    now live in the reference store where a citation can reach them.
+    live in the reference store where a citation can reach them.
     """
     while True:
         found = find_environment(body, "thebibliography")
@@ -614,6 +614,309 @@ def clean_inline(text: str) -> str:
     return collapse_whitespace(clean_text(text, figures=None, chapter="")[0])
 
 
+# ==========================================================================
+# cross-references: numbering, anchors and links
+# ==========================================================================
+
+REF_TAG = re.compile(r"\[ref:\s*([^\]]*)\]")
+# Environments whose rows are numbered one by one, as LaTeX numbers them.
+ROW_NUMBERED_ENVIRONMENTS = frozenset(
+    {"align", "align*", "eqnarray", "eqnarray*", "gather", "gather*",
+     "flalign", "flalign*"}
+)
+LABEL_COMMAND = re.compile(r"\\label\s*\{([^}]*)\}")
+PANEL_LETTERS = "abcdefghijklmnopqrstuvwxyz"
+
+
+def anchor_slug(label: str) -> str:
+    """An HTML id for a LaTeX label: `fig:f2compare` becomes `fig-f2compare`.
+
+    Named after the label rather than the number so that the anchor survives a
+    re-fetch that renumbers, and so a reader can grep for it.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "-", label.strip().lower()).strip("-")
+    return slug or "ref"
+
+
+class Numbering:
+    """Numbers the objects a paper cross-references, and anchors each one.
+
+    LaTeX resolves `\\ref{eq:ckmt}` against a counter that lives in the
+    `\\label` and nowhere else, so a conversion that drops the label leaves the
+    reader with `[ref: eq:ckmt]` and nothing anywhere to match it against. This
+    walks the paper in the same order LaTeX does, hands each equation, figure,
+    table and section its number, and remembers which chapter it landed in.
+    `apply_ref_links` then turns every marker into a link.
+
+    The numbers are recomputed, not read off the paper, so a document that
+    renumbers by hand can end up one out. The link still lands on the right
+    object; only the printed number is a guess.
+    """
+
+    def __init__(self) -> None:
+        self.counts = {"equation": 0, "figure": 0, "table": 0}
+        self.labels: dict[str, dict] = {}
+        self.taken: set[str] = set()
+        self.chapter_title = ""
+        self.chapter_index = 0
+
+    def start_chapter(self, index: int, title: str) -> None:
+        self.chapter_index = index
+        self.chapter_title = title
+
+    def next_number(self, kind: str) -> str:
+        self.counts[kind] += 1
+        return str(self.counts[kind])
+
+    def register(self, label: str, kind: str, number: str) -> str:
+        """Record a label and return the anchor id to write next to the object."""
+        label = collapse_whitespace(label)
+        if not label:
+            return ""
+        if label in self.labels:
+            return self.labels[label]["anchor"]
+        anchor = anchor_slug(label)
+        if anchor in self.taken:
+            suffix = 2
+            while "%s-%d" % (anchor, suffix) in self.taken:
+                suffix += 1
+            anchor = "%s-%d" % (anchor, suffix)
+        self.taken.add(anchor)
+        self.labels[label] = {
+            "kind": kind,
+            "number": number,
+            "anchor": anchor,
+            "chapter": self.chapter_title,
+            "file": "",
+        }
+        return anchor
+
+    def point_at(self, label: str, kind: str, number: str, anchor: str) -> None:
+        """Register a label against an anchor another label already owns.
+
+        A multi-panel figure carries one label for the whole figure and one per
+        panel; the prose cites the whole-figure label, which has no block of
+        its own to sit next to.
+        """
+        label = collapse_whitespace(label)
+        if not label or label in self.labels:
+            return
+        self.labels[label] = {
+            "kind": kind,
+            "number": number,
+            "anchor": anchor,
+            "chapter": self.chapter_title,
+            "file": "",
+        }
+
+
+def anchor_tag(anchor: str) -> str:
+    return '\n\n<a id="%s"></a>\n' % anchor if anchor else ""
+
+
+def split_math_rows(body: str) -> list[str]:
+    """Split a multi-row maths body at its top-level `\\\\` row breaks.
+
+    A `\\\\` inside a nested environment — a matrix, a cases block — ends a row
+    of that, not of the equation, so nesting is tracked.
+    """
+    rows = []
+    depth = 0
+    start = 0
+    index = 0
+    while index < len(body):
+        if body.startswith("\\begin{", index):
+            depth += 1
+            index += 7
+            continue
+        if body.startswith("\\end{", index):
+            depth -= 1
+            index += 5
+            continue
+        if body.startswith("\\\\", index):
+            if depth <= 0:
+                rows.append(body[start:index])
+                index += 2
+                # \\[2mm] carries a spacing argument that belongs to the break.
+                index = read_optional(body, index)
+                start = index
+                continue
+            index += 2
+            continue
+        if body[index] == "\\":
+            index += 2
+            continue
+        index += 1
+    rows.append(body[start:])
+    return rows
+
+
+def number_display_math(
+    name: str, body: str, numbering: Numbering | None
+) -> tuple[str, str, str]:
+    """Number a display-maths body. Returns (body, anchor lines, tag).
+
+    A number is written into the maths itself so the chapter reads like the
+    paper: `\\tag{5}` for a block with one number, and `\\qquad (5)` per row for
+    an `align`, where KaTeX does not accept `\\tag`. The tag comes back
+    separately because it has to sit outside the environment the caller wraps
+    the body in — KaTeX rejects it inside one.
+    """
+    if numbering is None:
+        return body, "", ""
+
+    starred = name.endswith("*")
+    anchors = []
+
+    def take(label: str, unnumbered: bool) -> str:
+        """A number for this row, and the anchor for its label."""
+        if unnumbered and not label:
+            return ""
+        number = numbering.next_number("equation")
+        if label:
+            anchors.append(numbering.register(label, "equation", number))
+        return number
+
+    tag = ""
+    if name in ROW_NUMBERED_ENVIRONMENTS:
+        pieces = []
+        for row in split_math_rows(body):
+            label_match = LABEL_COMMAND.search(row)
+            label = label_match.group(1) if label_match else ""
+            silent = bool(re.search(r"\\(?:nonumber|notag)(?![a-zA-Z])", row))
+            number = take(label, starred or silent)
+            if number and row.strip():
+                row = "%s \\qquad (%s)" % (row.rstrip(), number)
+            pieces.append(row)
+        body = " \\\\ ".join(pieces)
+    else:
+        label_match = LABEL_COMMAND.search(body)
+        label = label_match.group(1) if label_match else ""
+        # `displaymath`, `\[...\]` and `$$...$$` are unnumbered in LaTeX, and
+        # arrive here with an empty name.
+        unnumbered = starred or name in ("", "displaymath", "split")
+        number = take(label, unnumbered)
+        if number:
+            body = body.rstrip()
+            tag = " \\tag{%s}" % number
+
+    anchor_lines = "".join(anchor_tag(anchor) for anchor in anchors if anchor)
+    return body, anchor_lines, tag
+
+
+def number_headings(text: str, numbering: Numbering | None) -> str:
+    """Turn `\\subsection{T}\\label{L}` into a numbered, anchored heading.
+
+    The label has to be consumed here: by the time the heading rules run it has
+    been separated from the heading it names, and `DROP_WITH_ARGS` deletes it.
+    """
+    if numbering is None:
+        return text
+
+    levels = {"subsection": 2, "subsubsection": 3}
+    counters = {2: 0, 3: 0}
+    pattern = re.compile(r"\\(subsubsection|subsection)\*?\s*(?=[\[{])")
+    out = []
+    cursor = 0
+    while True:
+        match = pattern.search(text, cursor)
+        if not match:
+            out.append(text[cursor:])
+            break
+        index = read_optional(text, match.end())
+        if index >= len(text) or text[index] != "{":
+            out.append(text[cursor : match.end()])
+            cursor = match.end()
+            continue
+        end = match_brace(text, index)
+        title = clean_inline(text[index + 1 : end - 1])
+
+        level = levels[match.group(1)]
+        counters[level] += 1
+        if level == 2:
+            counters[3] = 0
+            number = "%d.%d" % (numbering.chapter_index, counters[2])
+        else:
+            number = "%d.%d.%d" % (numbering.chapter_index, counters[2], counters[3])
+
+        # A label directly after the heading names the section, not whatever
+        # follows it.
+        anchor = ""
+        after = skip_spaces(text, end)
+        label_match = LABEL_COMMAND.match(text, after)
+        if label_match:
+            anchor = numbering.register(label_match.group(1), "section", number)
+            end = label_match.end()
+
+        out.append(text[cursor : match.start()])
+        out.append("%s\n\n%s %s %s\n\n" % (anchor_tag(anchor), "#" * level, number, title))
+        cursor = end
+    return "".join(out)
+
+
+def link_refs(
+    text: str, labels: dict[str, dict], current_file: str, prefix: str = ""
+) -> tuple[str, list[str]]:
+    """Turn every `[ref: label]` into a link to the object it names.
+
+    The link text is the number alone: the paper's own prose already supplies
+    the word and the brackets around it, so `eq.~(\\ref{eq:ckmt})` reads as
+    `eq. ([5](#eq-5))`. A label with no target keeps its marker — that is how a
+    reference the source never defined stays visible.
+    """
+    missing = []
+
+    def replace(match: re.Match) -> str:
+        label = collapse_whitespace(match.group(1))
+        entry = labels.get(label)
+        if not entry:
+            missing.append(label)
+            return match.group(0)
+        target = "" if entry["file"] == current_file and not prefix else (
+            prefix + entry["file"]
+        )
+        return "[%s](%s#%s)" % (entry["number"], target, entry["anchor"])
+
+    return REF_TAG.sub(replace, text), missing
+
+
+def chapter_files_by_title(chapters: list[dict]) -> dict[str, str]:
+    """The file each section title ended up in, first piece wins when it split."""
+    by_title: dict[str, str] = {}
+    for chapter in chapters:
+        by_title.setdefault(chapter["title"].split(" — ")[0], chapter["file"])
+    return by_title
+
+
+def apply_ref_links(chapters: list[dict], numbering: Numbering) -> list[str]:
+    """Resolve the cross-references of every chapter. Returns the labels missed.
+
+    Runs once the chapters are settled, because a reference reaches across
+    files and the file names are only known after a long chapter is split.
+    """
+    # Where each anchor actually ended up, which is not always the chapter it
+    # was numbered in: a long chapter is split into several files. The chapter
+    # it was numbered in answers for a label whose anchor never made it out --
+    # one on an object the conversion dropped.
+    in_file = {}
+    for chapter in chapters:
+        for found in re.finditer(r'<a id="([^"]*)"></a>', chapter["text"]):
+            in_file.setdefault(found.group(1), chapter["file"])
+    by_title = chapter_files_by_title(chapters)
+    for entry in numbering.labels.values():
+        entry["file"] = in_file.get(entry["anchor"]) or by_title.get(
+            entry["chapter"], ""
+        )
+
+    missing: list[str] = []
+    for chapter in chapters:
+        chapter["text"], missed = link_refs(
+            chapter["text"], numbering.labels, chapter["file"]
+        )
+        missing.extend(missed)
+    return sorted(set(missing))
+
+
 def sanitize_math(body: str) -> str:
     """Rewrite valid LaTeX that KaTeX cannot parse.
 
@@ -641,10 +944,32 @@ def sanitize_math(body: str) -> str:
 
 def display_math(body: str) -> str:
     """Wrap a display-maths body so a Markdown preview renders it."""
-    return "\n\n$$\n%s\n$$\n\n" % sanitize_math(body).strip("\n").strip()
+    body = sanitize_math(body).strip("\n").strip()
+    # A blank line ends a paragraph, and with it the maths block: what follows
+    # would be printed as TeX. The source is free to leave one anywhere.
+    return "\n\n$$\n%s\n$$\n\n" % re.sub(r"\n[ \t]*\n+", "\n", body)
 
 
-def figure_block(file_name: str, caption: str) -> str:
+def find_first_environment(
+    text: str, names, start: int = 0
+) -> tuple[str, int, int, str] | None:
+    """The environment among `names` that begins first. Returns (name, ...).
+
+    Figures, tables and equations are numbered as they are met, so they have to
+    be met in the order the paper writes them — not one environment name after
+    another, which would number every `figure*` before every `figure`.
+    """
+    best = None
+    for name in names:
+        found = find_environment(text, name, start)
+        if found and (best is None or found[0] < best[1]):
+            best = (name,) + found
+    return best
+
+
+def figure_block(
+    file_name: str, caption: str, number: str = "", anchor: str = ""
+) -> str:
     """Embed a figure so it shows in the preview, with its caption beneath.
 
     The chapters sit in `chapters/`, so the image is one level up in
@@ -659,26 +984,44 @@ def figure_block(file_name: str, caption: str) -> str:
     if len(alt) > 120:
         alt = alt[:117].rstrip() + "..."
     block = (
-        '\n\n<p align="center">\n'
+        (anchor_tag(anchor) or "\n")
+        + '\n<p align="center">\n'
         '<img src="../figures/%s" alt="%s" width="%d"/>\n'
         "</p>\n" % (file_name, alt, FIGURE_WIDTH_PX)
     )
     if caption:
-        block += "\n**Figure.** %s\n" % collapse_whitespace(caption)
+        block += "\n**Figure%s.** %s\n" % (
+            " " + number if number else "", collapse_whitespace(caption)
+        )
     return block + "\n"
 
 
 def clean_text(
-    raw: str, figures: list | None, chapter: str
+    raw: str, figures: list | None, chapter: str, numbering: Numbering | None = None
 ) -> tuple[str, list[dict]]:
     """Convert a raw TeX fragment to readable text.
 
     Math is kept as TeX. Figures become a one-line marker and, when `figures`
     is a list, are appended to it as records.
+
+    With a `Numbering`, every equation, figure, table and heading is numbered
+    and anchored so that the paper's own cross-references can be linked back to
+    it later. Without one — a caption, a title, the abstract — nothing is
+    numbered, since those fragments are converted out of document order.
     """
     found_figures: list[dict] = []
     text = strip_comments(raw)
     holder = Placeholder()
+
+    # A `\label` at the head of a section body names the section: the title
+    # was consumed with the `\section` that split_sections cut at.
+    chapter_anchor = ""
+    if numbering is not None:
+        opening = LABEL_COMMAND.match(text.lstrip())
+        if opening:
+            chapter_anchor = numbering.register(
+                opening.group(1), "section", str(numbering.chapter_index)
+            )
 
     # --- verbatim-ish environments, kept as fenced blocks -----------------
     for name in VERBATIM_ENVIRONMENTS:
@@ -691,64 +1034,91 @@ def clean_text(
             text = text[:start] + holder.stash(block) + text[end:]
 
     # --- figures ----------------------------------------------------------
-    for name in FIGURE_ENVIRONMENTS:
-        while True:
-            found = find_environment(text, name)
-            if not found:
-                break
-            start, end, body = found
-            records = parse_figure(body, chapter)
-            found_figures.extend(records)
-            if records:
-                marker = "".join(
-                    figure_block(record["file_hint"], record["caption"])
-                    for record in records
+    while True:
+        found = find_first_environment(text, FIGURE_ENVIRONMENTS)
+        if not found:
+            break
+        _, start, end, body = found
+        records = parse_figure(body, chapter)
+        found_figures.extend(records)
+        if records:
+            number = numbering.next_number("figure") if numbering else ""
+            marker = ""
+            for index, record in enumerate(records):
+                panel = number
+                if number and len(records) > 1:
+                    panel += PANEL_LETTERS[index % len(PANEL_LETTERS)]
+                record["number"] = panel
+                anchor = (
+                    numbering.register(record["label"], "figure", panel)
+                    if numbering else ""
                 )
-            else:
-                marker = "\n\n[FIGURE: unresolved]\n\n"
-            text = text[:start] + holder.stash(marker) + text[end:]
+                if numbering and index == 0:
+                    # The prose cites the figure as a whole; its label sits on
+                    # the environment, not on any one panel.
+                    whole = LABEL_COMMAND.search(body)
+                    if whole:
+                        numbering.point_at(
+                            whole.group(1), "figure", number, anchor
+                        )
+                marker += figure_block(
+                    record["file_hint"], record["caption"], panel, anchor
+                )
+        else:
+            marker = "\n\n[FIGURE: unresolved]\n\n"
+        text = text[:start] + holder.stash(marker) + text[end:]
 
     # --- tables, kept verbatim -------------------------------------------
-    for name in TABLE_ENVIRONMENTS:
-        while True:
-            found = find_environment(text, name)
-            if not found:
-                break
-            start, end, body = found
-            caption = extract_caption(body)
-            block = "\n\n```tex\n%s\n```\n" % body.strip("\n")
-            if caption:
-                block += "\n[TABLE: %s]\n\n" % caption
-            text = text[:start] + holder.stash(block) + text[end:]
+    while True:
+        found = find_first_environment(text, TABLE_ENVIRONMENTS)
+        if not found:
+            break
+        _, start, end, body = found
+        caption = extract_caption(body)
+        anchor = ""
+        number = ""
+        if numbering:
+            number = numbering.next_number("table")
+            label = LABEL_COMMAND.search(body)
+            if label:
+                anchor = numbering.register(label.group(1), "table", number)
+        block = "%s\n\n```tex\n%s\n```\n" % (anchor_tag(anchor), body.strip("\n"))
+        if caption:
+            block += "\n**Table%s.** %s\n\n" % (
+                " " + number if number else "", caption
+            )
+        text = text[:start] + holder.stash(block) + text[end:]
 
     # --- display math -----------------------------------------------------
-    for name in MATH_ENVIRONMENTS:
-        while True:
-            found = find_environment(text, name)
-            if not found:
-                break
-            start, end, body = found
-            if name in BARE_MATH_ENVIRONMENTS:
-                inner = body
-            elif name in ALIGNED_MATH_ENVIRONMENTS:
-                # KaTeX has no eqnarray, flalign or multline. aligned takes the
-                # same '&'-separated rows and renders them acceptably.
-                inner = "\\begin{aligned}%s\\end{aligned}" % body
-            else:
-                inner = "\\begin{%s}%s\\end{%s}" % (name, body, name)
-            text = text[:start] + holder.stash(display_math(inner)) + text[end:]
+    while True:
+        found = find_first_environment(text, MATH_ENVIRONMENTS)
+        if not found:
+            break
+        name, start, end, body = found
+        body, anchors, tag = number_display_math(name, body, numbering)
+        if name in BARE_MATH_ENVIRONMENTS:
+            inner = body
+        elif name in ALIGNED_MATH_ENVIRONMENTS:
+            # KaTeX has no eqnarray, flalign or multline. aligned takes the
+            # same '&'-separated rows and renders them acceptably.
+            inner = "\\begin{aligned}%s\\end{aligned}" % body
+        else:
+            inner = "\\begin{%s}%s\\end{%s}" % (name, body, name)
+        text = (
+            text[:start]
+            + holder.stash(anchors + display_math(inner + tag))
+            + text[end:]
+        )
+
+    def bare_display(body: str) -> str:
+        body, anchors, tag = number_display_math("", body, numbering)
+        return holder.stash(anchors + display_math(body + tag))
 
     text = re.sub(
-        r"\\\[(.+?)\\\]",
-        lambda m: holder.stash(display_math(m.group(1))),
-        text,
-        flags=re.DOTALL,
+        r"\\\[(.+?)\\\]", lambda m: bare_display(m.group(1)), text, flags=re.DOTALL
     )
     text = re.sub(
-        r"\$\$(.+?)\$\$",
-        lambda m: holder.stash(display_math(m.group(1))),
-        text,
-        flags=re.DOTALL,
+        r"\$\$(.+?)\$\$", lambda m: bare_display(m.group(1)), text, flags=re.DOTALL
     )
 
     # --- inline math ------------------------------------------------------
@@ -766,6 +1136,9 @@ def clean_text(
     )
 
     # --- headings ---------------------------------------------------------
+    # Numbered first, which also takes the \label naming each heading; what is
+    # left over is a heading no cross-reference points at.
+    text = number_headings(text, numbering)
     text = replace_command_arg(text, "subsubsection", lambda arg: "\n\n### %s\n\n" % clean_inline(arg))
     text = replace_command_arg(text, "subsection", lambda arg: "\n\n## %s\n\n" % clean_inline(arg))
     text = replace_command_arg(text, "paragraph", lambda arg: "\n\n**%s** " % clean_inline(arg))
@@ -824,6 +1197,9 @@ def clean_text(
     text = "\n".join(line.rstrip() for line in text.split("\n"))
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
+
+    if chapter_anchor:
+        text = anchor_tag(chapter_anchor).lstrip("\n") + "\n" + text.lstrip("\n")
 
     if figures is not None:
         figures.extend(found_figures)
@@ -931,13 +1307,31 @@ def split_long_chapter(text: str, limit: int) -> list[tuple[str, str]]:
     parts = re.split(r"\n(?=## )", text)
     if len(parts) < 2:
         return []
+    # A heading may be preceded by the anchor its own label owns. The cut falls
+    # between the two, so the anchor moves to the piece it names.
+    trailing_anchor = re.compile(r'\n\s*(<a id="[^"]*"></a>)\s*\Z')
+    for index in range(len(parts) - 1):
+        moved = trailing_anchor.search(parts[index])
+        if moved:
+            parts[index] = parts[index][: moved.start()]
+            parts[index + 1] = moved.group(1) + "\n" + parts[index + 1]
+
     pieces = []
     for part in parts:
         part = part.strip()
+        anchor = ""
+        anchor_match = re.match(r'<a id="[^"]*"></a>\s*\n', part)
+        if anchor_match:
+            anchor = anchor_match.group(0).strip()
+            part = part[anchor_match.end() :].lstrip("\n")
         heading = part.split("\n", 1)[0]
         if heading.startswith("## "):
-            title = heading[3:].strip()
+            # The heading number belongs to the chapter it came from; the piece
+            # is named after the words alone.
+            title = re.sub(r"\A\d+(?:\.\d+)*\s+", "", heading[3:].strip())
             part = part[len(heading) :].lstrip("\n")
+            if anchor:
+                part = anchor + "\n\n" + part
         else:
             title = "opening"
             # Drop the chapter heading; the caller writes its own.
@@ -1014,17 +1408,25 @@ def write_figures_index(records: list[dict], figures_dir: Path) -> None:
         "One row per figure, with the caption as the paper gives it. Search this",
         "file to find the figure that shows a given thing, then read the image.",
         "",
-        "| File | Label | Chapter | Caption |",
-        "|---|---|---|---|",
+        "| # | File | Label | Chapter | Caption |",
+        "|---|---|---|---|---|",
     ]
     for record in records:
         caption = record["caption"].replace("|", "\\|").replace("\n", " ")
+        chapter = record.get("chapter") or ""
+        chapter_file = record.get("chapter_file") or ""
+        if chapter_file:
+            anchor = record.get("anchor") or ""
+            chapter = "[%s](../chapters/%s%s)" % (
+                chapter, chapter_file, "#" + anchor if anchor else ""
+            )
         lines.append(
-            "| %s | %s | %s | %s |"
+            "| %s | %s | %s | %s | %s |"
             % (
+                record.get("number") or "",
                 record.get("file") or "(missing: %s)" % record["source"],
                 record.get("label") or "",
-                record.get("chapter") or "",
+                chapter,
                 caption,
             )
         )
@@ -1193,13 +1595,20 @@ def main() -> int:
 
         chapters = []
         figure_records: list[dict] = []
+        numbering = Numbering()
         for index, (title, section_body) in enumerate(sections, start=1):
-            text, section_figures = clean_text(section_body, figure_records, title)
+            numbering.start_chapter(index, title)
+            text, section_figures = clean_text(
+                section_body, figure_records, title, numbering
+            )
             if not text.strip():
                 continue
             heading = "# %d. %s\n\n" % (index, title)
             content = heading + text
-            subsections = re.findall(r"^## (.+)$", content, flags=re.MULTILINE)
+            subsections = [
+                re.sub(r"\A\d+(?:\.\d+)*\s+", "", found)
+                for found in re.findall(r"^## (.+)$", content, flags=re.MULTILINE)
+            ]
             pieces = split_long_chapter(content, args.max_chapter_bytes)
             if pieces:
                 for piece_index, (piece_title, piece_text) in enumerate(pieces, start=1):
@@ -1234,11 +1643,29 @@ def main() -> int:
             for record in figure_records:
                 record["caption"] = apply_cite_tags(record.get("caption", ""), key_tags)
 
+        # The chapters are settled, so a cross-reference now knows which file
+        # its target ended up in.
+        unresolved_refs = apply_ref_links(chapters, numbering)
+        if unresolved_refs:
+            warnings.append(
+                "%d cross-reference label(s) had no target in the source and keep "
+                "their [ref: ...] marker: %s"
+                % (len(unresolved_refs), ", ".join(unresolved_refs[:10]))
+            )
+        by_title = chapter_files_by_title(chapters)
+        for record in figure_records:
+            record["caption"], _ = link_refs(
+                record.get("caption", ""), numbering.labels, "", prefix="../chapters/"
+            )
+            record["chapter_file"] = by_title.get(record.get("chapter", ""), "")
+            entry = numbering.labels.get(record.get("label", ""))
+            record["anchor"] = entry["anchor"] if entry else ""
+
         if args.dry_run:
             print(json.dumps(build_manifest(
                 args, metadata, publication, cited, abstract, parser_used, chapters,
                 [dict(record, file=record["file_hint"]) for record in figure_records],
-                warnings, main_tex, source_dir), indent=2))
+                warnings, main_tex, source_dir, numbering, unresolved_refs), indent=2))
             return 0
 
         if paper_dir.exists():
@@ -1281,7 +1708,7 @@ def main() -> int:
 
         print(json.dumps(build_manifest(
             args, metadata, publication, cited, abstract, parser_used, chapters, resolved,
-            warnings, main_tex, source_dir), indent=2))
+            warnings, main_tex, source_dir, numbering, unresolved_refs), indent=2))
         return 0
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
@@ -1289,7 +1716,7 @@ def main() -> int:
 
 def build_manifest(
     args, metadata, publication, cited, abstract, parser_used, chapters, figures, warnings,
-    main_tex, source_dir
+    main_tex, source_dir, numbering=None, unresolved_refs=None
 ) -> dict:
     for chapter in chapters:
         chapter.pop("text", None)
@@ -1325,10 +1752,16 @@ def build_manifest(
             {
                 "file": record.get("file", ""),
                 "label": record.get("label", ""),
+                "number": record.get("number", ""),
                 "chapter": record.get("chapter", ""),
             }
             for record in figures
         ],
+        # What the paper's own \ref commands now point at: one entry per label,
+        # naming the file and anchor a reader lands on.
+        "labels": numbering.labels if numbering else {},
+        # Labels the source never defined; their [ref: ...] markers stayed put.
+        "unresolved_refs": unresolved_refs or [],
         # Every work this paper cites, tagged. update_references.py folds these
         # into the store; until it runs, the tags in the chapters name rows
         # that REFERENCES.md does not have yet.

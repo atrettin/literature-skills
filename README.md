@@ -69,16 +69,40 @@ literature/
 Chapters are written to render in a Markdown preview: display maths as
 `$$ … $$`, figures as centred `<img>` blocks with their captions beneath.
 
+## Cross-references that go somewhere
+
+A paper refers to itself constantly — "as shown in eq. (5)", "see Fig. 3", "in
+Section IV". LaTeX writes those as a `\ref` against a `\label`, and the label is
+the author's private name for a place in the source, not a number and not an
+address. Left at that, the reader meets `eq. ([ref: eq:ckmt])` with nothing
+anywhere to match it against.
+
+So every equation, figure, table and section is numbered and anchored as it is
+met, and a reference is a link to the thing it names, carrying the chapter file
+when that is a different one:
+
+```markdown
+eq. ([6](#eq-ckmt))
+Section [4](04_partially_conserved_axial_vector_current.md#sec-pcac)
+```
+
+The numbers are recomputed rather than read off the published paper, so one that
+renumbers by hand can end up a little out; the link still lands on the right
+object. A label the source never defined keeps its `[ref: …]` marker, which is
+how it stays visible. `check_references.py` reports both, alongside the
+citations it checks.
+
 ## Citations that go somewhere
 
-A citation in a chapter used to be a dead end: `[cite: Lipari:2002at]` is the
-author's private label for an entry in a bibliography that the conversion threw
-away. Nothing in the collection could say which paper it meant, so a claim a
-paper borrowed could not be traced back to whoever established it.
+A citation is a dead end on its own: `[cite: Lipari:2002at]` is the author's
+private label for an entry in a bibliography that the conversion does not carry
+into the chapters. Left at that, nothing in the collection would say which paper
+it means, and a claim a paper borrowed could not be traced back to whoever
+established it.
 
-Now the bibliography is read from the TeX source, each entry is resolved against
+So the bibliography is read from the TeX source, each entry is resolved against
 [INSPIRE-HEP](https://inspirehep.net/) and [Crossref](https://www.crossref.org/),
-and the citation names a row instead:
+and the citation names a row:
 
 ```
 [cite: lipari_2002_neutrino_oscillation_neutrino_cross]

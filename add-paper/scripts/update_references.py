@@ -118,9 +118,9 @@ def display_cited_by(record: dict) -> str:
 def display_title(record: dict) -> str:
     """The title, marked when unconfirmed and linked when held here in full.
 
-    This carries what used to be a column of its own for the tag. Tags run to
-    fifty characters and made that column wider than the title beside it, for a
-    string nobody reads — an identifier is looked up, not browsed.
+    The tag gets no column of its own. Tags run to fifty characters, which
+    would make for a column wider than the title beside it, holding a string
+    nobody reads — an identifier is looked up, not browsed.
     reference_lookup.py answers by tag; this table is for reading.
     """
     title = collapse_whitespace(record.get("title") or "")

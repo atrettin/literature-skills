@@ -54,14 +54,21 @@ refresh that.
 
 Chapter files hold the words of the paper. Citations become `[cite: tag]`, and
 `$LOOKUP` turns a tag into the publication it names — see below.
-Cross-references to the
-paper's own equations and sections become `[ref: label]`, and those resolve to
-nothing; treat them as the paper saying "see elsewhere in this paper".
+
+A reference the paper makes to itself becomes a link to the thing it names:
+`eq. ([6](#eq-ckmt))` for an equation in the same chapter, and
+`Section [4](04_partially_conserved_axial_vector_current.md#sec-pcac)` for one in
+another. The number in the link is the number the object carries in this
+collection, and the file named before the `#` is the chapter to read for it. A `[ref: label]` with no link is a reference
+whose target the paper's own source never defined; treat it as the paper saying
+"see elsewhere in this paper".
 
 Inline maths stays as `$…$` and display maths as `$$…$$`, so a Markdown preview
-renders it. A figure is embedded as a centred `<img>` pointing at
-`../figures/<name>.png`, followed by a line starting `**Figure.**` that carries
-its caption.
+renders it. A numbered equation carries its number as `\tag{6}`. A figure is
+embedded as a centred `<img>` pointing at `../figures/<name>.png`, followed by a
+line starting `**Figure 6.**` that carries its caption; a table is the paper's
+own LaTeX in a ```` ```tex ```` block, with `**Table 2.**` and its caption
+beneath.
 
 Read `figures/` for a figure. `figures_raw/` exists only so the conversion can
 be redone; never read it, and never delete it.
@@ -132,6 +139,10 @@ where the lookup costs one record. It carries no tags at all.
 3. Read the PNG in `figures/` with the `Read` tool.
 
 Do not read the chapters to find a figure.
+
+Each row carries the figure's number and links to the place in the chapter where
+the paper discusses it, so a figure a cross-reference names — `Fig. [3](…)` —
+is the row numbered 3, or 3a and 3b when the paper drew it as panels.
 
 ## To find a paper that is not there
 
