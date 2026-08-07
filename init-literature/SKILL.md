@@ -83,6 +83,15 @@ plain text for humans and agents to read. Each paper has its own directory:
 
 Start at `INDEX.md` of a paper. Read only the chapters that you need.
 
+A citation in a chapter reads `[cite: some_tag]`. Resolve the tag to the work it
+names — title, authors, journal, DOI, arXiv identifier — with the `add-paper`
+skill's `reference_lookup.py`, which reads `.references.jsonl`. That is how a
+claim a paper borrowed gets traced back to whoever established it.
+
+[REFERENCES.md](REFERENCES.md) is the same data as a table, most-cited first,
+for reading rather than for lookup: what these papers are built on, and which of
+it is already held here.
+
 Agents: use the `use-literature` skill to read a paper, and the `add-paper`
 skill to add one.
 
@@ -99,6 +108,16 @@ Leave the table empty, with only its header. `add-paper` adds a row per paper,
 in order of the year, newest last. Year is the year of the arXiv submission, the
 same one the directory name uses. Journal is where the paper was published, and
 `—` while the paper is still a preprint.
+
+Then write the empty reference index, so the collection has one from the start:
+
+```bash
+$PY <add-paper skill>/scripts/update_references.py --render-only
+```
+
+That creates `literature/REFERENCES.md` from an empty store. It needs the
+`add-paper` skill's scripts; if that skill is not installed here, skip it —
+`add-paper` writes the file itself the first time it files a paper's references.
 
 ## Step 5. Say what comes next
 

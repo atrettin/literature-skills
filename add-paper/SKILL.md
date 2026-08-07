@@ -121,6 +121,19 @@ Write the slug in lower case. Replace each other character with `_`. Use the
 year of the arXiv submission, not the year of the journal. Example:
 `alvarez-ruso_2017_nustec_review`.
 
+**First check whether the collection already has a tag for this paper.** Another
+paper here may already cite it, in which case it has a record under a tag of
+exactly this shape. Ask by identifier, not by name:
+
+```bash
+$PY $SKILL/scripts/reference_lookup.py --arxiv <arxiv_id>
+$PY $SKILL/scripts/reference_lookup.py --doi <doi>
+```
+
+If that finds a record, **use its `tag` as the slug**. The tag is already
+written into the chapters of every paper that cites this one, and reusing it
+makes those citations resolve to the paper itself once it is here.
+
 ## Step 4. Fetch the paper
 
 ```bash
@@ -134,6 +147,13 @@ The script downloads the TeX source. It writes these files:
 - `literature/<slug>/figures/<name>.png` — one PNG for each figure, cropped
 - `literature/<slug>/figures/FIGURES.md` — the caption of each figure
 - `literature/<slug>/figures_raw/<figure files>` — the originals, untouched
+
+It also reads the paper's bibliography and resolves it, which is what makes the
+citations in the chapters mean anything. `[cite: Lipari:2002at]` — the author's
+private label — comes out as `[cite: lipari_2002_neutrino_oscillation_neutrino_cross]`,
+a tag that step 6 gives a row in `literature/REFERENCES.md`. The references
+themselves are in the manifest's `references` field; step 6 files them. Pass
+`--no-references` to skip this, and the citations keep the paper's own keys.
 
 Every figure is converted to PNG so that it can be read directly, and the
 surrounding whitespace is cropped. The paper's own files stay in
@@ -151,7 +171,12 @@ $PY $SKILL/scripts/convert_figures.py \
     literature/<slug>
 ```
 
-The script prints a JSON manifest. Keep the manifest. You need it in step 6.
+The script prints a JSON manifest. **Write it to a file** — step 6 reads it, and
+it is large enough that keeping it only in the conversation is wasteful:
+
+```bash
+$PY $SKILL/scripts/arxiv_fetch.py <arxiv_id> --slug <slug> > /tmp/<slug>.json
+```
 
 The script writes no `INDEX.md`. You write that file.
 
@@ -192,7 +217,8 @@ The text is then less exact. Tell the user when this happens.
 
 Add `--force` only when the user wants to replace a paper that is already there.
 `--force` empties the paper directory first, which **deletes `INDEX.md` along
-with everything else**. Write it again from step 5 after any re-fetch.
+with everything else**. Write it again from step 5 after any re-fetch, and run
+step 6 again so the reference store learns the paper's citations afresh.
 
 ## Step 5. Read the chapters and write INDEX.md
 
@@ -246,7 +272,55 @@ Never write a summary of a chapter that you did not read.
 Do not change the text in the chapter files. The chapter files hold the words of
 the paper.
 
-## Step 6. Add the paper to the top-level index
+## Step 6. File the paper's references
+
+```bash
+$PY $SKILL/scripts/update_references.py --manifest <manifest file>
+$PY $SKILL/scripts/check_references.py
+```
+
+Write the manifest from step 4 to a file if you have not already, and pass it
+here. The first script folds every work the paper cites into the reference
+store and rewrites `literature/REFERENCES.md` from it. The second checks that
+every `[cite: ...]` in the collection still names a row; it prints `"ok": true`
+and exits 0 when all is well.
+
+Run this **after** `INDEX.md` exists, not before. The merge reads each paper's
+`INDEX.md` to work out which cited works this collection also holds in full, and
+links their rows to them.
+
+What comes back from the merge:
+
+| Field | What it means |
+|---|---|
+| `added` | works this paper is the first to cite |
+| `updated` | works already known, which now list this paper too |
+| `unchanged` | works already known and already listing it — a re-run |
+| `unverified` | rows across the whole store whose identity is not confirmed |
+| `retagged` | citations repointed because the store already knew a work under another tag |
+
+One work has one row however many papers cite it, and re-running the merge on
+the same manifest changes nothing, so it is safe to repeat.
+
+Tell the user the count of unverified references, as you do for warnings. Those
+rows are marked ⚠ in the table: they come from the paper's own bibliography or
+from a title match, and their fields may be wrong. Every other row was confirmed
+against INSPIRE-HEP or Crossref by DOI, arXiv identifier, or journal, volume and
+page.
+
+If `check_references.py` reports anything under `unresolved`, say so — a
+citation in a chapter is naming a record that does not exist, and the claim it
+supports cannot be traced until it does.
+
+`reference_lookup.py` reads the store the merge just wrote, and is how anything
+downstream resolves a tag. `REFERENCES.md` is the view beside it, for a person
+browsing; it carries no tags, so do not grep it for one:
+
+```bash
+$PY $SKILL/scripts/reference_lookup.py <tag>
+```
+
+## Step 7. Add the paper to the top-level index
 
 Add one row to the table in `literature/README.md`:
 
@@ -263,7 +337,7 @@ A collection started before this skill had a Journal column has a four-column
 table. Add the column to the header, the separator row and every existing row —
 `—` for a row you have not looked up — before you add yours.
 
-## Step 7. Refresh a paper that is already there
+## Step 8. Refresh a paper that is already there
 
 A preprint gets published later. To bring an ingested paper up to date, look it
 up again:
@@ -295,3 +369,9 @@ figures. The paper's text did not change — only what is known about it did.
   not hold, or holds without a publication, is recorded as a preprint. Guessing
   the journal from the paper's own front matter puts a wrong citation into every
   document that later cites it.
+- Never edit `literature/REFERENCES.md` by hand. It is rendered in full from
+  `.references.jsonl` every time a paper is added, so an edit is discarded at
+  the next run. Fix the store, or fix what put the wrong value there.
+- Never fill in a ⚠ row from memory. A reference nothing could confirm stays
+  unconfirmed until a lookup confirms it; that mark is what tells a later reader
+  the row may be wrong.

@@ -40,12 +40,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import convert_figures  # noqa: E402
 import inspire_lookup  # noqa: E402
+import references  # noqa: E402
 from arxiv_search import (  # noqa: E402
     COURTESY_DELAY_S,
     USER_AGENT,
     collapse_whitespace,
     fetch_feed,
     parse_entries,
+    slugify,
 )
 
 EPRINT_URL = "https://arxiv.org/e-print/%s"
@@ -224,12 +226,6 @@ def strip_comments(text: str) -> str:
         cleaned = re.sub(r"(?<!\\)((?:\\\\)*)%.*$", r"\1", line)
         out.append(cleaned)
     return "\n".join(out)
-
-
-def slugify(text: str, limit: int = 48) -> str:
-    text = re.sub(r"\\[a-zA-Z]+", " ", text)
-    text = re.sub(r"[^0-9a-zA-Z]+", "_", text).strip("_").lower()
-    return (text[:limit].rstrip("_")) or "section"
 
 
 # ==========================================================================
@@ -479,6 +475,53 @@ def expand_macros(text: str, macros: dict, passes: int = 4) -> str:
         pieces.append(text[cursor:])
         text = "".join(pieces)
     return text
+
+
+CITE_TAG = re.compile(r"\[cite:\s*([^\]]*)\]")
+
+
+def apply_cite_tags(text: str, key_tags: dict[str, list[str]]) -> str:
+    """Put reference tags where the paper's own LaTeX keys used to be.
+
+    `[cite: Lipari:2002at,Katori:2016yel]` becomes
+    `[cite: lipari_2002_..., katori_2018_...]`, each tag naming a row of
+    REFERENCES.md. One key can stand for several works, when the bibliography
+    packed several into one \\bibitem, so it can expand to several tags.
+
+    A key the bibliography never defined keeps its original text: there is
+    nothing to point it at, and leaving it visible is how that stays known.
+    """
+    def replace(match: re.Match) -> str:
+        tags = []
+        for key in match.group(1).split(","):
+            key = collapse_whitespace(key)
+            if key:
+                tags.extend(key_tags.get(key) or [key])
+        if not tags:
+            return match.group(0)
+        return "[cite: %s]" % ", ".join(tags)
+
+    return CITE_TAG.sub(replace, text)
+
+
+def drop_bibliography(body: str) -> str:
+    """Take the reference list out of the document.
+
+    A paper that types its bibliography out in the TeX leaves it after the last
+    \\section, so it lands in that chapter — which is how a chapter on cross
+    sections came to end in "F.A. Brieva and J.R. Rook, Nuclear Physics A291".
+    references.py has already read it by the time this runs, and the entries
+    now live in the reference store where a citation can reach them.
+    """
+    while True:
+        found = find_environment(body, "thebibliography")
+        if not found:
+            break
+        body = body[: found[0]] + body[found[1] :]
+    # Only the environment is cut out, never everything after it. A paper that
+    # puts its references before its appendices — and plenty do — would
+    # otherwise lose every appendix along with them.
+    return re.sub(r"\\bibliography\s*\{[^}]*\}", "", body)
 
 
 def extract_body(text: str) -> str:
@@ -1071,6 +1114,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="skip the INSPIRE-HEP lookup; take the journal from arXiv alone",
     )
+    parser.add_argument(
+        "--no-references",
+        action="store_true",
+        help="skip the bibliography; citations keep the paper's own LaTeX keys",
+    )
     parser.add_argument("--dry-run", action="store_true", help="print the manifest, write nothing")
     parser.add_argument("--keep-source", type=Path, help="keep the extracted TeX source here")
     return parser
@@ -1108,6 +1156,23 @@ def main() -> int:
         begin_document = raw.find("\\begin{document}")
         macros = collect_macros(raw[: begin_document if begin_document > 0 else 0])
         body = expand_macros(extract_body(raw), macros)
+
+        # The bibliography is read before the body is cut down to its sections,
+        # since a paper that types its references out sits them after the last
+        # \section and they would otherwise be split into that chapter.
+        cited: list[dict] = []
+        key_tags: dict[str, list[str]] = {}
+        if not args.no_references:
+            try:
+                cited, key_tags = references.collect(
+                    source_dir, body, args.arxiv_id, args.literature_root, warnings
+                )
+            except Exception as error:  # the paper matters more than its bibliography
+                warnings.append(
+                    "the bibliography could not be resolved (%s); citations keep "
+                    "their original keys" % error
+                )
+        body = drop_bibliography(body)
 
         positions = section_positions_texsoup(body)
         parser_used = "texsoup"
@@ -1163,9 +1228,15 @@ def main() -> int:
             for record in section_figures:
                 record["chapter"] = title
 
+        if key_tags:
+            for chapter in chapters:
+                chapter["text"] = apply_cite_tags(chapter["text"], key_tags)
+            for record in figure_records:
+                record["caption"] = apply_cite_tags(record.get("caption", ""), key_tags)
+
         if args.dry_run:
             print(json.dumps(build_manifest(
-                args, metadata, publication, abstract, parser_used, chapters,
+                args, metadata, publication, cited, abstract, parser_used, chapters,
                 [dict(record, file=record["file_hint"]) for record in figure_records],
                 warnings, main_tex, source_dir), indent=2))
             return 0
@@ -1209,7 +1280,7 @@ def main() -> int:
             chapter.pop("text", None)
 
         print(json.dumps(build_manifest(
-            args, metadata, publication, abstract, parser_used, chapters, resolved,
+            args, metadata, publication, cited, abstract, parser_used, chapters, resolved,
             warnings, main_tex, source_dir), indent=2))
         return 0
     finally:
@@ -1217,7 +1288,7 @@ def main() -> int:
 
 
 def build_manifest(
-    args, metadata, publication, abstract, parser_used, chapters, figures, warnings,
+    args, metadata, publication, cited, abstract, parser_used, chapters, figures, warnings,
     main_tex, source_dir
 ) -> dict:
     for chapter in chapters:
@@ -1258,6 +1329,10 @@ def build_manifest(
             }
             for record in figures
         ],
+        # Every work this paper cites, tagged. update_references.py folds these
+        # into the store; until it runs, the tags in the chapters name rows
+        # that REFERENCES.md does not have yet.
+        "references": cited,
         "warnings": warnings,
     }
 

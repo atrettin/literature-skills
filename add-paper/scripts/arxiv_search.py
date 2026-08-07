@@ -22,6 +22,7 @@ import json
 import re
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -59,6 +60,27 @@ def normalize_title(text: str) -> str:
 
 def collapse_whitespace(text: str) -> str:
     return " ".join(text.split())
+
+
+def slugify(text: str, limit: int = 48, default: str = "section") -> str:
+    """Reduce text to the lower-case underscore form used for names on disk.
+
+    Directory names, chapter file names and reference tags all pass through
+    here, so a work held in full and the same work cited by another paper end
+    up under one identifier. Callers naming something other than a section
+    should say so: `default` is what comes back when nothing survives.
+    """
+    text = re.sub(r"\\[a-zA-Z]+", " ", text)
+    # Fold accents onto their base letter first. Stripping them as punctuation
+    # instead turns Glück into gl_ck and Argüelles into arg_elles, which read
+    # as damage rather than as names.
+    text = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(character)
+    )
+    text = re.sub(r"[^0-9a-zA-Z]+", "_", text).strip("_").lower()
+    return (text[:limit].rstrip("_")) or default
 
 
 def query_words(text: str) -> str:

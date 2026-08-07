@@ -13,11 +13,27 @@ and gives you no more answers.
 project with no `literature/` at all has no database yet — the `init-literature`
 skill starts one.
 
+## Two shorthands
+
+Resolving a citation runs one script, which ships with the `add-paper` skill.
+Neither path is fixed, so:
+
+- **`$LOOKUP`** — `<the add-paper skill's directory>/scripts/reference_lookup.py`.
+  The `add-paper` skill prints its own base directory when it loads; if it is
+  not installed alongside this one, `find ~/.claude/skills -name reference_lookup.py`
+  finds it.
+- **`$PY`** — the project's Python: `.venv/bin/python` when the project has a
+  virtual environment, otherwise `python3`.
+
+Run every command from the root of the project, so that `literature/` resolves.
+
 ## The structure
 
 ```
 literature/
   README.md                     one row for each paper
+  REFERENCES.md                 one row for each work the papers cite
+  .references.jsonl             the store REFERENCES.md is rendered from
   <slug>/                       one directory for each paper
     INDEX.md                    metadata, abstract, and a summary of each chapter
     chapters/NN_<title>.md      the text of one section
@@ -36,11 +52,16 @@ chapter for it. A `Journal` row of `—` and a `Published` row of `preprint` mea
 the paper had not been published when it was last looked up; `add-paper` can
 refresh that.
 
-Chapter files hold the words of the paper. Citations become `[cite: key]` and
-cross-references become `[ref: label]`. Inline maths stays as `$…$` and display
-maths as `$$…$$`, so a Markdown preview renders it. A figure is embedded as a
-centred `<img>` pointing at `../figures/<name>.png`, followed by a line starting
-`**Figure.**` that carries its caption.
+Chapter files hold the words of the paper. Citations become `[cite: tag]`, and
+`$LOOKUP` turns a tag into the publication it names — see below.
+Cross-references to the
+paper's own equations and sections become `[ref: label]`, and those resolve to
+nothing; treat them as the paper saying "see elsewhere in this paper".
+
+Inline maths stays as `$…$` and display maths as `$$…$$`, so a Markdown preview
+renders it. A figure is embedded as a centred `<img>` pointing at
+`../figures/<name>.png`, followed by a line starting `**Figure.**` that carries
+its caption.
 
 Read `figures/` for a figure. `figures_raw/` exists only so the conversion can
 be redone; never read it, and never delete it.
@@ -55,6 +76,55 @@ be redone; never read it, and never delete it.
 
 Do not read all chapters of a paper.
 
+## To trace a claim a paper borrowed
+
+A paper states plenty it did not establish itself. Where it says so, it cites:
+
+> The axial mass extracted from deuterium data is $1.03$ GeV
+> [cite: bodek_2008_axial_mass_quasielastic].
+
+Look the tag up before you repeat the claim as though the paper you are reading
+had shown it:
+
+```bash
+$PY $LOOKUP bodek_2008_axial_mass_quasielastic
+```
+
+It answers in JSON with the title, authors, year, journal, DOI and arXiv
+identifier of the work the claim actually comes from. Cite **that** work, not
+the paper you found it in. Several tags at once is fine — pass them all.
+
+Author lists come back collapsed to three names with `authors_total` beside
+them, because a high-energy physics paper can carry several thousand authors and
+listing them answers nothing. Pass `--all-authors` on the rare occasion you need
+the rest.
+
+What the answer can tell you:
+
+- **`held_as` names a directory.** The work is here in full. Read
+  `literature/<that slug>/INDEX.md` — it is an ordinary paper of the collection.
+- **`held_as` is null, with a `doi` or `arxiv_id`.** The work is identified but
+  not here. Cite it from the answer; fetch it only if the question turns on
+  reading it, as below.
+- **`verified` is false.** Nothing could confirm this record. Its fields come
+  from the citing paper's own bibliography, or from a match on the title alone,
+  and may be wrong or incomplete. Never present it as an established source: say
+  what the citing paper claimed, and that its source could not be confirmed.
+
+The same tool searches, when you have no tag in hand:
+
+```bash
+$PY $LOOKUP --search "quasielastic neutrino"   # title, author, journal
+$PY $LOOKUP --doi 10.1103/physrevc.48.1246
+$PY $LOOKUP --arxiv 1611.07770
+$PY $LOOKUP --cited-by <slug>                  # everything a paper draws on
+```
+
+`literature/REFERENCES.md` is a view of the same data, sorted most-cited first,
+for a person browsing what the field is built on. Do not read it to resolve a
+tag: it holds one row per work across every paper here and grows without limit,
+where the lookup costs one record. It carries no tags at all.
+
 ## To find a figure
 
 1. Read or grep `literature/<slug>/figures/FIGURES.md`.
@@ -65,8 +135,17 @@ Do not read the chapters to find a figure.
 
 ## To find a paper that is not there
 
-1. Tell the user that the database has no paper on the subject.
-2. Offer the `add-paper` skill.
+1. Search the references first: `$PY $LOOKUP --search "<author or title word>"`.
+   A paper the collection does not hold may still be cited by one that it does,
+   and the answer gives you the arXiv identifier to fetch it by.
+2. Otherwise tell the user that the database has no paper on the subject.
+3. Offer the `add-paper` skill.
+
+You may add a cited work yourself, without asking, when answering the question
+needs the source rather than the citing paper's summary of it — a number you
+must check, a derivation the citing paper only names. Take the `arxiv_id` from
+the lookup and follow `add-paper` from its step 3, using the record's `tag` as
+the slug. Say that you did it and why.
 
 ## Rules
 
@@ -84,3 +163,13 @@ Do not read the chapters to find a figure.
   `(Author year, arXiv:ID, §section)` when the paper is still a preprint. The
   year in a citation is the `Published` year of a published paper and the
   `Submitted` year of a preprint.
+- Attribute a claim to the work that made it. When a paper you read cites
+  someone else for a fact, resolve the tag with `$LOOKUP` and cite that work.
+  Citing the paper you happened to read for a result it borrowed puts a wrong
+  attribution into the project's documentation.
+- Never edit `literature/REFERENCES.md` or `.references.jsonl`. The table is
+  rendered from the store and rewritten in full whenever a paper is added; both
+  belong to `add-paper`.
+- Never answer from a tag alone. The tag carries an author and a year, which is
+  enough to look convincing and not enough to be right — the tag is an
+  identifier, not a citation.
