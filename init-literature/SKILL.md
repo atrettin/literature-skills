@@ -91,12 +91,14 @@ text must not go to a remote. Never commit a file under `literature/`.
 
 ## Papers
 
-| Title | Authors | Year | What it is about |
-|---|---|---|---|
+| Title | Authors | Year | Journal | What it is about |
+|---|---|---|---|---|
 ~~~
 
 Leave the table empty, with only its header. `add-paper` adds a row per paper,
-in order of the year, newest last.
+in order of the year, newest last. Year is the year of the arXiv submission, the
+same one the directory name uses. Journal is where the paper was published, and
+`—` while the paper is still a preprint.
 
 ## Step 5. Say what comes next
 

@@ -8,7 +8,12 @@ description: Adds a paper from arXiv to the local literature database in literat
 The literature database holds papers as plain text, split into chapters. Agents
 read it with the `use-literature` skill. This skill puts a new paper into it.
 
-Two scripts do the mechanical work. You do the reading and the summaries.
+The scripts do the mechanical work. You do the reading and the summaries.
+
+The paper comes from arXiv, because arXiv is the only source that carries the
+TeX. arXiv does not say where the paper was published — its `journal_ref` field
+is written by the authors and is empty for most records. INSPIRE-HEP does say,
+and the fetch script asks it.
 
 ## Before you start
 
@@ -86,12 +91,23 @@ paper, whatever the heuristic said, and you may go to step 3 without asking the
 user. When the DOI disagrees, no amount of title similarity makes it the right
 paper.
 
-Cross-check against [INSPIRE-HEP](https://inspirehep.net/api/literature?q=) or
-[CrossRef](https://api.crossref.org/works/) when the arXiv record alone does not
-settle it. Both take a DOI directly. An INSPIRE record with an empty
-`arxiv_eprints` field is strong evidence that the paper was never posted to
-arXiv — theses and older conference proceedings frequently were not. That is a
-real answer: report it, and do not substitute a similar paper for it.
+Cross-check against INSPIRE-HEP when the arXiv record alone does not settle it:
+
+```bash
+$PY $SKILL/scripts/inspire_lookup.py <arxiv_id>
+$PY $SKILL/scripts/inspire_lookup.py --doi <doi>
+```
+
+The script prints the paper's title, journal and DOI as INSPIRE holds them.
+`"found": false` means INSPIRE has no record under that identifier — for a
+candidate you found on arXiv, that is usually a paper outside high-energy
+physics rather than a wrong identifier. When you have a journal reference but
+no arXiv candidate at all, look it up with `--doi`: a record whose title matches
+and whose `arxiv_id` comes back empty is strong evidence that the paper
+was never posted to arXiv — theses and older conference proceedings frequently
+were not. That is a real answer: report it, and do not substitute a similar
+paper for it. [CrossRef](https://api.crossref.org/works/) also takes a DOI
+directly and reaches outside high-energy physics.
 
 ## Step 3. Make the directory name
 
@@ -139,6 +155,24 @@ The script prints a JSON manifest. Keep the manifest. You need it in step 6.
 
 The script writes no `INDEX.md`. You write that file.
 
+The manifest's `publication` block says where the paper was published. The
+fetch script asks INSPIRE-HEP for it, keyed on the arXiv identifier:
+
+| Field | What it holds |
+|---|---|
+| `source` | `inspire`, `arxiv` (INSPIRE had nothing, arXiv's `journal_ref` was used) or `none` |
+| `journal` | `Phys.Rev.D 108 (2023) 113010`, or empty for a preprint |
+| `published_year` | the year the journal carried it, or `null` |
+| `doi` | the published DOI, or empty |
+| `errata` | one entry per erratum or addendum, usually empty |
+
+`submitted_year` sits beside it and holds the year of the arXiv submission.
+The two differ often, and by more than a year for proceedings volumes.
+
+A `journal` that comes back empty means the paper is still a preprint. That is
+an answer, not a failure — write it as one in step 5. Pass `--no-inspire` to
+skip the lookup; the journal then comes from arXiv alone and is usually empty.
+
 The chapters are written to render in a Markdown preview, not only to be read
 as text:
 
@@ -174,9 +208,11 @@ with everything else**. Write it again from step 5 after any re-fetch.
 | Field | Value |
 |---|---|
 | Authors | <first three authors, then "et al." for more> |
-| Year | <year> |
+| Submitted | <submitted_year> |
+| Published | <publication.published_year, or "preprint"> |
+| Journal | <publication.journal, or "—"> |
+| DOI | [<publication.doi>](https://doi.org/<publication.doi>), or "—" |
 | arXiv | [<arxiv_id>](https://arxiv.org/abs/<arxiv_id>) |
-| Journal | <journal_ref, or "—"> |
 | Ingested | <YYYY-MM-DD> |
 | Parser | <texsoup or fallback> |
 
@@ -195,6 +231,16 @@ with everything else**. Write it again from step 5 after any re-fetch.
 <count> figures. See [figures/FIGURES.md](figures/FIGURES.md) for the captions.
 ```
 
+The two year rows answer different questions, so write both even when they
+agree. `Submitted` is the arXiv date and always has a value. `Published` and
+`Journal` and `DOI` come from the `publication` block; when the paper is still
+a preprint, write `preprint` in `Published` and `—` in the other two. Add an
+`Erratum` row, directly beneath `Journal`, only when `publication.errata` is
+not empty, and put one erratum per line in it.
+
+The slug from step 3 keeps the **submission** year, whatever `Published` says.
+Do not rename a directory to match a journal year.
+
 Never write a summary of a chapter that you did not read.
 
 Do not change the text in the chapter files. The chapter files hold the words of
@@ -205,10 +251,31 @@ the paper.
 Add one row to the table in `literature/README.md`:
 
 ```markdown
-| [<Title>](<slug>/INDEX.md) | <first author> et al. | <year> | <what the paper is about, one sentence> |
+| [<Title>](<slug>/INDEX.md) | <first author> et al. | <submitted_year> | <publication.journal, or "—"> | <what the paper is about, one sentence> |
 ```
 
-Keep the rows in order of the year, newest last.
+Keep the rows in order of the year, newest last. The year here is the arXiv
+submission year, the same one the slug uses, so that the order and the directory
+names agree. The journal is the publication, or `—` while the paper is a
+preprint.
+
+A collection started before this skill had a Journal column has a four-column
+table. Add the column to the header, the separator row and every existing row —
+`—` for a row you have not looked up — before you add yours.
+
+## Step 7. Refresh a paper that is already there
+
+A preprint gets published later. To bring an ingested paper up to date, look it
+up again:
+
+```bash
+$PY $SKILL/scripts/inspire_lookup.py <arxiv_id>
+```
+
+Then edit the `Published`, `Journal` and `DOI` rows of the paper's `INDEX.md`
+and the Journal cell of its row in `literature/README.md`. Nothing else changes:
+do not re-fetch, do not pass `--force`, and do not touch the chapters or the
+figures. The paper's text did not change — only what is known about it did.
 
 ## Rules
 
@@ -224,3 +291,7 @@ Keep the rows in order of the year, newest last.
   exists, report the difference and add nothing.
 - Never delete `figures_raw/`. It is the only copy of the paper's own figure
   files, and every conversion is redone from it.
+- Never write a journal reference that no lookup returned. A paper INSPIRE does
+  not hold, or holds without a publication, is recorded as a preprint. Guessing
+  the journal from the paper's own front matter puts a wrong citation into every
+  document that later cites it.

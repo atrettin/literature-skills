@@ -11,7 +11,7 @@ it.
 | Skill | What it does |
 |---|---|
 | [init-literature](init-literature/SKILL.md) | Starts an empty collection in a project: creates `literature/` with its index, and makes git ignore it. |
-| [add-paper](add-paper/SKILL.md) | Finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, and indexes the result. |
+| [add-paper](add-paper/SKILL.md) | Finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, asks INSPIRE-HEP where it was published, and indexes the result. |
 | [use-literature](use-literature/SKILL.md) | How to find and read a paper already in the collection. |
 
 ## Installing
@@ -64,3 +64,15 @@ literature/<first-author>_<year>_<keywords>/
 
 Chapters are written to render in a Markdown preview: display maths as
 `$$ … $$`, figures as centred `<img>` blocks with their captions beneath.
+
+`INDEX.md` records both the year the preprint went to arXiv and the journal it
+was published in. arXiv cannot answer the second question — its `journal_ref`
+field is filled in by the authors and is empty for most records — so it comes
+from [INSPIRE-HEP](https://inspirehep.net/), keyed on the arXiv identifier.
+`add-paper/scripts/inspire_lookup.py` also runs on its own, to refresh a paper
+that has been published since it was ingested:
+
+```bash
+<project>/.venv/bin/python \
+    ~/work/software/literature-skills/add-paper/scripts/inspire_lookup.py 2307.09241
+```

@@ -27,7 +27,14 @@ literature/
     figures_raw/                the files as the paper shipped them
 ```
 
-The slug is `<first-author-surname>_<year>_<keyword>`.
+The slug is `<first-author-surname>_<year>_<keyword>`. The year in it is the
+year the preprint went to arXiv, which is not always the year of publication.
+
+`INDEX.md` carries both years and the journal reference. A question about where
+or when a paper appeared is answered from `INDEX.md` alone — never open a
+chapter for it. A `Journal` row of `—` and a `Published` row of `preprint` mean
+the paper had not been published when it was last looked up; `add-paper` can
+refresh that.
 
 Chapter files hold the words of the paper. Citations become `[cite: key]` and
 cross-references become `[ref: label]`. Inline maths stays as `$…$` and display
@@ -72,4 +79,8 @@ Do not read the chapters to find a figure.
   the code and its output for what the software does.
 - When you write a fact from the literature into the project's documentation,
   follow that project's own documentation rules if it has any, and cite the
-  paper as `(Author year, arXiv:ID, §section)`.
+  paper by its publication when `INDEX.md` gives one —
+  `(Author year, Phys.Rev.D 108 (2023) 113010, §section)` — and as
+  `(Author year, arXiv:ID, §section)` when the paper is still a preprint. The
+  year in a citation is the `Published` year of a published paper and the
+  `Submitted` year of a preprint.

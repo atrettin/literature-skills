@@ -10,6 +10,10 @@ Writes, under `<literature-root>/<slug>/`:
 It does **not** write INDEX.md. The calling agent writes that, from the JSON
 manifest this script prints on stdout plus its own reading of the chapters.
 
+The manifest's `publication` block says where the paper was published. arXiv
+alone cannot answer that, so it comes from INSPIRE-HEP; pass --no-inspire to
+skip that lookup.
+
 Usage:
     arxiv_fetch.py 1706.03621 --slug alvarez-ruso_2017_nustec_review
 """
@@ -35,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import convert_figures  # noqa: E402
+import inspire_lookup  # noqa: E402
 from arxiv_search import (  # noqa: E402
     COURTESY_DELAY_S,
     USER_AGENT,
@@ -984,6 +989,57 @@ def write_figures_index(records: list[dict], figures_dir: Path) -> None:
     (figures_dir / "FIGURES.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def arxiv_only_publication(metadata: dict) -> dict:
+    """What arXiv alone knows about the publication, which is usually nothing."""
+    journal_ref = collapse_whitespace(metadata.get("journal_ref", ""))
+    return {
+        "source": "arxiv" if journal_ref else "none",
+        "journal": journal_ref,
+        "published_year": None,
+        "doi": collapse_whitespace(metadata.get("doi", "")),
+        "errata": [],
+        "inspire_url": "",
+    }
+
+
+def resolve_publication(arxiv_id: str, metadata: dict, warnings: list[str]) -> dict:
+    """Ask INSPIRE where the paper was published, and fall back to arXiv.
+
+    arXiv's own `journal_ref` is written by the authors and is usually empty,
+    so INSPIRE decides when it holds the paper. A lookup that fails is a
+    warning, never an error: the TeX source is what the ingest is for.
+    """
+    record = inspire_lookup.lookup_by_arxiv(arxiv_id)
+    if not record["found"] and metadata.get("doi"):
+        record = inspire_lookup.lookup_by_doi(metadata["doi"])
+
+    if record["found"] and record["journal"]:
+        source, journal = "inspire", record["journal"]
+    else:
+        fallback = arxiv_only_publication(metadata)
+        source, journal = fallback["source"], fallback["journal"]
+
+    if not record["found"]:
+        warnings.append(
+            "INSPIRE-HEP gave no record for this paper (%s), so the journal and "
+            "the year of publication come from arXiv alone" % record.get("reason", "")
+        )
+    elif not record["journal"]:
+        warnings.append(
+            "INSPIRE-HEP holds this paper but reports no journal publication; "
+            "treat it as a preprint unless you find otherwise"
+        )
+
+    return {
+        "source": source,
+        "journal": journal,
+        "published_year": record["published_year"],
+        "doi": record["doi"] or collapse_whitespace(metadata.get("doi", "")),
+        "errata": record["errata"],
+        "inspire_url": record.get("inspire_url", ""),
+    }
+
+
 def fetch_metadata_by_id(arxiv_id: str) -> dict:
     """Query the arXiv API for a single paper's metadata."""
     params = urllib.parse.urlencode({"id_list": arxiv_id, "max_results": 1})
@@ -1010,6 +1066,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--literature-root", type=Path, default=Path("literature"))
     parser.add_argument("--max-chapter-bytes", type=int, default=DEFAULT_MAX_CHAPTER_BYTES)
     parser.add_argument("--force", action="store_true", help="overwrite an existing paper directory")
+    parser.add_argument(
+        "--no-inspire",
+        action="store_true",
+        help="skip the INSPIRE-HEP lookup; take the journal from arXiv alone",
+    )
     parser.add_argument("--dry-run", action="store_true", help="print the manifest, write nothing")
     parser.add_argument("--keep-source", type=Path, help="keep the extracted TeX source here")
     return parser
@@ -1027,6 +1088,14 @@ def main() -> int:
     work_dir = Path(tempfile.mkdtemp(prefix="arxiv_fetch_"))
     try:
         metadata = fetch_metadata_by_id(args.arxiv_id)
+        if args.no_inspire:
+            publication = arxiv_only_publication(metadata)
+        else:
+            try:
+                publication = resolve_publication(args.arxiv_id, metadata, warnings)
+            except Exception as error:  # the TeX matters more than the journal
+                publication = arxiv_only_publication(metadata)
+                warnings.append("the INSPIRE-HEP lookup failed (%s)" % error)
         time.sleep(COURTESY_DELAY_S)
         try:
             source_dir = download_source(args.arxiv_id, work_dir)
@@ -1096,7 +1165,7 @@ def main() -> int:
 
         if args.dry_run:
             print(json.dumps(build_manifest(
-                args, metadata, abstract, parser_used, chapters,
+                args, metadata, publication, abstract, parser_used, chapters,
                 [dict(record, file=record["file_hint"]) for record in figure_records],
                 warnings, main_tex, source_dir), indent=2))
             return 0
@@ -1140,7 +1209,7 @@ def main() -> int:
             chapter.pop("text", None)
 
         print(json.dumps(build_manifest(
-            args, metadata, abstract, parser_used, chapters, resolved,
+            args, metadata, publication, abstract, parser_used, chapters, resolved,
             warnings, main_tex, source_dir), indent=2))
         return 0
     finally:
@@ -1148,7 +1217,8 @@ def main() -> int:
 
 
 def build_manifest(
-    args, metadata, abstract, parser_used, chapters, figures, warnings, main_tex, source_dir
+    args, metadata, publication, abstract, parser_used, chapters, figures, warnings,
+    main_tex, source_dir
 ) -> dict:
     for chapter in chapters:
         chapter.pop("text", None)
@@ -1159,9 +1229,13 @@ def build_manifest(
         "title": metadata.get("title", ""),
         "authors": metadata.get("authors", []),
         "year": metadata.get("year"),
+        # The arXiv submission year, which the slug and the index order use.
+        # `publication.published_year` is the year the journal carried it.
+        "submitted_year": metadata.get("year"),
         "abs_url": metadata.get("abs_url", "https://arxiv.org/abs/%s" % args.arxiv_id),
         "journal_ref": metadata.get("journal_ref", ""),
         "doi": metadata.get("doi", ""),
+        "publication": publication,
         "abstract": abstract or metadata.get("summary", ""),
         "ingested": date.today().isoformat(),
         "parser": parser_used,
