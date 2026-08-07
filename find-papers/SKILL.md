@@ -64,6 +64,13 @@ same terms to arXiv, but only the first tells the cross-encoder what to rank.
 | `--max-results` | how many papers to report. The default is 15. |
 | `--literature-root` | where the collection is. The default is `literature`. |
 
+**A search takes about 4 to 8 seconds.** It sends one request to arXiv, and a
+second one three seconds later when the first finds little. It then reads up to
+a hundred abstracts with the cross-encoder. The first search of all also fetches
+the model, which adds a few seconds and happens one time. The script writes what
+it is doing to the error output while you wait. Wait for it. Do not start a
+second search because the first looks slow.
+
 **A category is exact.** `--category astro-ph` excludes `astro-ph.HE`, which is
 a separate category and not a part of it. Give both when you want both.
 

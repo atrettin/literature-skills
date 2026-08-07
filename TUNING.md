@@ -52,7 +52,9 @@ section before you change a delay.
 | `MODEL_NAME` | `ms-marco-MiniLM-L-12-v2` | The cross-encoder. `ms-marco-TinyBERT-L-2-v2` is 4 MB. It is faster, and it gives a worse order. `rank-T5-flan` is larger, and it is better on a subject far from its training data. FlashRank names the other models. |
 | `MAX_TOKENS` | 512 | How much of the question and the abstract the model reads. An abstract holds about 250 words. A lower value gives the model the first sentence only, and the model then ranks on that sentence. |
 | `MIN_PREFIX` | 4 | How many first letters make two words the same term. arXiv applies stemming to its index, and this value must agree: `scatter` answers `scattering`. A lower value lets `ion` take `ionisation`. A higher value reports a true stem as a missing term. |
+| `MIN_COVERAGE` | 0.34 | The share of the question a candidate must carry before the cross-encoder reads it. A candidate below it stays in the report and sorts after every paper the model read. This value sets the speed of a search: the model takes about 8 seconds for 100 papers, and the broad rung returns papers that carry one term. Measured across four questions, the lowest coverage among the 15 results the model chose was 0.56, so 0.34 leaves a wide margin. Above about 0.6 the model stops reading papers that it would have chosen. |
 | `MODEL_CACHE` | `~/.cache/flashrank` | Where the model stays. This is not a quality parameter. FlashRank's own default is `/tmp`, which the system clears. |
+| `DOWNLOAD_TIMEOUT_S` | 300.0 | How long the first run waits for the 21 MB model. A stalled download then reports a reason, and the search answers by coverage. |
 
 ## Matching a paper you can name
 

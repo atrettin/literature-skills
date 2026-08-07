@@ -19,6 +19,7 @@ model only reorders what coverage has already described.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -42,6 +43,32 @@ MAX_TOKENS = 512
 # `neutrinos`. Below it, prefixes stop being evidence — `ion` would take
 # `ionisation`.
 MIN_PREFIX = 4
+
+# A candidate carrying less than this share of the question goes to the
+# cross-encoder only if there is room to spare. The broad rung asks for any term
+# and returns papers that carry one, and scoring those costs most of the run:
+# 100 pairs take about 8 seconds, and a search reports 15. Measured over four
+# real questions, the lowest coverage among the 15 the model actually chose was
+# 0.56, so this leaves a wide margin. Raise it and the model reads fewer papers;
+# above about 0.6 it stops reading papers it would have chosen.
+MIN_COVERAGE = 0.34
+
+# Fetching 21 MB. Long enough for a slow line, short enough that a stalled
+# download reports a reason instead of holding the search open.
+DOWNLOAD_TIMEOUT_S = 300.0
+
+
+def say(message: str) -> None:
+    """Tell a person at a terminal what is happening.
+
+    Ranking a hundred abstracts takes several seconds and the first run also
+    fetches a model, and stdout carries one JSON report and nothing else. So
+    progress goes to stderr, and only when a person is there to read it: a
+    caller that redirects the report into a file or another program gets the
+    quiet output it expects.
+    """
+    if sys.stderr.isatty():
+        print(message, file=sys.stderr, flush=True)
 
 
 # --------------------------------------------------------------------------
@@ -85,6 +112,53 @@ def coverage(terms: list[str], title: str, abstract: str) -> tuple[float, list[s
 # --------------------------------------------------------------------------
 
 
+def model_is_cached() -> bool:
+    return (MODEL_CACHE / MODEL_NAME).is_dir()
+
+
+def download_model(timeout_s: float = DOWNLOAD_TIMEOUT_S) -> str | None:
+    """Fetch the model in a process of its own. Returns a reason on failure.
+
+    The download must not happen in the process that goes on to search, and the
+    reason is a macOS fault rather than tidiness. Downloading starts a progress
+    bar, whose lock is a multiprocessing semaphore, whose resource tracker
+    starts by fork and exec. The model and its tokenizer have already put native
+    threads in the process by then, and on macOS a fork from a multi-threaded
+    process crashes the child before it reaches exec:
+
+        *** multi-threaded process forked ***
+        crashed on child side of fork pre-exec
+
+    Loading a model that is already on disk starts neither the progress bar nor
+    the semaphore, so a warm process is safe. Doing the download somewhere else
+    is what makes every process warm.
+    """
+    program = (
+        "from flashrank import Ranker; "
+        "Ranker(model_name=%r, cache_dir=%r, max_length=%d, log_level='ERROR')"
+        % (MODEL_NAME, str(MODEL_CACHE), MAX_TOKENS)
+    )
+    try:
+        finished = subprocess.run(
+            [sys.executable, "-c", program],
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        return "downloading the %s model took longer than %ds" % (MODEL_NAME, timeout_s)
+    except OSError as error:
+        return "the %s model could not be downloaded (%s)" % (MODEL_NAME, error)
+
+    if finished.returncode != 0 or not model_is_cached():
+        detail = (finished.stderr or "").strip().splitlines()
+        return "downloading the %s model failed (%s)" % (
+            MODEL_NAME,
+            detail[-1] if detail else "exit %d" % finished.returncode,
+        )
+    return None
+
+
 def load_ranker():  # noqa: ANN201 - the type belongs to an optional dependency
     """Build the cross-encoder, or explain why there is none.
 
@@ -100,6 +174,12 @@ def load_ranker():  # noqa: ANN201 - the type belongs to an optional dependency
             "flashrank is not installed; ordered by term coverage. "
             "Install it with: pip install -r find-papers/requirements.txt"
         )
+
+    if not model_is_cached():
+        say("fetching the %s model; this happens once" % MODEL_NAME)
+        failure = download_model()
+        if failure:
+            return None, "%s; ordered by term coverage" % failure
 
     try:
         MODEL_CACHE.mkdir(parents=True, exist_ok=True)
@@ -156,25 +236,38 @@ def rank(topic: str, terms: list[str], entries: list[dict]) -> tuple[list[dict],
         share, missing = coverage(terms, entry.get("title", ""), entry.get("summary", ""))
         entry["coverage"] = round(share, 4)
         entry["missing_terms"] = missing
+        entry["ranked"] = share >= MIN_COVERAGE
 
     ranker, note = load_ranker()
-    scores = relevance_scores(ranker, topic, entries) if ranker is not None else None
-    if ranker is not None and scores is None:
-        note = "the %s model failed while scoring; ordered by term coverage" % MODEL_NAME
+
+    worth_reading = [entry for entry in entries if entry["ranked"]]
+    scores = None
+    if ranker is not None and worth_reading:
+        say("ranking %d of %d candidates" % (len(worth_reading), len(entries)))
+        scores = relevance_scores(ranker, topic, worth_reading)
+        if scores is None:
+            note = "the %s model failed while scoring; ordered by term coverage" % MODEL_NAME
 
     if scores is None:
         for entry in entries:
             entry["score"] = entry["coverage"]
         backend = "coverage"
     else:
-        for entry, score in zip(entries, scores):
+        for entry, score in zip(worth_reading, scores):
             entry["score"] = round(score, 4)
+        # A candidate the model never read keeps its coverage as a score. The
+        # sort below puts every one of them after every paper the model did
+        # read, so the two numbers are never compared against each other.
+        for entry in entries:
+            if not entry["ranked"]:
+                entry["score"] = entry["coverage"]
         backend = "flashrank:%s" % MODEL_NAME
 
     # arXiv returned these in its own relevance order, which carries full text
     # and citation information this has no other access to. Keeping it as the
     # tie-break costs nothing and beats an arbitrary order among equal scores.
     ordered = sorted(
-        enumerate(entries), key=lambda pair: (-pair[1]["score"], pair[0])
+        enumerate(entries),
+        key=lambda pair: (not pair[1]["ranked"], -pair[1]["score"], pair[0]),
     )
     return [entry for _, entry in ordered], backend, note
