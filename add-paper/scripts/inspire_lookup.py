@@ -11,6 +11,10 @@ The report's "found" field says whether INSPIRE holds the paper at all. A
 paper that INSPIRE holds but that has not been published yet comes back with
 "found": true and an empty "journal" — that is a preprint, not a miss.
 
+INSPIRE allows 15 requests per IP in any 5-second window. One paper costs one
+request, so a single run never comes near that; a run that is rate-limited
+anyway waits out the whole window before it tries again.
+
 Usage:
     inspire_lookup.py 2307.09241
     inspire_lookup.py --doi 10.1016/j.ppnp.2018.01.006
@@ -37,6 +41,13 @@ RECORD_URL = "https://inspirehep.net/literature/%s"
 REQUEST_TIMEOUT_S = 30.0
 MAX_RETRIES = 3
 RETRY_DELAY_S = 3.0
+
+# INSPIRE allows 15 requests per IP in any 5-second window and answers the
+# rest with HTTP 429. A blocked request still counts against the quota, so
+# retrying before the window has passed only spends the next slot on another
+# 429. Wait out the whole window.
+RATE_LIMIT_WINDOW_S = 5.0
+MAX_RETRY_DELAY_S = 60.0
 
 # An erratum is published separately from the paper it corrects. It belongs in
 # its own row of INDEX.md, never in the Journal field.
@@ -119,10 +130,13 @@ def fetch_record(path: str) -> dict | None:
             if error.code == 404:
                 return None
             if error.code == 429:
-                # INSPIRE says how long to wait; believe it, within reason.
+                # Never less than the rate-limit window, and longer when
+                # INSPIRE says so itself.
                 retry_after = error.headers.get("Retry-After") if error.headers else None
+                delay = RATE_LIMIT_WINDOW_S
                 if retry_after and str(retry_after).strip().isdigit():
-                    delay = min(float(str(retry_after).strip()), 60.0)
+                    delay = max(delay, float(str(retry_after).strip()))
+                delay = min(delay, MAX_RETRY_DELAY_S)
                 last_error = error
             elif 500 <= error.code < 600:
                 last_error = error
