@@ -52,6 +52,37 @@ install degrades rather than fails:
 | `rsvg-convert` (librsvg) | SVG | `brew install librsvg` |
 | Pillow | raster formats, and the cropping step for everything | in `requirements.txt` |
 
+## The scripts
+
+Every script is a standalone command line tool, and `--help` gives its full
+options. All of them live in `add-paper/scripts/`, and all of them expect to run
+from the root of the project that holds `literature/`. The lines below use this
+repository's own `.venv`, which is how they are run while the skills are
+developed here.
+
+```bash
+.venv/bin/python -m pip install -r add-paper/requirements.txt
+```
+
+| Script | Does |
+|---|---|
+| `arxiv_search.py --title … --author … --year …` | finds the paper on arXiv and prints the candidates |
+| `arxiv_fetch.py <arxiv-id> --slug <dir>` | ingests one paper: source, chapters, figures, bibliography |
+| `convert_figures.py <paper-dir>` | converts the figures of a paper again |
+| `check_references.py` | asserts that every `[cite: …]` and `[ref: …]` in the collection still resolves |
+| `reference_lookup.py <tag>` | resolves one citation, or searches the reference store |
+| `update_references.py` | renders `REFERENCES.md` from the store |
+| `inspire_lookup.py <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
+
+Two options of `arxiv_fetch.py` matter while the conversion is worked on:
+`--dry-run` prints the manifest and writes nothing, and `--keep-source <dir>`
+keeps the extracted TeX to compare the output against. `--force` overwrites a
+paper directory that exists.
+
+There is no test suite. To exercise the pipeline end to end, ingest a real paper
+and then run `check_references.py`. `pyrightconfig.json` configures the type
+checks.
+
 ## What a paper ends up as
 
 ```
