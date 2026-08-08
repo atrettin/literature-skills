@@ -83,14 +83,16 @@ plain text for humans and agents to read. Each paper has its own directory:
 
 Start at `INDEX.md` of a paper. Read only the chapters that you need.
 
-A citation in a chapter reads `[cite: some_tag]`. Resolve the tag to the work it
-names — title, authors, journal, DOI, arXiv identifier — with the `add-paper`
-skill's `reference_lookup.py`, which reads `.references.jsonl`. That is how a
-claim a paper borrowed gets traced back to whoever established it.
+A citation in a chapter reads `(Lipari, 2002)` and opens that work's page under
+`references/`, which is named after the work's tag. Agents resolve that tag with
+the `add-paper` skill's `reference_lookup.py`, which reads `.references.jsonl`
+and answers with the title, authors, journal, DOI and arXiv identifier. That is
+how a claim a paper borrowed gets traced back to whoever established it.
 
-[REFERENCES.md](REFERENCES.md) is the same data as a table, most-cited first,
-for reading rather than for lookup: what these papers are built on, and which of
-it is already held here.
+[REFERENCES.md](REFERENCES.md) is the same data as one table, most-cited first:
+what these papers are built on, and which of it is already held here. It and
+`references/` are both for reading, and both are rendered from
+`.references.jsonl` — never edit either by hand.
 
 Agents: use the `use-literature` skill to read a paper, and the `add-paper`
 skill to add one.
@@ -115,9 +117,10 @@ Then write the empty reference index, so the collection has one from the start:
 $PY <add-paper skill>/scripts/update_references.py --render-only
 ```
 
-That creates `literature/REFERENCES.md` from an empty store. It needs the
-`add-paper` skill's scripts; if that skill is not installed here, skip it —
-`add-paper` writes the file itself the first time it files a paper's references.
+That creates `literature/REFERENCES.md` and an empty `literature/references/`
+from an empty store. It needs the `add-paper` skill's scripts; if that skill is
+not installed here, skip it — `add-paper` writes both itself the first time it
+files a paper's references.
 
 ## Step 5. Say what comes next
 

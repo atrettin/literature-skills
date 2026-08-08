@@ -86,7 +86,7 @@ developed here.
 | `arxiv_discover.py --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, and marks the ones the collection holds |
 | `arxiv_fetch.py <arxiv-id> --slug <dir>` | ingests one paper: source, chapters, figures, bibliography |
 | `convert_figures.py <paper-dir>` | converts the figures of a paper again |
-| `check_references.py` | asserts that every `[cite: …]` and `[ref: …]` in the collection still resolves |
+| `check_references.py` | asserts that every citation and `[ref: …]` in the collection still resolves |
 | `reference_lookup.py <tag>` | resolves one citation, or searches the reference store |
 | `update_references.py` | renders `REFERENCES.md` from the store |
 | `inspire_lookup.py <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
@@ -104,8 +104,9 @@ paper directory that exists.
 .venv/bin/python -m pyright
 ```
 
-The tests cover the three parts that fail quietly: the queries the scripts send
-to arXiv, the ranking, and the answers the collection gives about a paper.
+The tests cover the four parts that fail quietly: the queries the scripts send to
+arXiv, the ranking, the answers the collection gives about a paper, and the
+citations written into the chapters.
 
 They call no network. `tests/data/` holds the arXiv responses they run against.
 `tests/data/collection_fixture/` holds the collection they check against. That
@@ -128,9 +129,9 @@ Each of these can change at arXiv rather than here, and arXiv reports none of
 them as a failure. Run this group when a search returns the wrong kind of
 answer.
 
-The conversion pipeline has no unit tests. To exercise it end to end, ingest a
-real paper and then run `check_references.py`. `pyrightconfig.json` configures
-the type checks.
+The LaTeX-to-Markdown conversion has no unit tests. To exercise it end to end,
+ingest a real paper and then run `check_references.py`. `pyrightconfig.json`
+configures the type checks.
 
 [TUNING.md](TUNING.md) lists the numbers that decide how good an answer is. They
 do not decide whether the answer is correct. Three examples:
@@ -148,7 +149,8 @@ you change one. Add a row to it when you introduce another.
 literature/
 ├── README.md                 one row per paper held here
 ├── REFERENCES.md             one row per work those papers cite
-├── .references.jsonl         the store REFERENCES.md is rendered from
+├── .references.jsonl         the store the two views are rendered from
+├── references/<tag>.md       one page per cited work, what a citation opens
 └── <first-author>_<year>_<keywords>/
     ├── INDEX.md              identity, abstract, per-chapter summaries
     ├── chapters/NN_<title>.md    the text, one file per section
@@ -192,11 +194,30 @@ established it.
 
 So the bibliography is read from the TeX source, each entry is resolved against
 [INSPIRE-HEP](https://inspirehep.net/) and [Crossref](https://www.crossref.org/),
-and the citation names a row:
+and the citation becomes a link on to that work's own page:
 
+```markdown
+… and for searches for physics beyond the standard model
+([Lipari, 2002](../../references/lipari_2002_neutrino_oscillation_neutrino_cross.md);
+[Katori et al., 2018](../../references/katori_2018_neutrino_nucleus_cross_sections.md)).
 ```
-[cite: lipari_2002_neutrino_oscillation_neutrino_cross]
-```
+
+A reader sees `(Lipari, 2002)` and one click opens that work — its title,
+authors, journal, DOI, arXiv link, and the papers here that cite it. Several
+works at one point share one pair of brackets, separated by semicolons, the way
+a journal sets them.
+
+**A citation names a file rather than a row of a table.** The obvious thing is
+to link to `REFERENCES.md#<tag>`, and it does not work: the VS Code Markdown
+preview resolves a cross-file `#fragment` through the target's heading table of
+contents, so an anchor in a table cell is unreachable and the file merely opens
+at the top. A heading it could reach would have to be linked to by its slug
+rather than by the tag, and the tag in the link is the whole point of the next
+paragraph. A link to a file lands where it says, in every renderer, with nothing
+to resolve.
+
+The tag has not gone anywhere — it names the file, which is what an agent greps
+for and what it passes to `reference_lookup.py`:
 
 ```console
 $ reference_lookup.py lipari_2002_neutrino_oscillation_neutrino_cross
@@ -229,18 +250,21 @@ thousand authors, and a citation never turns on the four hundredth of them.
 
 **Storage is separate from presentation.** `.references.jsonl` is the store —
 one JSON object per line, written atomically, deduplicated on DOI, arXiv
-identifier, INSPIRE record number, or journal-volume-page. Two views sit on top
-of it, and neither is where the data lives:
+identifier, INSPIRE record number, or journal-volume-page. Three views sit on
+top of it, and none is where the data lives:
 
 | | For | Answers |
 |---|---|---|
-| `reference_lookup.py` | resolving one citation | a tag, a DOI, an arXiv id, a search, or everything one paper cites |
-| `REFERENCES.md` | reading | one row per cited work, most-cited first, linked where the collection holds it |
+| `reference_lookup.py` | an agent resolving a citation | a tag, a DOI, an arXiv id, a search, or everything one paper cites |
+| `REFERENCES.md` | a person browsing | one row per cited work, most-cited first, linked where the collection holds it |
+| `references/<tag>.md` | a person following a citation | that one work, on a page of its own |
 
-The table carries no tags — they run to fifty characters and made that column
-wider than the titles beside it, for a string that is looked up rather than
-read. It is rendered from the store in full on every run, so editing it by hand
-achieves nothing.
+The two files are rendered from the store in full on every run, so editing
+either by hand achieves nothing; a page whose work has left the store is
+deleted. The table has no tag column — a tag runs to fifty characters and made
+that column wider than the titles beside it, for a string that is looked up
+rather than read. Its titles link to the paper for the works this collection
+holds in full, which is how a reader spots those at a glance.
 
 **A row marked ⚠ was not confirmed.** Only a DOI, an arXiv identifier, an
 INSPIRE texkey, or a journal-volume-page triple with agreeing authors counts as
@@ -249,9 +273,10 @@ bibliography, does not — those drift, and a confidently wrong publication
 attached to a real claim is worse than no citation at all. Unresolvable entries
 keep whatever their own bibliography said, marked, rather than disappearing.
 
-`check_references.py` reads every `[cite: …]` in the collection and asserts each
-one still resolves. It is the only guard against a tag quietly going stale, and
-`add-paper` runs it after every ingest.
+`check_references.py` reads every citation in the collection and asserts each one
+still resolves — against the store, and against the anchors of the table it links
+to. It is the only guard against a tag quietly going stale, and `add-paper` runs
+it after every ingest.
 
 `INDEX.md` records both the year the preprint went to arXiv and the journal it
 was published in. arXiv cannot answer the second question — its `journal_ref`

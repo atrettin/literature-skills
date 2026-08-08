@@ -156,9 +156,13 @@ The script downloads the TeX source. It writes these files:
 It also reads the paper's bibliography and resolves it, which is what makes the
 citations in the chapters mean anything. `[cite: Lipari:2002at]` — the author's
 private label — comes out as `[cite: lipari_2002_neutrino_oscillation_neutrino_cross]`,
-a tag that step 6 gives a row in `literature/REFERENCES.md`. The references
-themselves are in the manifest's `references` field; step 6 files them. Pass
-`--no-references` to skip this, and the citations keep the paper's own keys.
+a tag that step 6 gives a row in `literature/REFERENCES.md`. Step 6 also turns
+that marker into the link a reader follows,
+`([Lipari, 2002](../../references/lipari_2002_neutrino_oscillation_neutrino_cross.md))`,
+so a chapter still holding a `[cite: ...]` marker after step 6 is one whose tag
+the store could not answer. The references themselves are in the manifest's
+`references` field; step 6 files them. Pass `--no-references` to skip this, and
+the citations keep the paper's own keys.
 
 Every figure is converted to PNG so that it can be read directly, and the
 surrounding whitespace is cropped. The paper's own files stay in
@@ -303,9 +307,11 @@ $PY $SKILL/scripts/check_references.py
 
 Write the manifest from step 4 to a file if you have not already, and pass it
 here. The first script folds every work the paper cites into the reference
-store and rewrites `literature/REFERENCES.md` from it. The second checks that
-every `[cite: ...]` in the collection still names a row; it prints `"ok": true`
-and exits 0 when all is well.
+store, rewrites `literature/REFERENCES.md` and `literature/references/` from it,
+and writes the citations into the chapters — `relinked` in its output counts the
+files it touched. The second checks that every citation in the collection still
+names a work and still has a page to open; it prints `"ok": true` and exits 0
+when all is well.
 
 Run this **after** `INDEX.md` exists, not before. The merge reads each paper's
 `INDEX.md` to work out which cited works this collection also holds in full, and
@@ -320,6 +326,9 @@ What comes back from the merge:
 | `unchanged` | works already known and already listing it — a re-run |
 | `unverified` | rows across the whole store whose identity is not confirmed |
 | `retagged` | citations repointed because the store already knew a work under another tag |
+| `relinked` | files whose `[cite: ...]` markers became links a reader can follow |
+| `pages_written` | pages under `references/` written or brought up to date |
+| `pages_removed` | pages whose work is no longer in the store |
 
 One work has one row however many papers cite it, and re-running the merge on
 the same manifest changes nothing, so it is safe to repeat.
@@ -332,7 +341,9 @@ page.
 
 If `check_references.py` reports anything under `unresolved`, say so — a
 citation in a chapter is naming a record that does not exist, and the claim it
-supports cannot be traced until it does.
+supports cannot be traced until it does. `missing_pages` means the record is
+there but the page its citation opens is not; re-run `update_references.py
+--render-only`, which writes them.
 
 `dangling_refs` is the same check for the papers' internal cross-references: a
 link to an equation, figure or section anchor that is not there, or a
@@ -342,7 +353,8 @@ reference it holds; re-fetching it is what fixes that.
 
 `reference_lookup.py` reads the store the merge just wrote, and is how anything
 downstream resolves a tag. `REFERENCES.md` is the view beside it, for a person
-browsing; it carries no tags, so do not grep it for one:
+browsing and for a citation to land on; take the tag from the fragment of the
+link that cites it, and do not grep the table for one:
 
 ```bash
 $PY $SKILL/scripts/reference_lookup.py <tag>
@@ -397,9 +409,10 @@ figures. The paper's text did not change — only what is known about it did.
   not hold, or holds without a publication, is recorded as a preprint. Guessing
   the journal from the paper's own front matter puts a wrong citation into every
   document that later cites it.
-- Never edit `literature/REFERENCES.md` by hand. It is rendered in full from
-  `.references.jsonl` every time a paper is added, so an edit is discarded at
-  the next run. Fix the store, or fix what put the wrong value there.
+- Never edit `literature/REFERENCES.md` or `literature/references/` by hand.
+  Both are rendered in full from `.references.jsonl` every time a paper is
+  added, so an edit is discarded at the next run. Fix the store, or fix what put
+  the wrong value there.
 - Never fill in a ⚠ row from memory. A reference nothing could confirm stays
   unconfirmed until a lookup confirms it; that mark is what tells a later reader
   the row may be wrong.

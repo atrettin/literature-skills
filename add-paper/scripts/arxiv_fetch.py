@@ -40,6 +40,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import convert_figures  # noqa: E402
 import inspire_lookup  # noqa: E402
+import reference_store  # noqa: E402
 import references  # noqa: E402
 from arxiv_search import (  # noqa: E402
     COURTESY_DELAY_S,
@@ -477,9 +478,6 @@ def expand_macros(text: str, macros: dict, passes: int = 4) -> str:
     return text
 
 
-CITE_TAG = re.compile(r"\[cite:\s*([^\]]*)\]")
-
-
 def apply_cite_tags(text: str, key_tags: dict[str, list[str]]) -> str:
     """Put reference tags in place of the paper's own LaTeX keys.
 
@@ -487,6 +485,10 @@ def apply_cite_tags(text: str, key_tags: dict[str, list[str]]) -> str:
     `[cite: lipari_2002_..., katori_2018_...]`, each tag naming a row of
     REFERENCES.md. One key can stand for several works, when the bibliography
     packed several into one \\bibitem, so it can expand to several tags.
+
+    The marker is the intermediate form. update_references.py turns it into the
+    link a reader follows, once the store has the author and year to label it
+    with — see relink_citations there.
 
     A key the bibliography never defined keeps its original text: there is
     nothing to point it at, and leaving it visible is how that stays known.
@@ -501,7 +503,7 @@ def apply_cite_tags(text: str, key_tags: dict[str, list[str]]) -> str:
             return match.group(0)
         return "[cite: %s]" % ", ".join(tags)
 
-    return CITE_TAG.sub(replace, text)
+    return reference_store.CITE_TAG.sub(replace, text)
 
 
 def drop_bibliography(body: str) -> str:

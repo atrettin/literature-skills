@@ -42,6 +42,19 @@ from arxiv_search import collapse_whitespace, normalize_title, slugify  # noqa: 
 
 STORE_NAME = ".references.jsonl"
 VIEW_NAME = "REFERENCES.md"
+# One page per cited work, for a reader following a citation. The tag names the
+# file, so a citation carries its tag in plain sight either way.
+RECORDS_DIR = "references"
+
+# How a citation is written, in the two forms it passes through. The
+# conversion leaves the marker; update_references.py turns it into the link a
+# reader follows. Both shapes are matched in three scripts, so they live here
+# rather than in whichever one needed them first.
+#
+#   [cite: lipari_2002_neutrino_oscillation_neutrino_cross]
+#   ([Lipari, 2002](../../references/lipari_2002_neutrino_oscillation_neutrino_cross.md))
+CITE_TAG = re.compile(r"\[cite:\s*([^\]]*)\]")
+CITE_LINK = re.compile(r"\]\((?:[^)]*/)?" + re.escape(RECORDS_DIR) + r"/([^/)\s]+)\.md\)")
 
 # Title words that say nothing about which paper this is. Dropping them keeps
 # a tag short enough to read inside a sentence.

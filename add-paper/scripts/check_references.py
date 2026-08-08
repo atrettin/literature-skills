@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Check that every citation in the collection still points at something.
 
-Tags are written into chapter files and answered by `.references.jsonl`. The
-two are separate files that nothing keeps in step automatically, so this reads
-every `[cite: ...]` in the collection and asks the store to account for it.
+Tags are written into chapter files — as the fragment of the link a citation
+is — and answered by `.references.jsonl`. The two are separate files that
+nothing keeps in step automatically, so this reads every citation in the
+collection and asks the store to account for it.
 
 Run it after adding a paper. It is cheap, it touches nothing, and it is the
 only thing that notices when a citation has quietly stopped resolving.
@@ -14,9 +15,11 @@ What it reports:
     duplicate    one work holds two records, so its citations are split
     orphan       a record nothing cites any more
     stale        a record points at a paper directory that is not there
+    missing page a cited work has no page under references/ to open
     dangling ref a link to an equation, figure or section that is not there
 
-Exit status is 1 when anything unresolved, duplicated or stale was found.
+Exit status is 1 when anything unresolved, duplicated, stale or missing a page
+was found.
 Orphans, unverified rows and dangling cross-references are reported but do not
 fail: an orphan is what a re-ingested paper leaves behind, an unverified row is
 honest about itself, and a cross-reference the paper's own source never defined
@@ -40,7 +43,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import reference_store  # noqa: E402
 from arxiv_search import collapse_whitespace  # noqa: E402
 
-CITE_TAG = re.compile(r"\[cite:\s*([^\]]*)\]")
 # A cross-reference the conversion could not resolve keeps its marker.
 REF_TAG = re.compile(r"\[ref:\s*([^\]]*)\]")
 # `[5](03_model.md#eq-ckmt)` and `[5](#eq-ckmt)` for a target in the same file.
@@ -48,18 +50,40 @@ REF_LINK = re.compile(r"\]\(([^)#]*)#([^)\s]+)\)")
 ANCHOR = re.compile(r'<a id="([^"]*)"></a>')
 
 
+def written_files(root: Path) -> list[Path]:
+    """The Markdown of the papers, which is all this has anything to say about.
+
+    The files at the root and the pages under `references/` are rendered from
+    the store on every run. A citation cannot go stale in a file that is
+    rewritten from the thing it would go stale against.
+    """
+    return sorted(
+        path
+        for path in root.rglob("*.md")
+        if path.parent != root and path.parent.name != reference_store.RECORDS_DIR
+    )
+
+
 def read_citations(root: Path) -> dict[str, list[str]]:
-    """tag -> the files citing it, over every paper in the collection."""
+    """tag -> the files citing it, over every paper in the collection.
+
+    Both forms count. A citation normally reads
+    `([Lipari, 2002](../../references/<tag>.md))` and carries its tag as the
+    name of the file it opens; a `[cite: tag]` marker still standing is one
+    update_references.py could not label, and a tag it names is exactly the
+    kind this is here to report.
+    """
     found: dict[str, list[str]] = collections.defaultdict(list)
-    for path in sorted(root.rglob("*.md")):
-        if path.parent == root:
-            continue
+    for path in written_files(root):
         text = path.read_text(encoding="utf-8", errors="replace")
-        for match in CITE_TAG.finditer(text):
+        where = str(path.relative_to(root))
+        for tag in reference_store.CITE_LINK.findall(text):
+            found[tag].append(where)
+        for match in reference_store.CITE_TAG.finditer(text):
             for tag in match.group(1).split(","):
                 tag = collapse_whitespace(tag)
                 if tag:
-                    found[tag].append(str(path.relative_to(root)))
+                    found[tag].append(where)
     return found
 
 
@@ -73,9 +97,7 @@ def read_cross_references(root: Path) -> list[dict]:
     """
     anchors: dict[Path, set[str]] = {}
     texts: dict[Path, str] = {}
-    for path in sorted(root.rglob("*.md")):
-        if path.parent == root:
-            continue
+    for path in written_files(root):
         texts[path] = path.read_text(encoding="utf-8", errors="replace")
         anchors[path.resolve()] = set(ANCHOR.findall(texts[path]))
 
@@ -124,6 +146,14 @@ def check(root: Path) -> dict:
             key=lambda item: item["tag"],
         ),
         "duplicates": duplicates,
+        # A tag the store answers still needs the page its citation opens. The
+        # store cannot say whether that file is on disk, and a reader clicking
+        # a citation is the only other thing that would find out.
+        "missing_pages": sorted(
+            tag
+            for tag in cited
+            if tag in tags and not (root / reference_store.RECORDS_DIR / ("%s.md" % tag)).is_file()
+        ),
         "stale": sorted(
             record.get("tag", "")
             for record in store
@@ -135,10 +165,10 @@ def check(root: Path) -> dict:
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--literature-root", type=Path, default=Path("literature"))
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not args.literature_root.exists():
         print(json.dumps({"error": "%s does not exist" % args.literature_root}, indent=2))
@@ -150,7 +180,12 @@ def main() -> int:
         print(json.dumps({"error": str(error)}, indent=2))
         return 1
 
-    report["ok"] = not (report["unresolved"] or report["duplicates"] or report["stale"])
+    report["ok"] = not (
+        report["unresolved"]
+        or report["duplicates"]
+        or report["stale"]
+        or report["missing_pages"]
+    )
     print(json.dumps(report, indent=2))
     return 0 if report["ok"] else 1
 

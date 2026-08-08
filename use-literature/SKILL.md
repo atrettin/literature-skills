@@ -33,7 +33,8 @@ Run every command from the root of the project, so that `literature/` resolves.
 literature/
   README.md                     one row for each paper
   REFERENCES.md                 one row for each work the papers cite
-  .references.jsonl             the store REFERENCES.md is rendered from
+  .references.jsonl             the store the two views are rendered from
+  references/<tag>.md           one page for each cited work — for a person
   <slug>/                       one directory for each paper
     INDEX.md                    metadata, abstract, and a summary of each chapter
     chapters/NN_<title>.md      the text of one section
@@ -52,8 +53,9 @@ chapter for it. A `Journal` row of `—` and a `Published` row of `preprint` mea
 the paper had not been published when it was last looked up; `add-paper` can
 refresh that.
 
-Chapter files hold the words of the paper. Citations become `[cite: tag]`, and
-`$LOOKUP` turns a tag into the publication it names — see below.
+Chapter files hold the words of the paper. A citation becomes a link that reads
+`(Lipari, 2002)` and names a file whose stem is the tag; `$LOOKUP` turns that
+tag into the publication it names — see below.
 
 A reference the paper makes to itself becomes a link to the thing it names:
 `eq. ([6](#eq-ckmt))` for an equation in the same chapter, and
@@ -88,10 +90,14 @@ Do not read all chapters of a paper.
 A paper states plenty it did not establish itself. Where it says so, it cites:
 
 > The axial mass extracted from deuterium data is $1.03$ GeV
-> [cite: bodek_2008_axial_mass_quasielastic].
+> ([Bodek et al., 2008](../../references/bodek_2008_axial_mass_quasielastic.md)).
 
-Look the tag up before you repeat the claim as though the paper you are reading
-had shown it:
+The tag is the name of the file the link opens, without `.md` — here
+`bodek_2008_axial_mass_quasielastic`. **Do not follow the link.** `references/`
+and `REFERENCES.md` are both rendered for a person to read; `$LOOKUP` is the one
+way you resolve a citation, and it answers with more, from the store the two are
+rendered from. Look the tag up before you repeat the claim as though the paper
+you are reading had shown it:
 
 ```bash
 $PY $LOOKUP bodek_2008_axial_mass_quasielastic
@@ -128,9 +134,11 @@ $PY $LOOKUP --cited-by <slug>                  # everything a paper draws on
 ```
 
 `literature/REFERENCES.md` is a view of the same data, sorted most-cited first,
-for a person browsing what the field is built on. Do not read it to resolve a
-tag: it holds one row per work across every paper here and grows without limit,
-where the lookup costs one record. It carries no tags at all.
+for a person browsing what the field is built on, and `literature/references/`
+is the same data again, one page per work, for a person following a citation.
+Do not read either to resolve a tag: the table holds one row per work across
+every paper here and grows without limit, and a page tells you less than the
+lookup does at the same cost.
 
 ## To find a figure
 
@@ -182,9 +190,9 @@ the slug. Say that you did it and why.
   someone else for a fact, resolve the tag with `$LOOKUP` and cite that work.
   Citing the paper you happened to read for a result it borrowed puts a wrong
   attribution into the project's documentation.
-- Never edit `literature/REFERENCES.md` or `.references.jsonl`. The table is
-  rendered from the store and rewritten in full whenever a paper is added; both
-  belong to `add-paper`.
-- Never answer from a tag alone. The tag carries an author and a year, which is
-  enough to look convincing and not enough to be right — the tag is an
-  identifier, not a citation.
+- Never edit `literature/REFERENCES.md`, `literature/references/` or
+  `.references.jsonl`. The first two are rendered from the store and rewritten
+  in full whenever a paper is added; all three belong to `add-paper`.
+- Never answer from a citation alone. Its text and its tag both carry an author
+  and a year, which is enough to look convincing and not enough to be right —
+  they are identifiers, not citations. Resolve the tag with `$LOOKUP`.
