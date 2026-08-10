@@ -26,9 +26,8 @@ you could not verify, and keep it visible.
 - Use the Python environment in `.venv` to run code and to install packages.
 - Do not use historical framing in documentation. State what is and why, not
   what was, what changed, or what a thing used to do.
-- Review documentation against the `asd-ste100` skill when you write or update
-  it.
-- Review a plan against the `asd-ste100` skill after you write it.
+- Review implementation plans and agent instructions against the `asd-ste100`
+  skill after you write them.
 - A planning agent must add an instruction to work in a worktree, unless the
   user says otherwise. Work large enough to need a plan is large enough to need
   a worktree.
