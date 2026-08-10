@@ -1,0 +1,16 @@
+{
+  "hits": {
+    "total": 1,
+    "hits": [
+      {
+        "metadata": {
+          "references": [
+            {"record": {"$ref": "https://inspirehep.net/api/literature/590543"}},
+            {"record": {"$ref": "https://inspirehep.net/api/literature/2678901"}},
+            {"reference": {"misc": ["a line the citing paper never keyed to a record"]}}
+          ]
+        }
+      }
+    ]
+  }
+}

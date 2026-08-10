@@ -348,6 +348,21 @@ def mark_held(records: list[dict], root: Path) -> int:
 # --------------------------------------------------------------------------
 
 
+def default_root() -> Path:
+    """Where the collection is: `$LITERATURE_ROOT`, or `literature` beside you.
+
+    One collection can serve many projects. A paper costs a download, a
+    conversion and a place in the reference store, and paying that again in
+    the next project buys nothing. The variable names a directory that outlives
+    any one project; without it the collection belongs to the project, as the
+    path in every skill says.
+
+    Every script reads this as the default of `--literature-root`, so the flag
+    still wins where a caller names a root of its own.
+    """
+    return Path(os.environ.get("LITERATURE_ROOT") or "literature")
+
+
 def store_path(root: Path) -> Path:
     return root / STORE_NAME
 

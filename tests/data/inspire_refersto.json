@@ -1,0 +1,73 @@
+{
+  "hits": {
+    "total": 3141,
+    "hits": [
+      {
+        "metadata": {
+          "control_number": 2678901,
+          "titles": [
+            {
+              "title": "Neutrino Cross Sections: Interface of shallow- and deep-inelastic scattering for collider neutrinos"
+            }
+          ],
+          "authors": [{"full_name": "Jeong, Yu Seon"}, {"full_name": "Reno, Mary Hall"}],
+          "publication_info": [
+            {
+              "journal_title": "Phys.Rev.D",
+              "journal_volume": "108",
+              "year": 2023,
+              "artid": "113010"
+            }
+          ],
+          "dois": [{"value": "10.1103/PhysRevD.108.113010"}],
+          "arxiv_eprints": [{"value": "2307.09241"}],
+          "citation_count": 31,
+          "abstracts": [
+            {"value": "The shallow-inelastic region sits between resonance production and deep-inelastic scattering, and neither description holds across the whole of it."}
+          ]
+        }
+      },
+      {
+        "metadata": {
+          "control_number": 590543,
+          "titles": [{"title": "Neutrino oscillation studies and the neutrino cross-section"}],
+          "authors": [{"full_name": "Lipari, Paolo"}],
+          "publication_info": [
+            {
+              "journal_title": "Nucl.Phys.B Proc.Suppl.",
+              "journal_volume": "112",
+              "year": 2002,
+              "page_start": "274",
+              "page_end": "287"
+            }
+          ],
+          "dois": [{"value": "10.1016/S0920-5632(02)01783-8"}],
+          "arxiv_eprints": [{"value": "hep-ph/0207172"}],
+          "citation_count": 53,
+          "abstracts": [
+            {"value": "An oscillation measurement can be no better than the cross section it is unfolded with, and the cross section at these energies is known least well where the flux is largest. This sentence is here to make the abstract longer than the four hundred characters that triage is allowed to see, so that the truncation the report performs has something to cut away and the test can prove that it cut. The abstract carries on past that point, because a real one does, and because a cut that lands on the last character would prove nothing at all."}
+          ]
+        }
+      },
+      {
+        "metadata": {
+          "control_number": 2799001,
+          "titles": [{"title": "A measurement nobody in the fixture collection has heard of"}],
+          "authors": [
+            {"full_name": "Nowak, Jaroslaw"},
+            {"full_name": "Sobczyk, Jan"},
+            {"full_name": "Juszczak, Cezary"},
+            {"full_name": "Zmuda, Janusz"}
+          ],
+          "publication_info": [
+            {"journal_title": "Phys.Rev.D", "journal_volume": "111", "year": 2025, "artid": "012001"}
+          ],
+          "dois": [{"value": "10.1103/PhysRevD.111.012001"}],
+          "arxiv_eprints": [{"value": "2501.00001"}],
+          "citation_count": 2,
+          "abstracts": [{"value": "A paper the collection does not know at all."}]
+        }
+      }
+    ]
+  }
+}

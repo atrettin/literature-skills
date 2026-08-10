@@ -1510,7 +1510,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("arxiv_id", help="arXiv identifier, for example 1706.03621")
     parser.add_argument("--slug", required=True, help="directory name under the literature root")
-    parser.add_argument("--literature-root", type=Path, default=Path("literature"))
+    parser.add_argument(
+        "--literature-root", type=Path, default=reference_store.default_root()
+    )
     parser.add_argument("--max-chapter-bytes", type=int, default=DEFAULT_MAX_CHAPTER_BYTES)
     parser.add_argument("--force", action="store_true", help="overwrite an existing paper directory")
     parser.add_argument(

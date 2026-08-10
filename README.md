@@ -10,10 +10,12 @@ it.
 
 | Skill | What it does |
 |---|---|
-| [init-literature](init-literature/SKILL.md) | Starts an empty collection in a project: creates `literature/` with its index, and makes git ignore it. |
+| [init-literature](init-literature/SKILL.md) | Starts an empty collection: creates the directory with its index, and makes git ignore it. |
 | [add-paper](add-paper/SKILL.md) | Finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, asks INSPIRE-HEP where it was published, resolves its bibliography, and indexes the result. |
 | [use-literature](use-literature/SKILL.md) | How to find and read a paper already in the collection. |
 | [find-papers](find-papers/SKILL.md) | Searches arXiv by the subject of a paper's abstract, ranks the hits against the question with a local cross-encoder, and marks the ones the collection already holds. |
+| [follow-citations](follow-citations/SKILL.md) | Finds the papers that cite a given paper, with INSPIRE-HEP, and the works it draws on, from the reference store. |
+| [research-report](research-report/SKILL.md) | Answers a task that needs a literature review, in a bounded loop of search, read and assess, and writes a report whose every claim links to the chapter it came from. |
 
 ## Installing
 
@@ -23,8 +25,13 @@ with no per-project setup:
 ```bash
 git clone <this repo> ~/work/software/literature-skills
 
-for s in add-paper use-literature init-literature find-papers; do
+for s in add-paper use-literature init-literature find-papers \
+         follow-citations research-report; do
     ln -s ~/work/software/literature-skills/$s ~/.claude/skills/$s
+done
+
+for a in literature-researcher paper-ingestor paper-scout; do
+    ln -s ~/work/software/literature-skills/.claude/agents/$a.md ~/.claude/agents/$a.md
 done
 ```
 
@@ -32,7 +39,72 @@ They are symlinks, so `git pull` in the clone updates every project at once, and
 an edit in the clone takes effect immediately.
 
 To install for one project only, symlink into that project's `.claude/skills/`
-instead of `~/.claude/skills/`.
+and `.claude/agents/` instead.
+
+## Researching a task
+
+`research-report` answers a task whose result is a report with citations. A
+question is one such task. So is "check the claims in this file against the
+literature", and so is "list the cross-section models this generator uses, by
+the energy range where each applies".
+
+It runs a loop, because the first papers a search finds are approximate matches.
+Reading them teaches what the search should have asked for, and which papers to
+follow through the citation graph. The loop stops when each sub-question is
+answered, or when a limit in [TUNING.md](TUNING.md) stops it — and the report
+says which of the two happened.
+
+Three agents divide the work, and the division is about context rather than
+speed:
+
+| Agent | Reads | Why it is separate |
+|---|---|---|
+| `literature-researcher` | `INDEX.md` files, the reports of the other two, and the chapters it cites | it runs the loop and writes the report. |
+| `paper-ingestor` | the whole paper, one time | ingesting reads every chapter to summarise it. That text must not stay in the context that has to last the whole task. |
+| `paper-scout` | the whole paper, against the open sub-questions | a chapter summary was written before anybody had these questions, so it can miss the paragraph that answers one. |
+
+Only the ingestor calls arXiv and INSPIRE, and only one runs at a time. A scout
+reads local files, so several run together.
+
+The report goes to `reports/<task-slug>.md` in the project, beside
+`reports/<task-slug>.research-log.md`, which records each iteration: what was
+searched, what was read, what was found, and what stayed open. Both are the
+agent's own words and can be committed.
+
+Each citation in a report is a relative link into the collection, down to the
+anchor of the section the claim came from:
+
+```markdown
+(Jeong 2023, Phys.Rev.D 108 (2023) 113010,
+[§2](../literature/jeong_2023_shallow_deep_inelastic/chapters/02_introduction.md#sec-introduction))
+```
+
+`check_report.py` then checks the report the way `check_references.py` checks the
+collection: every link opens a file that exists, every anchor is in that file,
+every tag has a record, the body and the references agree, and every
+unconfirmed work carries its ⚠.
+
+[EVALUATION.md](EVALUATION.md) says how to measure whether the agent does this
+well.
+
+## A collection shared between projects
+
+A collection can serve more than one project. Set `LITERATURE_ROOT`:
+
+```bash
+export LITERATURE_ROOT=~/literature
+```
+
+Every script reads it as the default of `--literature-root`, and every skill
+reads the collection there. Without it, the collection is `literature/` in the
+project, and nothing changes for a project that has one.
+
+A paper costs a download and a conversion. Paying that again in the next project
+buys nothing, and the second copy is a second thing to keep in step.
+
+A shared collection usually sits outside any repository. `init-literature` then
+has no `.gitignore` to write, says so, and states that the copyright still
+holds.
 
 ## Requirements
 
@@ -72,9 +144,9 @@ produced it, so a reader always knows which of the two they have.
 
 Every script is a standalone command line tool, and `--help` gives its full
 options. All of them live in `add-paper/scripts/`, and all of them expect to run
-from the root of the project that holds `literature/`. The lines below use this
-repository's own `.venv`, which is how they are run while the skills are
-developed here.
+from the root of the project that holds `literature/` — or with
+`LITERATURE_ROOT` set, from anywhere. The lines below use this repository's own
+`.venv`, which is how they are run while the skills are developed here.
 
 ```bash
 .venv/bin/python -m pip install -r add-paper/requirements.txt
@@ -90,6 +162,8 @@ developed here.
 | `reference_lookup.py <tag>` | resolves one citation, or searches the reference store |
 | `update_references.py` | renders `REFERENCES.md` from the store |
 | `inspire_lookup.py <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
+| `inspire_citations.py <arxiv-id>` | finds the papers that cite one paper, and the works it draws on |
+| `check_report.py <report.md>` | asserts that every citation of a report opens the text it names |
 
 Two options of `arxiv_fetch.py` matter while the conversion is worked on:
 `--dry-run` prints the manifest and writes nothing, and `--keep-source <dir>`
@@ -104,9 +178,11 @@ paper directory that exists.
 .venv/bin/python -m pyright
 ```
 
-The tests cover the four parts that fail quietly: the queries the scripts send to
-arXiv, the ranking, the answers the collection gives about a paper, and the
-citations written into the chapters.
+The tests cover the parts that fail quietly: the queries the scripts send to
+arXiv, the ranking, the answers the collection gives about a paper, the
+citations written into the chapters, the citations written into a report, the
+queries sent to INSPIRE for the citation graph, and which collection a script
+reads.
 
 They call no network. `tests/data/` holds the arXiv responses they run against.
 `tests/data/collection_fixture/` holds the collection they check against. That

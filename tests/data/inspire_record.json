@@ -1,0 +1,32 @@
+{
+  "metadata": {
+    "control_number": 1599542,
+    "titles": [
+      {
+        "title": "NuSTEC White Paper: Status and challenges of neutrino-nucleus scattering"
+      }
+    ],
+    "authors": [
+      {"full_name": "Alvarez-Ruso, L."},
+      {"full_name": "Athar, M. Sajjad"},
+      {"full_name": "Barbaro, M. B."}
+    ],
+    "publication_info": [
+      {
+        "journal_title": "Prog.Part.Nucl.Phys.",
+        "journal_volume": "100",
+        "year": 2018,
+        "page_start": "1",
+        "page_end": "68"
+      }
+    ],
+    "dois": [{"value": "10.1016/j.ppnp.2018.01.006"}],
+    "arxiv_eprints": [{"value": "1706.03621", "categories": ["hep-ph"]}],
+    "citation_count": 812,
+    "document_type": ["article"],
+    "preprint_date": "2017-06-12",
+    "abstracts": [
+      {"value": "The precision era of neutrino oscillation physics needs a description of neutrino-nucleus scattering that is good enough for the measurement it supports."}
+    ]
+  }
+}

@@ -167,7 +167,9 @@ def check(root: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--literature-root", type=Path, default=Path("literature"))
+    parser.add_argument(
+        "--literature-root", type=Path, default=reference_store.default_root()
+    )
     args = parser.parse_args(argv)
 
     if not args.literature_root.exists():

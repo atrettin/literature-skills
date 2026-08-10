@@ -79,7 +79,7 @@ class Options:
     categories: list[str] = field(default_factory=list)
     since: int | None = None
     max_results: int = 15
-    literature_root: Path = Path("literature")
+    literature_root: Path = field(default_factory=reference_store.default_root)
 
 
 # --------------------------------------------------------------------------
@@ -311,7 +311,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--since", type=int, help="earliest year of submission")
     parser.add_argument("--max-results", type=int, default=15)
-    parser.add_argument("--literature-root", type=Path, default=Path("literature"))
+    parser.add_argument(
+        "--literature-root", type=Path, default=reference_store.default_root()
+    )
     return parser
 
 

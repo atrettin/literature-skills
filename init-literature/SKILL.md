@@ -1,19 +1,28 @@
 ---
 name: init-literature
-description: Starts an empty literature database in the current project, creating literature/ with its index and making sure git ignores it. Use when a project has no literature/ directory yet and the user wants to begin collecting papers.
+description: Starts an empty literature database, creating the collection directory with its index and making sure git ignores it. Use when a project has no literature/ directory yet and the user wants to begin collecting papers.
 ---
 
 # Start a literature collection
 
-This skill creates an empty `literature/` for a project that has none. Papers go
-in afterwards with the `add-paper` skill.
+This skill creates an empty collection for a project that has none. Papers go in
+afterwards with the `add-paper` skill.
+
+## Step 0. Find where the collection goes
+
+The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
+set, it is `literature/` in the project.
+
+One collection can serve many projects, and that is what the variable is for: a
+paper costs a download and a conversion, and paying that a second time in the
+next project buys nothing. Every path below means the collection's directory,
+wherever it is.
 
 ## Step 1. Refuse if one already exists
 
-If `literature/` is present, stop. Tell the user that the project already has a
-collection and how many papers are in it. Do not overwrite `README.md` — it is
-the index of papers already collected, and rewriting it destroys their
-summaries.
+If the directory is present, stop. Tell the user that the collection exists and
+how many papers are in it. Do not overwrite its `README.md` — it is the index of
+papers already collected, and rewriting it destroys their summaries.
 
 ## Step 2. Ask what the collection covers
 
@@ -29,10 +38,12 @@ copyrighted. If they reach a remote, the user has published someone else's work
 under their own account — that is their personal legal exposure, not an abstract
 policy. A collection that is not ignored will be committed sooner or later.
 
-1. Check for a repository:
+1. Check for a repository. Ask about the collection's own directory, and not
+   about the project: a shared collection outside the project can sit in a
+   repository of its own, or in none.
 
    ```bash
-   git rev-parse --is-inside-work-tree
+   git -C <the collection's parent directory> rev-parse --is-inside-work-tree
    ```
 
 2. **If it is a repository**, find the root and test whether the path is covered
@@ -40,11 +51,12 @@ policy. A collection that is not ignored will be committed sooner or later.
    file, so a project that is already safe gets no duplicate rule:
 
    ```bash
-   git rev-parse --show-toplevel
-   git check-ignore -q literature/ && echo ignored || echo "NOT ignored"
+   git -C <the collection's parent directory> rev-parse --show-toplevel
+   git check-ignore -q <the collection's path> && echo ignored || echo "NOT ignored"
    ```
 
-   When it is not ignored, append to the `.gitignore` at the repository root:
+   When it is not ignored, append to the `.gitignore` at that repository's root
+   the collection's path, relative to that root, with a `/` at the end:
 
    ```
    # Literature. The papers are copyrighted and must never be committed or
@@ -52,11 +64,12 @@ policy. A collection that is not ignored will be committed sooner or later.
    literature/
    ```
 
-   Then confirm with `git check-ignore -q literature/`.
+   Then confirm with `git check-ignore -q <the collection's path>`.
 
-3. **If it is not a repository**, carry on, but tell the user plainly that
-   nothing protects the directory yet and that they must ignore `literature/`
-   before they run `git init` and commit.
+3. **If it is not a repository**, carry on. Tell the user plainly that no
+   repository can commit the collection where it is, and that the copyright
+   still holds: they must not publish the papers by any other means either. If
+   they run `git init` there later, they must ignore the collection first.
 
 Tell the user what you did either way, and why: the papers are under copyright,
 pushing them to a remote distributes them, and the liability is theirs. One or
@@ -64,7 +77,7 @@ two sentences — state it as a fact they need, not as a warning to be dismissed
 
 ## Step 4. Write the directory and its index
 
-Create `literature/` and write `literature/README.md`:
+Create the collection's directory and write its `README.md`:
 
 ~~~markdown
 # Literature
@@ -98,7 +111,7 @@ Agents: use the `use-literature` skill to read a paper, and the `add-paper`
 skill to add one.
 
 This directory is **not tracked by git**. The papers are copyrighted, so their
-text must not go to a remote. Never commit a file under `literature/`.
+text must not go to a remote. Never commit a file of this collection.
 
 ## Papers
 
@@ -117,10 +130,11 @@ Then write the empty reference index, so the collection has one from the start:
 $PY <add-paper skill>/scripts/update_references.py --render-only
 ```
 
-That creates `literature/REFERENCES.md` and an empty `literature/references/`
-from an empty store. It needs the `add-paper` skill's scripts; if that skill is
-not installed here, skip it — `add-paper` writes both itself the first time it
-files a paper's references.
+That creates `REFERENCES.md` and an empty `references/` in the collection from
+an empty store. Give `--literature-root` when `$LITERATURE_ROOT` is not set and
+the collection is not `literature/` in the project. The command needs the
+`add-paper` skill's scripts. If that skill is not installed here, skip it:
+`add-paper` writes both itself the first time it files a paper's references.
 
 ## Step 5. Say what comes next
 
@@ -131,7 +145,7 @@ title, an author or an arXiv ID. Mention that `add-paper` needs `TexSoup` and
 
 ## Rules
 
-- Never create `literature/` without settling step 3 first.
+- Never create the collection without settling step 3 first.
 - Never write a paper into the collection here. That is `add-paper`'s work.
 - Never add the collection to version control, and never suggest a way to
   distribute its contents.

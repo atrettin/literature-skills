@@ -56,6 +56,42 @@ section before you change a delay.
 | `MODEL_CACHE` | `~/.cache/flashrank` | Where the model stays. This is not a quality parameter. FlashRank's own default is `/tmp`, which the system clears. |
 | `DOWNLOAD_TIMEOUT_S` | 300.0 | How long the first run waits for the 21 MB model. A stalled download then reports a reason, and the search answers by coverage. |
 
+## Following the citations of a paper
+
+`add-paper/scripts/inspire_citations.py` finds the papers that cite one paper,
+and the works that it draws on.
+
+| Parameter | Now | What it does |
+|---|---|---|
+| `MAX_RESULTS` | 20 | How many papers one direction reports. A well-cited review has thousands of citers, and the report says how many it left behind. A higher value gives more to triage, from one request either way. |
+| `CITED_FETCH_CAP` | 40 | How many of a paper's own references the script looks up. This is one batch. A review cites five hundred works, and a higher value costs one more request for each further forty. |
+| `DEFAULT_SORT` | `mostcited` | The order of the citing papers when the caller asks for none. `mostcited` answers "what did the field build on this". `mostrecent` answers "what came after it", and is one flag away. |
+
+## Researching a task
+
+`research-report/SKILL.md` runs the loop that answers a task from the
+literature. These limits stop the loop. They are not numbers in a script: the
+skill states them, and the agent obeys them.
+
+| Parameter | Now | What it does |
+|---|---|---|
+| `MAX_ITERATIONS` | 4 | How many times the loop can search, read and assess again. A higher value follows a subject further, and costs more time and more API calls. A report that stopped at this limit says so. |
+| `MAX_NEW_PAPERS_PER_ITERATION` | 5 | How many papers one iteration ingests. Each ingest happens in a `paper-ingestor` agent, thus the cost is time at arXiv, and not context of the agent that researches. |
+| `MAX_TOTAL_INGESTS` | 20 | How many papers the whole task ingests. It bounds a task that keeps finding one more paper worth reading. |
+| `DRY_ITERATIONS` | 2 | How many iterations can find no new relevant paper before the loop stops. A lower value stops earlier on a subject that the collection covers already. |
+| `MAX_PARALLEL_SCOUTS` | 4 | How many `paper-scout` agents read at one time. A scout calls no API, thus this value trades tokens against waiting. |
+
+## Choosing a model for an agent
+
+The frontmatter of each agent in `.claude/agents/` names its model. A cheaper
+model costs less and reads less well.
+
+| Parameter | Now | What it does |
+|---|---|---|
+| `model` of `paper-ingestor` | `sonnet` | The model that ingests a paper. Most of that work is mechanical. The judgement is in the summary of each chapter and in the match of the paper to the request. `haiku` is the cheaper value to try, and a worse `INDEX.md` costs every later read. |
+| `model` of `paper-scout` | `haiku` | The model that reads one paper against the sub-questions. This is targeted extraction, and not synthesis. `sonnet` is the value to try when scouts miss a passage that answers a question. |
+| `model` of `literature-researcher` | `inherit` | The model that runs the loop and writes the report. It reads no full text, and it makes every judgement. |
+
 ## Matching a paper you can name
 
 `add-paper/scripts/arxiv_search.py` finds one paper that you can name.
@@ -98,6 +134,6 @@ repository sets each one. A lower value makes nothing faster.
 | `COURTESY_DELAY_S` | `arxiv_search.py`, 3.0 | arXiv asks for three seconds between calls. A lower value causes a rate limit, and that costs more time than the change saves. |
 | `RATE_LIMIT_WINDOW_S` | `inspire_lookup.py`, 5.0 | The rate-limit window of INSPIRE-HEP. The script answers a 429 and then waits out the whole window. |
 | `MAX_RETRY_DELAY_S` | `inspire_lookup.py`, 60.0 | A ceiling on the delay that a `Retry-After` header can ask for. A wrong header cannot then stop a run. |
-| `INSPIRE_PACE_S` and `BATCH_SIZE` | `references.py`, 0.5 and 40 | The pace and the batch size that the INSPIRE API accepts. |
+| `INSPIRE_PACE_S` and `BATCH_SIZE` | `references.py`, 0.5 and 40 | The pace and the batch size that the INSPIRE API accepts. `inspire_citations.py` sends its requests through the same functions, and thus at the same pace. |
 | `REQUEST_TIMEOUT_S` and `CROSSREF_TIMEOUT_S` | four scripts, 20 to 120 | How long a script waits for a server. `arxiv_fetch.py` waits the longest, at 120, because it downloads an archive of the source. |
 | `MAX_RETRIES` | two scripts, 3 | How many times a script repeats a failed request. |

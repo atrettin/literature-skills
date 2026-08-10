@@ -643,18 +643,38 @@ def build_entries(source_dir: Path, body: str, keys: list[str]) -> list[dict]:
 # --------------------------------------------------------------------------
 
 
-def inspire_search(query: str, fields: tuple[str, ...], size: int = BATCH_SIZE) -> list[dict]:
+def inspire_search(
+    query: str, fields: tuple[str, ...], size: int = BATCH_SIZE, sort: str | None = None
+) -> list[dict]:
     """Run one INSPIRE search and return the hits' metadata. Never raises."""
-    params = urllib.parse.urlencode({"q": query, "fields": ",".join(fields), "size": size})
+    return search_payload(query, fields, size, sort)[0]
+
+
+def search_payload(
+    query: str, fields: tuple[str, ...], size: int = BATCH_SIZE, sort: str | None = None
+) -> tuple[list[dict], int]:
+    """The hits' metadata and how many hits there are in all.
+
+    A search that asks for twenty of three thousand answers with twenty. The
+    total says which of those two numbers the caller is holding.
+    """
+    query_parts = {"q": query, "fields": ",".join(fields), "size": size}
+    if sort:
+        query_parts["sort"] = sort
+    params = urllib.parse.urlencode(query_parts)
     try:
         payload = inspire_lookup.fetch_record("literature?" + params)
     except RuntimeError:
-        return []
+        return [], 0
     time.sleep(INSPIRE_PACE_S)
     if not payload:
-        return []
-    hits = ((payload.get("hits") or {}).get("hits")) or []
-    return [hit.get("metadata") or {} for hit in hits]
+        return [], 0
+    hits = (payload.get("hits") or {}).get("hits") or []
+    total = (payload.get("hits") or {}).get("total")
+    return (
+        [hit.get("metadata") or {} for hit in hits],
+        total if isinstance(total, int) else len(hits),
+    )
 
 
 def in_batches(items: list, size: int = BATCH_SIZE):
@@ -1069,7 +1089,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--source-dir", type=Path, required=True, help="extracted TeX source")
     parser.add_argument("--arxiv-id", default="", help="the citing paper, for INSPIRE's reference list")
-    parser.add_argument("--literature-root", type=Path, default=Path("literature"))
+    parser.add_argument(
+        "--literature-root", type=Path, default=reference_store.default_root()
+    )
     parser.add_argument("--no-lookup", action="store_true", help="read the bibliography, look nothing up")
     args = parser.parse_args()
 

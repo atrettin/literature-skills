@@ -439,7 +439,9 @@ def apply_rewrites(root: Path, slug: str, rewrites: dict[str, str]) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--manifest", type=Path, help="the JSON arxiv_fetch.py printed")
-    parser.add_argument("--literature-root", type=Path, default=Path("literature"))
+    parser.add_argument(
+        "--literature-root", type=Path, default=reference_store.default_root()
+    )
     parser.add_argument(
         "--render-only",
         action="store_true",

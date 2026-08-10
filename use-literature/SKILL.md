@@ -27,6 +27,11 @@ Neither path is fixed, so:
 
 Run every command from the root of the project, so that `literature/` resolves.
 
+The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
+set, it is `literature/` in the project. The scripts read the variable
+themselves, thus you do not give `--literature-root`. Read and write the
+collection's files at that path.
+
 ## The structure
 
 ```

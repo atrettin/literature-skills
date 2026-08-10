@@ -96,7 +96,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="show at most N authors of each work (default %d)" % DEFAULT_AUTHORS,
     )
     parser.add_argument("--all-authors", action="store_true", help="show every author")
-    parser.add_argument("--literature-root", type=Path, default=Path("literature"))
+    parser.add_argument(
+        "--literature-root", type=Path, default=reference_store.default_root()
+    )
     return parser
 
 

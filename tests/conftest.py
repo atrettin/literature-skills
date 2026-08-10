@@ -86,3 +86,60 @@ def no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     import arxiv_discover
 
     monkeypatch.setattr(arxiv_discover.time, "sleep", lambda seconds: None)
+
+
+class FakeInspire:
+    """Stands in for `inspire_lookup.fetch_record`, and records what it was asked.
+
+    Every request to INSPIRE in these scripts goes through that one function,
+    whether it fetches a record by identifier or runs a search, so replacing it
+    replaces the whole API. A test sets `answers`, keyed by a substring of the
+    path, and reads `paths` to check what was asked for. A path no key matches
+    answers 404, the same as a record INSPIRE does not hold.
+    """
+
+    def __init__(self, answers: dict[str, dict] | None = None) -> None:
+        self.answers = answers or {}
+        self.paths: list[str] = []
+
+    def __call__(self, path: str) -> dict | None:
+        self.paths.append(path)
+        for key, payload in self.answers.items():
+            if key in path:
+                return payload
+        return None
+
+    def query(self, index: int = 0) -> str:
+        """The `q=` of the index-th search, as it was sent."""
+        import urllib.parse
+
+        searches = [path for path in self.paths if path.startswith("literature?")]
+        parsed = urllib.parse.parse_qs(searches[index].split("?", 1)[1])
+        return parsed["q"][0]
+
+    def params(self, index: int = 0) -> dict[str, str]:
+        """Every parameter of the index-th search."""
+        import urllib.parse
+
+        searches = [path for path in self.paths if path.startswith("literature?")]
+        parsed = urllib.parse.parse_qs(searches[index].split("?", 1)[1])
+        return {name: values[0] for name, values in parsed.items()}
+
+
+@pytest.fixture
+def inspire_payloads() -> dict[str, dict]:
+    """The canned INSPIRE answers, read from tests/data."""
+    import json
+
+    return {
+        name: json.loads((DATA / ("%s.json" % name)).read_text(encoding="utf-8"))
+        for name in ("inspire_record", "inspire_refersto", "inspire_references", "inspire_recids")
+    }
+
+
+@pytest.fixture
+def no_pace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop the pause between INSPIRE requests. Nothing here calls INSPIRE."""
+    import references
+
+    monkeypatch.setattr(references.time, "sleep", lambda seconds: None)
