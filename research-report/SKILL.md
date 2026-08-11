@@ -33,7 +33,7 @@ file below the literature root.
 
 ## Before you start
 
-Five shorthands are used below. The `add-paper` skill prints its own base
+Six shorthands are used below. The `add-paper` skill prints its own base
 directory when it loads; its `scripts/` directory holds each script.
 
 - **`$PY`** — the project's Python. Use `.venv/bin/python` when the project has
@@ -41,6 +41,7 @@ directory when it loads; its `scripts/` directory holds each script.
 - **`$LOOKUP`** — `<add-paper>/scripts/reference_lookup.py`
 - **`$CITE`** — `<add-paper>/scripts/inspire_citations.py`
 - **`$SEARCH`** — `<add-paper>/scripts/search_literature.py`
+- **`$SCAN`** — `<add-paper>/scripts/terminology_scan.py`
 - **`$AUDIT`** — `<add-paper>/scripts/check_report.py`
 
 **Find the collection first.** It is at `$LITERATURE_ROOT` when that variable is
@@ -49,12 +50,13 @@ run `init-literature` before you search. Write the path down: the header of the
 report and each link in it depend on it.
 
 **Delegate the heavy reading.** Your own context is the limit on this work, and
-the full text of a paper is large. Two agents keep that text out of it:
+the full text of a paper is large. Three agents keep that text out of it:
 
 | Agent | What it does |
 |---|---|
 | `paper-ingestor` | handles an exception of the ingest script for one paper. It reports the slug and the warnings, and no paper text. |
 | `paper-scout` | reads one paper that is on disk against your sub-questions. It reports the locations that answer them. It uses no API, thus several can run at the same time. |
+| `terminology-scout` | says how one term of the literature relates to your subject. It uses no API, thus several can run at the same time. |
 
 If the environment cannot start an agent, do the same work yourself: ingest with
 `add-paper`, read with `use-literature`. The workflow does not change. It only
@@ -102,6 +104,7 @@ set is that scope:
 | Tool | How you pass the set |
 |---|---|
 | `$SEARCH` | `--paper <slug>` for each paper of the set, when you verify a claim of this task |
+| `$SCAN` | `--cited-by <slug>` for each paper of the set, when you look for the other names of your subject |
 
 A tool that you run over the whole collection answers a question about the
 collection. It does not answer a question about your task.
@@ -118,6 +121,7 @@ These limits hold for the whole task:
 | `DRY_ITERATIONS` | 2 |
 | `MAX_PARALLEL_SCOUTS` | 4 |
 | `CURRENCY_GRACE_MONTHS` | 12 |
+| `MAX_TERMINOLOGY_SCOUTS` | 3 |
 
 ### Step 1. Plan the iteration
 
@@ -282,6 +286,55 @@ Three things answer nothing. Say so each time:
   lookup confirmed it.
 - Your own memory of the field. Only the text at the link counts.
 
+### Step 4b. Find the other names of the subject
+
+**Run this after iteration 1. It is required.** Your query holds the words of
+the person who asked. The papers hold the words of the field, and the two are
+often different words for one area. `missing_terms` cannot tell you this. It
+names the terms of your query that a paper lacks. It never names the terms of
+the papers that your query lacks.
+
+**Scope it to the working set.** Give one `--cited-by` for each paper in your
+working set, and no more:
+
+```bash
+$PY $SCAN --topic "<your topic phrase>" \
+          --cited-by <slug> --cited-by <slug>
+```
+
+The collection is persistent. It holds the papers of tasks that came before
+yours, and their titles carry the vocabulary of other subjects. A scan of the
+whole store thus offers you the other names of somebody else's question. The
+script refuses to run without a scope for that reason. Never use `--all-papers`
+here: it answers a question about the collection, and not about your task.
+
+Check the `scope` block of the report. Its `papers` list must equal your working
+set. When it does not, you passed the wrong slugs.
+
+The scan reads the titles of the works those papers cite. It calls no API. It
+reports the frequent multiword terms that your topic does not hold. Each term
+carries the number of titles that use it, and examples of those titles.
+
+Read the terms. Each one is in one of three states:
+
+| The term | What you do |
+|---|---|
+| You know it, and it names your subject | Add it to the topic phrase of the next search. |
+| You know it, and it names something else | Ignore it. Write one line in the log that says so. |
+| You do not know how it relates to your subject | Give it to a `terminology-scout` agent. |
+
+Start at most `MAX_TERMINOLOGY_SCOUTS` `terminology-scout` agents. Give each one
+the subject and one term. A scout calls no API, thus several run at the same
+time. Each one answers with a table: the term, where the papers use it, whether
+it names the same object, and how it differs.
+
+**Never treat a term as a synonym.** A scout answers `narrower`, `wider` or
+`related` more often than `yes`. That distinction is the finding. A search for a
+narrower term finds papers about a part of your subject, and the report must say
+which part. Write the table in the log, under `### Terminology`.
+
+A later iteration can run the scan again. Iteration 1 must run it.
+
 ### Step 5. Decide
 
 | The state | What you do |
@@ -300,6 +353,7 @@ reader must know which one stopped you.
 | What the last iteration showed | The next move |
 |---|---|
 | The papers use a term that your query did not have | Search again with the words of the papers. Your first query used the words of the person who asked. |
+| The scan found a term that names your subject, and your query did not have it | Search again with that term in the topic phrase. |
 | A paper you read cites the claim that a sub-question needs | Backward: `$PY $LOOKUP <tag>`. It costs nothing. Ingest the source only when the claim must be read at the source. |
 | The best paper is old, or the sub-question asks for the state of the art | Forward: `$PY $CITE <arxiv-id> --direction citing --sort mostrecent` |
 | The sub-question needs the accepted treatment | Forward: `$PY $CITE <arxiv-id> --direction citing --sort mostcited` |
@@ -344,6 +398,9 @@ Write one entry for each iteration, in this shape:
 ### Currency checks
 - SQ2, SQ7: <slug> (<arxiv-id>) — searched <date>, newest citer <year>, nothing that changes the answer
 - SQ4: <slug> — skipped, preprint <date>, younger than CURRENCY_GRACE_MONTHS
+
+### Terminology
+<the terms the scan reported, and what you did with each; the scout tables>
 
 ### Assessment
 SQ1 answered (currency: <slug>) · SQ2 partial · SQ3 open · SQ4 closed-negative (searched: "…", "…")

@@ -30,7 +30,7 @@ for s in add-paper use-literature init-literature find-papers \
     ln -s ~/work/software/literature-skills/$s ~/.claude/skills/$s
 done
 
-for a in literature-researcher paper-ingestor paper-scout; do
+for a in literature-researcher paper-ingestor paper-scout terminology-scout; do
     ln -s ~/work/software/literature-skills/.claude/agents/$a.md ~/.claude/agents/$a.md
 done
 ```
@@ -58,7 +58,7 @@ A sub-question counts as answered only after the loop asks INSPIRE which papers
 cite the paper that supplies the answer. The research log holds that search,
 under `Currency checks`, so a reader can see it.
 
-Three agents divide the work, and the division is about context rather than
+Four agents divide the work, and the division is about context rather than
 speed:
 
 | Agent | Reads | Why it is separate |
@@ -66,6 +66,7 @@ speed:
 | `literature-researcher` | `INDEX.md` files, the reports of the other two, and the chapters it cites | it runs the loop and writes the report. |
 | `paper-ingestor` | one report, and no chapter | it handles an exception of the ingest script — an ambiguous title, a name two works want. The script does the rest, and it reads no paper into any context. |
 | `paper-scout` | the whole paper, against the open sub-questions | a chapter summary was written before anybody had these questions, so it can miss the paragraph that answers one. |
+| `terminology-scout` | the chapters that use one term | a term the query lacks is a question about the words of the field. The answer must differentiate the two names, and it must never equate them: "heavy neutral lepton" names the heavy mass eigenstates, and "sterile neutrino" also covers a light state. |
 
 `rate_gate.py` holds every script to one request at a time, at the pace each API
 asks for, across processes. So one `add_paper.py --auto` command ingests a whole
@@ -179,6 +180,7 @@ from the root of the project that holds `literature/` — or with
 | `check_references.py` | asserts that every citation and `[ref: …]` in the collection still resolves, and reports placeholder residue; `--paper <slug>` scopes the verdict to one paper |
 | `reference_lookup.py <tag>` | resolves one citation, or searches the reference store |
 | `search_literature.py "<phrase>"` | finds a phrase in the text of the papers, and gives the chapter, the anchor and the line |
+| `terminology_scan.py --topic "…" --cited-by <slug>` | counts the multiword terms in the titles that the named papers cite, and reports the frequent ones the topic does not hold |
 | `update_references.py` | renders `REFERENCES.md` from the store |
 | `inspire_lookup.py <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
 | `inspire_citations.py <arxiv-id>` | finds the papers that cite one paper, and the works it draws on |
@@ -191,6 +193,17 @@ fields, and its length then comes from the arXiv comment. `--kind review` keeps
 the papers whose venue or INSPIRE document type names them a review, and
 `--sort {relevance,recent,cited}` re-orders the shortlist without changing which
 papers are on it.
+
+`terminology_scan.py` takes its scope, and it has no default: `--cited-by
+<slug>` for each paper of one task, or `--all-papers` for the whole collection.
+A collection serves more than one task, and it keeps the papers of each. A scan
+with no scope would mix their subjects. It would then report the other names of
+somebody else's question. It reads the titles of the reference store, drops each term the
+topic already holds, and reports the frequent rest with the number of titles
+that use each one. The research loop passes its working set and never
+`--all-papers`. A `terminology-scout` agent then says how one such term relates
+to the subject: the same object, a narrower one, a wider one, or a different
+one.
 
 Two options of `arxiv_fetch.py` matter while the conversion is worked on:
 `--dry-run` prints the manifest and writes nothing, and `--keep-source <dir>`
