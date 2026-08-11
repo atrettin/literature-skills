@@ -124,6 +124,9 @@ model costs less and reads less well.
 | `RENDER_DPI` | `convert_figures.py` | 300 | The resolution that the script renders a vector figure at. A higher value is easier to read and larger on disk. |
 | `MAX_PIXELS` | `convert_figures.py` | 2000 | The longest edge of a converted figure. |
 | `CROP_MARGIN` | `convert_figures.py` | 8 | How many pixels of whitespace stay around a cropped figure. |
+| `PARAGRAPH_ANCHOR_MIN_CHARS` | `arxiv_fetch.py` | 80 | The length under which a block of text gets no paragraph anchor. A lower value addresses more of the chapter, and writes an anchor line above shorter blocks. A higher value leaves a short paragraph addressable only through the paragraph above it. The value is a judgement: one sentence of prose is longer than 80 characters. |
+| `RESTORE_PASSES` | `arxiv_fetch.py` | 4 | How often the placeholder restore walks its items. Each pass answers one further level of nesting, such as the maths of a table inside that table. A lower value can leave a `PH<number>` in the text, which the manifest then reports as a warning. A higher value costs one more walk over a text that already holds no key. |
+| `SLUG_MIN_CHARS` | `arxiv_search.py` | 24 | The length under which a chapter file name keeps a cut word rather than lose more of the title. A higher value returns more names that end in half a word. A lower value returns shorter and less exact names. |
 
 ## Not tunable
 

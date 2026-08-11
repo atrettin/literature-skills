@@ -224,10 +224,17 @@ as text:
 - Figures are embedded as a centred `<img>` pointing at `../figures/<name>.png`,
   with the caption beneath. HTML rather than Markdown, because the images need
   a width.
+- Every paragraph of prose gets an `<a id="pN"></a>` anchor on the line above
+  it, counted from `p1` in each file. A citation can then name the paragraph
+  that carries the claim: `03_cross_sections.md#p12`.
+- The conversion writes a paragraph as one line, whatever the wrapping of the
+  TeX source. A search for a phrase inside one paragraph therefore finds that
+  phrase.
 - Equations, figures, tables and sections are numbered as the conversion meets
   them, and each one that the paper labelled gets an `<a id="...">` anchor named
-  after that label. The paper's own `\ref` commands become links to those
-  anchors: `eq. ([6](#eq-ckmt))` in the same chapter,
+  after that label. A heading the paper did not label carries an anchor named
+  after its title, as `#sec-nuclear-effects`. The paper's own `\ref` commands
+  become links to those anchors: `eq. ([6](#eq-ckmt))` in the same chapter,
   `Section [4](04_partially_conserved_axial_vector_current.md#sec-pcac)` across
   chapters. An equation carries its number in the maths itself, as `\tag{6}` or,
   in a multi-row `align`, as `\qquad (6)` on each numbered row.
@@ -245,6 +252,11 @@ The manifest's `labels` block says what each label resolved to.
 Read the `warnings` field of the manifest. Tell the user about each warning.
 A `parser` value of `fallback` means that TexSoup did not parse the source.
 The text is then less exact. Tell the user when this happens.
+
+One warning names **placeholder residue**: a count of `PH<number>` matches in
+the chapters. Each one stands where the paper wrote something else, usually a
+number inside a table. Report it to the user. Name the chapters it lists.
+Nothing repairs the text in place. Fetch the paper again with `--force`.
 
 Add `--force` only when the user wants to replace a paper that is already there.
 `--force` empties the paper directory first, which **deletes `INDEX.md` along
