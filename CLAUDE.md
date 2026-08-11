@@ -31,6 +31,9 @@ you could not verify, and keep it visible.
 - A planning agent must add an instruction to work in a worktree, unless the
   user says otherwise. Work large enough to need a plan is large enough to need
   a worktree.
+- When an agent starts to implement a plan, it must update the `TODO.md`. If
+  the task being worked on is not yet in `TODO.md`, add it and mark it as being
+  in progress.
 - `README.md` documents the skills, their scripts and their commands. When you
   change something that `README.md` describes, update `README.md` in the same
   change.
@@ -46,3 +49,5 @@ you could not verify, and keep it visible.
   one agent at a time. Do not spawn sub-agents that call these APIs in parallel,
   and do not ingest several papers at the same time. A rate limit that you hit
   costs more time than the work that you tried to make parallel.
+
+@./.claude/TODOS.md
