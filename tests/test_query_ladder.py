@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 import arxiv_discover
+import arxiv_search
 from arxiv_discover import Options
 from conftest import FakeFetch, first_entry_only
 
@@ -57,6 +58,54 @@ def test_terms_keep_their_order_and_drop_repeats() -> None:
     terms = arxiv_discover.topic_terms("neutrino scattering and neutrino oscillation")
 
     assert terms == ["neutrino", "scattering", "oscillation"]
+
+
+def test_meta_words_leave_the_arxiv_query() -> None:
+    """`review` and `status` say which kind of paper is wanted, not which subject.
+
+    No abstract carries them, so the strict rung fails on them and
+    `missing_terms` then names the wrong thing.
+    """
+    terms = arxiv_discover.topic_terms("review of the present status of sterile neutrinos")
+
+    assert "sterile" in terms and "neutrinos" in terms
+    assert "review" not in terms and "status" not in terms and "present" not in terms
+
+
+def test_meta_words_stay_in_the_topic_the_ranker_reads(
+    feed_quasielastic: str, no_sleep: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cross-encoder ranks a review first when the topic reads like one."""
+    topic = "review of the present status of sterile neutrinos"
+    seen: list[str] = []
+    original = arxiv_discover.rerank.rank
+
+    def watch(read_topic: str, terms: list[str], entries: list[dict]):  # noqa: ANN202
+        seen.append(read_topic)
+        return original(read_topic, terms, entries)
+
+    monkeypatch.setattr(arxiv_discover.rerank, "rank", watch)
+    arxiv_discover.search(options(topic=topic), fetch=FakeFetch([feed_quasielastic]))
+
+    assert seen == [topic]
+
+
+def test_the_report_names_the_meta_words_it_dropped(
+    feed_quasielastic: str, no_sleep: None
+) -> None:
+    report = arxiv_discover.search(
+        options(topic="review of the present status of sterile neutrinos"),
+        fetch=FakeFetch([feed_quasielastic]),
+    )
+
+    assert report["query"]["meta_terms_dropped"] == ["review", "present", "status"]
+
+
+def test_the_comment_reaches_the_entry(feed_quasielastic: str) -> None:
+    """The arXiv comment is the only place arXiv states how long a paper is."""
+    entries = arxiv_search.parse_entries(feed_quasielastic)
+
+    assert entries[0]["comment"] == "4 pages, 4 figures"
 
 
 def test_terms_stop_at_twelve() -> None:

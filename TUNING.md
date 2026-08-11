@@ -41,9 +41,24 @@ section before you change a delay.
 | `MIN_RESULTS` | 5 | The strict rung gives too little below this number of hits, and the broad rung then runs. A higher value widens the search more often. The search then finds more papers, and a larger part of what it finds is noise. **Change this one first.** |
 | `MAX_TERMS` | 12 | How many words of the topic reach the query. A longer question sends its first twelve terms only. |
 | `MIN_TERM_CHARS` | 3 | The query drops a shorter word. A higher value drops `pion`. A lower value keeps `of`, and `TOPIC_STOPWORDS` must then remove it. |
-| `TOPIC_STOPWORDS` | 81 words | The words that the script removes from a topic before the topic becomes a query. This set is not `reference_store.TAG_STOPWORDS`: that set drops `measurement` and `effect`, and a search needs those words. Add a word here when questions use it and it never separates one paper from another. |
+| `TOPIC_STOPWORDS` | 81 words | The words that the script removes from a topic before the topic becomes a query. This set is not `reference_store.TAG_STOPWORDS`: that set drops `measurement` and `effect`, and a search needs those words. It is not `META_TERMS` either: that set holds the words that describe the wanted kind of paper. Add a word here when questions use it and it never separates one paper from another. |
+| `META_TERMS` | 6 words | The words that the arXiv query drops and the cross-encoder keeps. Each one says what kind of paper the caller wants. No abstract carries them, and the strict rung fails on them. Add a word here when it describes a wanted paper. A word here that names a subject makes the search return the wrong papers. |
 | `AUTHORS_SHOWN` | 3 | How many authors a result names. `authors_total` gives the count of the rest. |
+| `ENRICH_CANDIDATES` | 40 | How many of the ranked candidates one INSPIRE request describes. A higher value describes more papers for `--kind` and `--sort` to work over. It costs one further request for each further 40. `references.BATCH_SIZE` is 40, thus this value costs one request. |
+| `DEFAULT_SORT` | `relevance` | The order of the shortlist when the caller asks for none. `relevance` answers "which paper answers my question". `recent` and `cited` answer the other two questions. Each is one flag away. |
+| `--kind` | `any` | Which kinds of paper the report holds. `review` answers a broad question. It drops a review that is a preprint, because a preprint has no venue. |
 | `--max-results` | 15 | How many results the report holds, out of the `CANDIDATES` that the ranking ordered. |
+
+`add-paper/scripts/paper_facts.py` describes a candidate: its length, its kind
+and its citation count. None of these enters the score. A citation count and an
+author count both point the wrong way for a research question, so they travel
+beside the score as fields and the caller decides.
+
+| Parameter | Now | What it does |
+|---|---|---|
+| `REVIEW_VENUES` | 6 names | The journals that `--kind review` reads as a review. A name added here admits every paper of that journal. A name missing here hides its reviews from the filter. |
+| `REVIEW_DOCUMENT_TYPES` | `review` | The INSPIRE document types that `--kind review` reads as a review. INSPIRE gives the type of some records only. |
+| `PAGE_COUNT_MAX` | 1000 | The largest page count that the parse of an arXiv comment accepts. A comment is free text, and a number in it can be a volume or a year. A lower value rejects a real long report. A higher value reports a wrong number as a length. |
 
 `add-paper/scripts/rerank.py` orders what the search found.
 

@@ -263,6 +263,9 @@ def parse_entries(feed_xml: str) -> list[dict]:
                 "summary": collapse_whitespace(entry.findtext(ATOM + "summary") or ""),
                 "doi": (entry.findtext(ARXIV_NS + "doi") or "").strip(),
                 "journal_ref": (entry.findtext(ARXIV_NS + "journal_ref") or "").strip(),
+                # Free text the authors write. Most records give a page count
+                # in it, which is the only length arXiv publishes at all.
+                "comment": collapse_whitespace(entry.findtext(ARXIV_NS + "comment") or ""),
                 "pdf_url": pdf_url,
                 "abs_url": "https://arxiv.org/abs/%s" % arxiv_id,
             }

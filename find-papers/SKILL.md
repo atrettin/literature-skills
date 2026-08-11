@@ -61,20 +61,50 @@ Step 2 reads the words that step 1 removes. Write `how meson exchange currents
 change the cross section` and not `meson exchange cross section`. Both send the
 same terms to arXiv, but only the first tells the cross-encoder what to rank.
 
+### Phrase a broad question the way a review abstract reads
+
+A broad question needs a review. Write the topic as a review writes its own
+abstract. These two forms find different papers:
+
+| Form | What it finds |
+|---|---|
+| `review of sterile neutrinos: why they are theoretically motivated` | narrow papers. It reads as a request, and no abstract is written as a request. |
+| `we review the present status of sterile neutrino dark matter, summarising the theoretical framework, laboratory and astrophysical searches` | reviews. It reads as the first sentence of one. |
+
+The reason is the cross-encoder. It compares the topic against an abstract. A
+topic that reads like a review abstract therefore scores a review highest.
+
+Six words name the wanted *kind* of paper: `review`, `status`, `present`,
+`summarising`, `theoretically` and `motivated`. They never reach arXiv. No
+abstract carries them as search terms. A query that asks for them makes every
+paper fail the strict rung. The report names them in
+`query.meta_terms_dropped`. They stay in the phrase the cross-encoder reads,
+and there they do their work.
+
 | Option | What it does |
 |---|---|
 | `--topic` | the subject, as a phrase. Required. |
 | `--category` | an arXiv category, such as `hep-ph`. Repeat it for more. |
-| `--since` | earliest year of submission. |
+| `--since` | earliest year of submission. It is the currency check: `--since 2023` answers "what came out after the papers I hold". |
 | `--max-results` | how many papers to report. The default is 15. |
+| `--kind` | `any` or `review`. `review` keeps the papers a review venue or an INSPIRE document type names as a review. |
+| `--sort` | `relevance`, `recent` or `cited`. It re-orders the papers the ranking chose. It never changes which papers those are. |
 | `--literature-root` | where the collection is. The default is `literature`. |
 
-**A search takes about 4 to 8 seconds.** It sends one request to arXiv, and a
+**Each `--sort` answers a different question.** `relevance` answers "which paper
+answers my question". `recent` answers "what came out last". `cited` answers
+"which paper does the field lean on". Every result keeps its `score` and its
+`relevance_rank` in each of the three orders. You thus see how the model ranked
+each paper, in every order.
+
+**A search takes about 5 to 9 seconds.** It sends one request to arXiv, and a
 second one three seconds later when the first finds little. It then reads up to
-a hundred abstracts with the cross-encoder. The first search of all also fetches
-the model, which adds a few seconds and happens one time. The script writes what
-it is doing to the error output while you wait. Wait for it. Do not start a
-second search because the first looks slow.
+a hundred abstracts with the cross-encoder. One INSPIRE request follows the
+arXiv requests, and it describes the shortlist with its length and its citation
+count. The first search of all also fetches the model, which adds a few seconds
+and happens one time. The script writes what it is doing to the error output
+while you wait. Wait for it. Do not start a second search because the first
+looks slow.
 
 **A category is exact.** `--category astro-ph` excludes `astro-ph.HE`, which is
 a separate category and not a part of it. Give both when you want both.
@@ -86,15 +116,23 @@ The script prints JSON. Read these fields first:
 | Field | What it holds |
 |---|---|
 | `ranking.backend` | which of the two orders you are reading. See below. |
+| `ranking.sort` | the order the results are in. It differs from the order you asked for when no source could answer that order. `ranking.note` then says why. |
 | `counts` | how many results are `held`, `cited`, and `new`. |
 | `query.terms` | the words the search used. Read them: they show what the script asked arXiv for. |
+| `query.meta_terms_dropped` | the words that describe the wanted kind of paper. The search dropped them, the ranking kept them. |
 | `query.queries` | the query of each rung that ran. |
+| `enrichment` | how many papers of the shortlist INSPIRE described. A `matched` of 0 means that INSPIRE described none of them. Every `citation_count` below is then `null`. |
+| `kind_filter` | what `--kind` kept and what it dropped. It is `null` when `--kind` is `any`. |
 
 Then, for each result:
 
 | Field | What it holds |
 |---|---|
 | `score` | the rank. Its meaning depends on `ranking.backend`. |
+| `relevance_rank` | the position the ranking gave this paper, from 1. A re-sort never changes it. |
+| `citation_count` | how many papers INSPIRE knows that cite this one. `null` means that INSPIRE holds no record of it. |
+| `pages` | the length of the paper. `pages_source` says which source gave it. `null` means that neither source did. |
+| `kind` | `review`, `article`, or `unknown`. `unknown` means that no venue and no document type described the paper. Every preprint is of that kind. |
 | `coverage` | the share of the terms this paper's title and abstract carry. |
 | `missing_terms` | the terms it does not carry. |
 | `found_by` | `strict` means the paper carries every term. `broad` means it carries some of them. |
@@ -126,6 +164,7 @@ paper from it.
 | The result | What you do |
 |---|---|
 | `held_as` holds a directory name | The collection holds this paper in full. Read it with `use-literature`. Do not ingest it again. |
+| `held_as` holds a directory name, and your task did not put it there | Read the paper. Add it to the working set of your task when its text bears on a sub-question. `research-report/SKILL.md` defines the working set. |
 | `known_as` holds a tag, `held_as` is `null` | A paper in the collection cites this work. Run `reference_lookup.py <tag>` for the full record. Ingest it with `add-paper` when the question needs the work itself. |
 | both are `null` | The collection does not know this paper. Report it, and offer the `add-paper` skill with the arXiv identifier. |
 
@@ -155,5 +194,20 @@ answer. A weak result is worse than no result. Never give one as an answer.
 - **A rank is not a judgement of relevance.** Report the backend that produced
   the order, and report `missing_terms`. Never present position 1 as the answer
   without them.
+- **A citation count measures attention, not correctness.** A recent paper that
+  settles a question holds few citations. A much-cited paper can be the one the
+  field has moved past. Never drop a paper for a low count, and never choose a
+  paper for a high one.
+- **`--kind review` finds a published review only.** A review that is still a
+  preprint has no venue and no document type. Its kind is `unknown`, and the
+  filter drops it. Read `kind_filter.dropped_unknown`. Run the search again with
+  `--kind any` before you report that the field holds no review.
+- **The collection answers for every task, and not for yours.** The collection
+  is persistent, and one collection serves many research tasks. A paper is
+  `held` because some task ingested it. `cited_by` names the papers of the
+  collection that cite the work, and an earlier question chose those papers.
+  Read the slugs in `cited_by`. A slug your task did not put there belongs to
+  other work. Such a paper is worth reading, because it is on disk already. It
+  is not evidence that your question is covered.
 - **Report the counts.** The user wants to know what is new. `counts.held` and
   `counts.cited` say how much of the answer was already on disk.
