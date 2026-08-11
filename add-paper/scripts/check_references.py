@@ -211,6 +211,7 @@ def scope_report(report: dict, paper: str, store: list[dict],
         ("unresolved", lambda item: cites(item["tag"])),
         ("missing_pages", cites),
         ("dangling_refs", lambda item: belongs_to(item["in"], paper)),
+        ("residue", lambda item: belongs_to(item["in"], paper)),
         ("duplicates", lambda item: any(
             cites(tag) or held_as_paper(tag) for tag in item["tags"])),
         ("stale", lambda tag: held_as_paper(tag) or cites(tag)),
@@ -231,11 +232,12 @@ def scope_report(report: dict, paper: str, store: list[dict],
         scoped[field] = mine[field]
     scoped["unverified"] = unverified
     scoped["dangling_refs"] = mine["dangling_refs"]
+    scoped["residue"] = mine["residue"]
     elsewhere["unverified"] = report["unverified"] - unverified
     scoped["elsewhere"] = {
         field: elsewhere[field]
         for field in ("unresolved", "duplicates", "missing_pages", "stale",
-                      "orphans", "unverified", "dangling_refs")
+                      "orphans", "unverified", "dangling_refs", "residue")
     }
     return scoped
 
