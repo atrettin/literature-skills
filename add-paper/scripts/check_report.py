@@ -12,8 +12,9 @@ What it reports:
     broken link     a link whose file is not there, or whose anchor is not in it
     unknown tag     a link to a reference page no record in the store answers
     cite marker     a `[cite: tag]` marker copied out of a chapter, unresolved
-    bibliography    a work cited in the text and absent from the references, or
-                    listed in the references and cited nowhere
+    bibliography    cited_but_not_listed: a work the text cites and the
+                    references omit; listed_but_not_cited: a work the
+                    references list and the text cites nowhere
     unflagged       a work the collection could not confirm, cited without the
                     ⚠ that says so
     no citations    a report that attributes nothing to anything
@@ -284,8 +285,8 @@ def check(report_path: Path, root: Path) -> dict:
         "broken_links": check_links(links),
         "unknown_tags": sorted(tag for tag in cited_tags if tag not in tags),
         "cite_markers": markers,
-        "uncited_in_references": sorted(set(body_works) - set(bibliography_works)),
-        "unlisted_in_references": sorted(set(bibliography_works) - set(body_works)),
+        "cited_but_not_listed": sorted(set(body_works) - set(bibliography_works)),
+        "listed_but_not_cited": sorted(set(bibliography_works) - set(body_works)),
         "unflagged_unverified": unflagged,
         # The log says how the report was reached: what was searched, what was
         # read, and what the search never answered. A reader auditing a claim
@@ -323,8 +324,8 @@ def main(argv: list[str] | None = None) -> int:
         report["broken_links"]
         or report["unknown_tags"]
         or report["cite_markers"]
-        or report["uncited_in_references"]
-        or report["unlisted_in_references"]
+        or report["cited_but_not_listed"]
+        or report["listed_but_not_cited"]
         or report["unflagged_unverified"]
         # A report that attributes nothing to anything has nothing to audit,
         # and a claim about the literature that names no paper is the failure
