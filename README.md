@@ -169,6 +169,7 @@ from the root of the project that holds `literature/` — or with
 | `arxiv_fetch.py <arxiv-id> --slug <dir>` | the conversion stage the driver calls: source, chapters, figures, bibliography |
 | `write_index.py <paper-dir>` | writes `INDEX.md` again from the manifest and the files, keeping the summaries |
 | `convert_figures.py <paper-dir>` | converts the figures of a paper again |
+| `collection_index.py --report <report.json>` | puts one paper into the table of `literature/README.md`; `--description` gives its row a sentence |
 | `check_references.py` | asserts that every citation and `[ref: …]` in the collection still resolves, and reports placeholder residue; `--paper <slug>` scopes the verdict to one paper |
 | `reference_lookup.py <tag>` | resolves one citation, or searches the reference store |
 | `search_literature.py "<phrase>"` | finds a phrase in the text of the papers, and gives the chapter, the anchor and the line |
@@ -244,6 +245,28 @@ The exception codes are `AMBIGUOUS_TITLE`, `NO_ARXIV_SOURCE`, `TAG_COLLISION`,
 question with no mechanical answer, and carries the fields the answer needs —
 `AMBIGUOUS_TITLE` carries the candidates, `TAG_COLLISION` carries the work that
 holds the name. `add-paper/SKILL.md` has a section for each code.
+
+A warning names something the ingest went on past. The collection holds the
+paper, and the report says what is imperfect about it:
+
+| Warning | Means |
+|---|---|
+| `PARSER_FALLBACK` | TexSoup could not read the source, thus the chapters come from the fallback parser |
+| `INSPIRE_NO_RECORD` | INSPIRE-HEP knows no record for this paper |
+| `INSPIRE_NO_JOURNAL` | INSPIRE-HEP holds the paper, and names no journal for it |
+| `INSPIRE_LOOKUP_FAILED` | the INSPIRE-HEP request itself failed |
+| `BIBLIOGRAPHY_FAILED` | the bibliography could not be resolved, thus the citations of this paper stay unlinked |
+| `UNRESOLVED_REFS` | a cross-reference label has no target in the source, and keeps its `[ref: …]` marker |
+| `FIGURE_SOURCE_MISSING` | the archive holds no file for a figure the text names |
+| `FIGURE_CONVERTER_MISSING` | the converter for that figure format is not installed |
+| `UNVERIFIED_REFERENCES` | neither INSPIRE-HEP nor Crossref confirmed a reference, thus its row is marked |
+| `PLACEHOLDER_RESIDUE` | a chapter still holds a `PH<digits>` marker or a control character |
+| `RATE_GATE_LOCAL` | nothing can write the collection root, thus the lock holds inside this process alone |
+
+`PLACEHOLDER_RESIDUE` comes from the `residue` field of the citation check, which
+names the files. The check is the one thing that scans for residue, so the driver
+scans no chapter itself: two scans are two definitions of residue, and they
+drift apart.
 
 The chapter summaries are the one part an agent writes, and they are opt-in:
 `--summarize <slug>` names the chapters that have none. `--index-only <slug>`
