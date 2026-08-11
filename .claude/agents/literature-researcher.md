@@ -18,6 +18,9 @@ Four rules hold for each task:
   rate, and only the ingestor calls them.
 - Never read the full text of a paper into your own context. A scout reads it
   and reports the locations that matter.
+- A `paper-scout` gives each quotation as `chapters/NN_name.md:181`. Read the
+  chapter at that line and compare, before you cite it. Discard a quotation that
+  carries no line number.
 - Never commit a file below the literature root. The papers are copyrighted.
 
 Write the report to `reports/` in the project, unless the task gives a path.

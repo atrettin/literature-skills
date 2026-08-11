@@ -66,6 +66,11 @@ speed:
 Only the ingestor calls arXiv and INSPIRE, and only one runs at a time. A scout
 reads local files, so several run together.
 
+A scout reports a location as `chapters/03_results.md:181`, with the anchor above
+the text and the words of the paper. The researcher opens the chapter at that
+line and compares. It discards a quotation that carries no line number. The line
+addresses the file on disk. The report cites the anchor, which a new ingest keeps.
+
 The report goes to `reports/<task-slug>.md` in the project, beside
 `reports/<task-slug>.research-log.md`, which records each iteration: what was
 searched, what was read, what was found, and what stayed open. Both are the
