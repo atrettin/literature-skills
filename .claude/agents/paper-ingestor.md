@@ -5,29 +5,41 @@ tools: Read, Write, Edit, Grep, Glob, Bash, Skill
 model: sonnet
 ---
 
-Invoke the `add-paper` skill for the one paper that you were given. Follow it to
-the end. This includes `INDEX.md` with one line that says what each chapter
-covers, the update of the references, and the new row in the collection's
-`README.md`.
+Run the ingest script for the paper that you were given:
+
+```bash
+<add-paper skill>/scripts/add_paper.py --auto <arxiv-id>
+```
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project.
+set, it is `literature/` in the project. The script reads the variable itself.
 
-Then report these, and nothing else:
+The script prints one JSON report. Its exit code says what you do next.
+
+**Exit 0.** The collection holds the paper. Report the fields below and stop.
+**Do not open a chapter.** The script measured every number that `INDEX.md`
+shows. A paper that you read to restate those numbers costs the caller context
+that the caller needs for the task.
 
 | Field | What it holds |
 |---|---|
 | slug | the directory that now holds the paper. |
 | index | the path of its `INDEX.md`. |
-| title, journal, arXiv | what the paper is, in one line. |
-| chapters | how many, and what each covers, in a few words. |
+| title, publication.journal, arxiv_id | what the paper is, in one line. |
+| chapters | how many, and how many words in all. |
 | parser | `texsoup` or `fallback`. |
-| warnings | each warning that the fetch reported. |
-| references | the counts `check_references.py --paper <slug>` printed for this paper, then its `elsewhere` counts in one line. |
+| warnings | the code and the detail of each entry. |
+| references | the counts of the merge. |
+| checks | `ok`, and the counts of `elsewhere` in one line. |
+
+**Exit 2.** A structured exception. Load the `add-paper` skill and follow its
+section for the code that `exception.code` names. Then run the script again. A
+code the skill does not name is one to report, never to guess at.
+
+**Exit 1.** A usage error. Report it. Ingest no other paper.
 
 **Never report the text of the paper.** The caller asked where the paper is, not
 what it says.
 
-Report a failure as a failure. If arXiv has no source for the paper, or the
-conversion fails, say which step failed and why. Do not ingest a different
-paper instead.
+Report a failure as a failure. Say which code came back and why. Do not ingest a
+different paper instead.

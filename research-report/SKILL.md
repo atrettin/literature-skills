@@ -53,7 +53,7 @@ the full text of a paper is large. Two agents keep that text out of it:
 
 | Agent | What it does |
 |---|---|
-| `paper-ingestor` | ingests one paper. Start one at a time. It reports the slug and the warnings, and no paper text. |
+| `paper-ingestor` | handles an exception of the ingest script for one paper. It reports the slug and the warnings, and no paper text. |
 | `paper-scout` | reads one paper that is on disk against your sub-questions. It reports the locations that answer them. It uses no API, thus several can run at the same time. |
 
 If the environment cannot start an agent, do the same work yourself: ingest with
@@ -109,10 +109,23 @@ the best candidates with their `missing_terms`.
 ### Step 3. Ingest and read
 
 **Ingest** at most `MAX_NEW_PAPERS_PER_ITERATION` new papers, and at most
-`MAX_TOTAL_INGESTS` in the whole task. Start one `paper-ingestor` agent for each
-paper, **one agent at a time**. Give it the arXiv identifier. Write one line in
-the log for each: which sub-question needs this paper. A paper that the
-collection holds already needs no ingest and counts against no limit.
+`MAX_TOTAL_INGESTS` in the whole task. Pass the whole queue of identifiers to
+one command:
+
+```bash
+<add-paper skill>/scripts/add_paper.py --auto <arxiv-id> [<arxiv-id> …]
+```
+
+The script sends one request at a time by itself. One command therefore ingests
+the whole queue. It prints one JSON report per paper, as one object per line. It
+exits 2 when any paper raised an exception.
+
+**Start a `paper-ingestor` agent only for a paper whose report carries an
+`exception`.** Give that agent the identifier of that paper. The exception is
+the one part of an ingest that needs judgement.
+
+Write one line in the log for each paper: which sub-question needs it. A paper
+that the collection holds already needs no ingest and counts against no limit.
 
 **Read in two tiers.** The tier depends on how much you must read:
 
@@ -341,9 +354,11 @@ Then tell the user:
 
 ## Rules
 
-- **One agent talks to arXiv and INSPIRE.** Start one `paper-ingestor` at a
-  time. Never run two searches at the same time. A scout uses no API, thus
-  several scouts can run together.
+- **One request at a time reaches arXiv and INSPIRE.** `rate_gate.py` holds
+  every script to that, across processes, so one `add_paper.py --auto` command
+  ingests a whole queue. Do not call these APIs from two agents at once: run a
+  search or a `paper-ingestor` while no ingest is running. A scout uses no API,
+  thus several scouts can run together.
 - **Keep the full text out of your context.** Read `INDEX.md` files, the reports
   of the agents, the JSON of the scripts, and the chapters that you cite.
   Never read a paper from beginning to end yourself. That is what a scout does.

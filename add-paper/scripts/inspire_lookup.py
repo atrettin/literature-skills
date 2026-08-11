@@ -33,9 +33,11 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import rate_gate  # noqa: E402
 from arxiv_search import USER_AGENT, collapse_whitespace  # noqa: E402
 
 API_ROOT = "https://inspirehep.net/api"
+API_HOST = "inspirehep.net"
 RECORD_URL = "https://inspirehep.net/literature/%s"
 
 REQUEST_TIMEOUT_S = 30.0
@@ -48,6 +50,13 @@ RETRY_DELAY_S = 3.0
 # 429. Wait out the whole window.
 RATE_LIMIT_WINDOW_S = 5.0
 MAX_RETRY_DELAY_S = 60.0
+
+# The pace between two INSPIRE requests. Every request to INSPIRE in these
+# scripts passes through `fetch_record` below, whether it reads one record or
+# runs a search, so the pace belongs beside that function. `references.py` reads
+# the name from here.
+INSPIRE_PACE_S = 0.5
+rate_gate.set_interval(API_HOST, INSPIRE_PACE_S)
 
 # An erratum is published separately from the paper it corrects. It belongs in
 # its own row of INDEX.md, never in the Journal field.
@@ -119,13 +128,16 @@ def strip_version(arxiv_id: str) -> str:
 def fetch_record(path: str) -> dict | None:
     """GET one INSPIRE record. None means INSPIRE does not hold it (404)."""
     url = "%s/%s" % (API_ROOT, path)
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    query = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     last_error = None
     for attempt in range(MAX_RETRIES):
         delay = RETRY_DELAY_S
         try:
-            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
-                return json.loads(response.read().decode("utf-8", errors="replace"))
+            # The gate paces this against every other INSPIRE request, here and
+            # in any other process reading the same collection.
+            with rate_gate.request(API_HOST):
+                with urllib.request.urlopen(query, timeout=REQUEST_TIMEOUT_S) as response:
+                    return json.loads(response.read().decode("utf-8", errors="replace"))
         except urllib.error.HTTPError as error:
             if error.code == 404:
                 return None

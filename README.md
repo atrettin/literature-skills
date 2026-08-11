@@ -11,7 +11,7 @@ it.
 | Skill | What it does |
 |---|---|
 | [init-literature](init-literature/SKILL.md) | Starts an empty collection: creates the directory with its index, and makes git ignore it. |
-| [add-paper](add-paper/SKILL.md) | Finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, asks INSPIRE-HEP where it was published, resolves its bibliography, and indexes the result. |
+| [add-paper](add-paper/SKILL.md) | Runs the ingest script, which finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, asks INSPIRE-HEP where it was published, resolves its bibliography and indexes the result. The skill handles the script's exceptions, and writes the chapter summaries when somebody asks for them. |
 | [use-literature](use-literature/SKILL.md) | How to find and read a paper already in the collection. |
 | [find-papers](find-papers/SKILL.md) | Searches arXiv by the subject of a paper's abstract, ranks the hits against the question with a local cross-encoder, describes each hit with its length and its citation count, and marks the ones the collection already holds. |
 | [follow-citations](follow-citations/SKILL.md) | Finds the papers that cite a given paper, with INSPIRE-HEP, and the works it draws on, from the reference store. |
@@ -60,11 +60,13 @@ speed:
 | Agent | Reads | Why it is separate |
 |---|---|---|
 | `literature-researcher` | `INDEX.md` files, the reports of the other two, and the chapters it cites | it runs the loop and writes the report. |
-| `paper-ingestor` | the whole paper, one time | ingesting reads every chapter to summarise it. That text must not stay in the context that has to last the whole task. |
+| `paper-ingestor` | one report, and no chapter | it handles an exception of the ingest script — an ambiguous title, a name two works want. The script does the rest, and it reads no paper into any context. |
 | `paper-scout` | the whole paper, against the open sub-questions | a chapter summary was written before anybody had these questions, so it can miss the paragraph that answers one. |
 
-Only the ingestor calls arXiv and INSPIRE, and only one runs at a time. A scout
-reads local files, so several run together.
+`rate_gate.py` holds every script to one request at a time, at the pace each API
+asks for, across processes. So one `add_paper.py --auto` command ingests a whole
+queue of papers, and no agent has to serialise them. A scout reads local files,
+so several run together.
 
 A scout reports a location as `chapters/03_results.md:181`, with the anchor above
 the text and the words of the paper. The researcher opens the chapter at that
@@ -161,9 +163,11 @@ from the root of the project that holds `literature/` — or with
 
 | Script | Does |
 |---|---|
+| `add_paper.py --auto <arxiv-id> …` | **the entry point.** Ingests each paper end to end, and prints one report per paper |
 | `arxiv_search.py --title … --author … --year …` | finds the paper on arXiv and prints the candidates |
 | `arxiv_discover.py --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, describes each hit with its length and its citation count, and marks the ones the collection holds |
-| `arxiv_fetch.py <arxiv-id> --slug <dir>` | ingests one paper: source, chapters, figures, bibliography |
+| `arxiv_fetch.py <arxiv-id> --slug <dir>` | the conversion stage the driver calls: source, chapters, figures, bibliography |
+| `write_index.py <paper-dir>` | writes `INDEX.md` again from the manifest and the files, keeping the summaries |
 | `convert_figures.py <paper-dir>` | converts the figures of a paper again |
 | `check_references.py` | asserts that every citation and `[ref: …]` in the collection still resolves, and reports placeholder residue; `--paper <slug>` scopes the verdict to one paper |
 | `reference_lookup.py <tag>` | resolves one citation, or searches the reference store |
@@ -185,6 +189,85 @@ Two options of `arxiv_fetch.py` matter while the conversion is worked on:
 `--dry-run` prints the manifest and writes nothing, and `--keep-source <dir>`
 keeps the extracted TeX to compare the output against. `--force` overwrites a
 paper directory that exists.
+
+## Ingesting without an agent
+
+`add_paper.py --auto` does an ingest end to end. Each step of one was already a
+script: the search, the conversion, the reference merge, the citation check. An
+agent that drives those scripts pays about 42,000 tokens of fixed context for
+one paper, and the paper passes through that context about two and a half times.
+Almost none of that cost buys judgement.
+
+```bash
+.venv/bin/python add-paper/scripts/add_paper.py --auto 2307.09241 1706.03621
+```
+
+**The exit code says who acts.**
+
+| Exit | Means | Then |
+|---|---|---|
+| 0 | the collection holds the paper | nobody has to do anything |
+| 2 | a structured exception, with a code | an agent decides, and runs the script again |
+| 1 | a usage error, or an unusable argument | fix the command |
+
+Two artefacts come out, and they are different sizes. The **full manifest** goes
+to `<paper-dir>/.ingest-manifest.json`. It holds every reference the paper
+cites, every label it defines, and everything else the conversion learned. The
+**compact report** goes to stdout, as one JSON object on one line per paper. It
+holds the identity, the chapter table, the counts and the warnings. It holds no
+field that grows with the size of a bibliography, thus a paper that cites five
+hundred works costs the same to report as one that cites five.
+
+Every field of the report is always present. `null` and `[]` are answers, so a
+reader never has to tell a missing value from an unknown one:
+
+| Field | Holds |
+|---|---|
+| `schema` | `add-paper/report/1`. Check this before anything else. |
+| `status` | `ingested`, `exception` or `error` |
+| `slug`, `paper_dir`, `index`, `manifest` | where the paper and its files went |
+| `title`, `authors`, `authors_total`, `submitted_year`, `publication`, `abs_url` | what the paper is |
+| `parser` | `texsoup` or `fallback` |
+| `chapters` | one entry per file: `file`, `number`, `title`, `words`, `named_anchors`, `bytes`, `subsections` |
+| `figures`, `figures_missing` | how many, and how many have no file on disk |
+| `references` | the counts of the merge |
+| `checks` | the citation verdict, scoped to this paper, with `elsewhere` for the rest |
+| `collection_row` | `added` or `present` |
+| `summary_state` | `pending` while the chapter summaries are `—` |
+| `warnings` | `{code, detail, count}` for each |
+| `exception` | `{code, detail, …}`, or `null` |
+| `next_action` | `none`, `handle_exception` or `summarize` |
+
+The exception codes are `AMBIGUOUS_TITLE`, `NO_ARXIV_SOURCE`, `TAG_COLLISION`,
+`PARSER_FAILURE`, `SLUG_EXISTS`, `REFERENCE_CHECK_FAILED`,
+`COLLECTION_INDEX_UNREADABLE` and `NETWORK_UNAVAILABLE`. Each one names a
+question with no mechanical answer, and carries the fields the answer needs —
+`AMBIGUOUS_TITLE` carries the candidates, `TAG_COLLISION` carries the work that
+holds the name. `add-paper/SKILL.md` has a section for each code.
+
+The chapter summaries are the one part an agent writes, and they are opt-in:
+`--summarize <slug>` names the chapters that have none. `--index-only <slug>`
+writes `INDEX.md` again from the manifest and the files, keeping every summary
+already in it.
+
+**One request at a time, enforced in code.** `rate_gate.py` holds each host to
+the pace its API asks for: three seconds for arXiv, half a second for INSPIRE-HEP
+and for Crossref. It takes an exclusive lock on
+`<literature-root>/.api-gate.json` for the length of each request. The lock is a
+file, thus a second shell, or an agent beside a running ingest, cannot double
+the rate between them.
+
+The collection that lock belongs to is the one the caller named. Every script
+that takes `--literature-root` passes it to the gate, so a run started from
+another directory locks the same collection and waits its turn. The gate locks a
+collection and never makes one: a gate that made one would leave an empty
+`literature/` behind in whatever directory a script ran from, and would take its
+lock there instead.
+
+The limit counts requests, and not agents. One command can therefore resolve the
+references of one paper while it downloads the next. A collection root that
+nothing can write gives a lock inside one process, and the report says so with
+`RATE_GATE_LOCAL`.
 
 ## Developing
 
@@ -245,11 +328,25 @@ literature/
 ├── .references.jsonl         the store the two views are rendered from
 ├── references/<tag>.md       one page per cited work, what a citation opens
 └── <first-author>_<year>_<keywords>/
-    ├── INDEX.md              identity, abstract, per-chapter summaries
+    ├── INDEX.md              identity, abstract, one row per chapter
+    ├── .ingest-manifest.json every reference and every label of the paper
     ├── chapters/NN_<title>.md    the text, one file per section
     ├── figures/<name>.png    cropped PNGs, embedded in the chapters
     └── figures_raw/          the arXiv originals, never deleted
 ```
+
+`INDEX.md` holds the identity table, the abstract, and one row per chapter. Each
+row gives the word count, the count of named anchors and the subsection titles.
+A script measures all three. No agent then spends context to restate a number
+that a script can count.
+
+The word count says where the substance of the paper is. The anchor count counts
+the `sec-`, `eq-`, `fig-` and `tab-` anchors. It leaves the `pN` paragraph
+anchors out, because every long paragraph carries one and their count merely
+repeats the word count beside it. A count of the named anchors says something
+else: it separates a chapter that labels its equations from a chapter of plain
+prose. The last column says what the chapter covers. It stays `—` until a
+summary pass fills it in.
 
 Chapters are written to render in a Markdown preview: display maths as
 `$$ … $$`, figures as centred `<img>` blocks with their captions beneath.

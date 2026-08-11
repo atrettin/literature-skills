@@ -30,7 +30,6 @@ import difflib
 import json
 import re
 import sys
-import time
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -39,6 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import inspire_lookup  # noqa: E402
+import rate_gate  # noqa: E402
 import reference_store  # noqa: E402
 from arxiv_search import (  # noqa: E402
     EXACT_TITLE_RATIO,
@@ -49,12 +49,18 @@ from arxiv_search import (  # noqa: E402
 )
 
 CROSSREF_URL = "https://api.crossref.org/works/%s"
+CROSSREF_HOST = "api.crossref.org"
 CROSSREF_TIMEOUT_S = 20.0
+
+# The pace Crossref asks of a client with no polite-pool token.
+CROSSREF_PACE_S = 0.5
+rate_gate.set_interval(CROSSREF_HOST, CROSSREF_PACE_S)
 
 # INSPIRE allows 15 requests per IP in any 5-second window. Every lookup here
 # is batched, so a 74-reference paper costs a handful of requests; this keeps
-# even a pathological one under the limit.
-INSPIRE_PACE_S = 0.5
+# even a pathological one under the limit. The pace itself lives in
+# `inspire_lookup`, beside the one function that sends every INSPIRE request.
+INSPIRE_PACE_S = inspire_lookup.INSPIRE_PACE_S
 BATCH_SIZE = 40
 
 INSPIRE_FIELDS = (
@@ -699,10 +705,11 @@ def search_payload(
         query_parts["sort"] = sort
     params = urllib.parse.urlencode(query_parts)
     try:
+        # `fetch_record` holds the gate for the request, which is where the
+        # pace between two INSPIRE calls is kept.
         payload = inspire_lookup.fetch_record("literature?" + params)
     except RuntimeError:
         return [], 0
-    time.sleep(INSPIRE_PACE_S)
     if not payload:
         return [], 0
     hits = (payload.get("hits") or {}).get("hits") or []
@@ -920,11 +927,13 @@ def fetch_by_recid(recids: list[str]) -> dict[str, dict]:
 def fetch_crossref(doi: str) -> dict | None:
     """Resolve a DOI that INSPIRE does not hold. Never raises."""
     url = CROSSREF_URL % urllib.parse.quote(doi, safe="/")
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    query = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(request, timeout=CROSSREF_TIMEOUT_S) as response:
-            payload = json.loads(response.read().decode("utf-8", errors="replace"))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+        with rate_gate.request(CROSSREF_HOST):
+            with urllib.request.urlopen(query, timeout=CROSSREF_TIMEOUT_S) as response:
+                payload = json.loads(response.read().decode("utf-8", errors="replace"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError,
+            rate_gate.GateTimeout):
         return None
     work = payload.get("message") or {}
     if not work:

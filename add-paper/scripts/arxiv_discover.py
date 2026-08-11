@@ -36,10 +36,10 @@ from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import paper_facts  # noqa: E402
+import rate_gate  # noqa: E402
 import reference_store  # noqa: E402
 import rerank  # noqa: E402
 from arxiv_search import (  # noqa: E402
-    COURTESY_DELAY_S,
     SUMMARY_CHARS,
     fetch_feed,
     parse_entries,
@@ -222,7 +222,8 @@ def gather(terms: list[str], options: Options, fetch: Fetch) -> tuple[list[dict]
     if broad == strict:
         return entries, queries
 
-    time.sleep(COURTESY_DELAY_S)
+    # The broad rung waits behind the strict one at the gate, which is where
+    # the pace arXiv asks for is kept.
     try:
         found = parse_entries(fetch(broad, CANDIDATES))
     except (RuntimeError, ET.ParseError, urllib.error.URLError):
@@ -467,6 +468,7 @@ def main() -> int:
     args = build_parser().parse_args()
     if not args.topic:
         return fail("give --topic", 2)
+    rate_gate.use_root(args.literature_root)
     for name in args.categories:
         if not CATEGORY.match(name):
             return fail("'%s' is not an arXiv category, such as hep-ph" % name, 2)

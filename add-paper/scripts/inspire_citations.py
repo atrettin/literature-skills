@@ -47,6 +47,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import arxiv_discover  # noqa: E402
 import inspire_lookup  # noqa: E402
+import rate_gate  # noqa: E402
 import reference_store  # noqa: E402
 import references  # noqa: E402
 from arxiv_search import SUMMARY_CHARS, collapse_whitespace, truncate  # noqa: E402
@@ -279,6 +280,7 @@ def main(argv: list[str] | None = None) -> int:
         return fail("give an arXiv identifier, --doi or --recid", 2)
     if args.max_results < 1:
         return fail("--max-results must be at least 1", 2)
+    rate_gate.use_root(args.literature_root)
 
     paper = resolve_paper(args.arxiv_id or "", args.doi or "", args.recid or "")
     if not paper["found"]:
