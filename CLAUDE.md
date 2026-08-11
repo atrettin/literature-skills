@@ -31,6 +31,21 @@ you could not verify, and keep it visible.
 - A planning agent must add an instruction to work in a worktree, unless the
   user says otherwise. Work large enough to need a plan is large enough to need
   a worktree.
+- A sub-agent cannot make its own worktree. Its launch fixes its working
+  directory, thus `EnterWorktree` fails in it. The agent that launches must give
+  the worktree. Pass `isolation: "worktree"` to the `Agent` tool, or make the
+  worktree first and give its absolute path in the prompt:
+
+  ```bash
+  git worktree add .claude/worktrees/<name> -b worktree-<name>
+  ```
+
+  Then tell the agent that the worktree is there, and that it starts work in
+  it. An instruction to call `EnterWorktree` costs the agent a failure and a
+  workaround.
+- A worktree sits at `.claude/worktrees/<name>`, and its branch is
+  `worktree-<name>`. One name for both makes the branch of a worktree, and the
+  worktree of a branch, plain to read in `git worktree list`.
 - When an agent starts to implement a plan, it must update the `TODO.md`. If
   the task being worked on is not yet in `TODO.md`, add it and mark it as being
   in progress.
