@@ -82,6 +82,26 @@ and the works that it draws on.
 | `CITED_FETCH_CAP` | 40 | How many of a paper's own references the script looks up. This is one batch. A review cites five hundred works, and a higher value costs one more request for each further forty. |
 | `DEFAULT_SORT` | `mostcited` | The order of the citing papers when the caller asks for none. `mostcited` answers "what did the field build on this". `mostrecent` answers "what came after it", and is one flag away. |
 
+## Discovering the other names of a subject
+
+`add-paper/scripts/terminology_scan.py` counts the multiword terms in the
+titles of the reference store.
+
+| Parameter | Now | What it does |
+|---|---|---|
+| `NGRAM_SIZES` | `(2, 3)` | The lengths of a term. Adding 4 finds a longer name, and most 4-grams are one title each. Adding 1 reports single words, which are what the query's term list already holds. |
+| `MIN_TITLES` | 4 | How many titles must hold a term before it is reported. A lower value finds a name that few papers use, and it reports more phrases that name nothing. A larger collection carries a higher value well. |
+| `MAX_TERMS` | 20 | How many terms the report holds. Each one costs the agent a judgement, and some of them cost a scout. |
+| `EXAMPLES_PER_TERM` | 3 | How many titles a term names as evidence. This is what an agent reads to see what the term is about, before it starts a scout. |
+| `SUBSUME_RATIO` | 0.8 | A shorter term goes when a longer term that holds it reaches this share of its count. A lower value keeps both "neutral lepton" and "heavy neutral lepton". A higher value reports the shorter term more often. |
+| `SHARED_WORD_BONUS` | 1.0 | How much a word shared with the topic lifts the score of a term. A term that shares a word is more often another name for the same area. At 0 the order is the count alone, and a frequent term of a neighbouring subject then leads the report. |
+| `TITLE_FURNITURE` | 27 words | The words that describe a kind of paper and not a subject. A term never begins or ends with one, so "search for heavy" does not reach the report. A word inside a term stays. Add a word here when it leads many titles of your field, and when it separates no subject from another. |
+
+`MIN_PREFIX` needs no row of its own. `terminology_scan.py` imports it from
+`rerank.py`, through `term_matches`, and the row there covers it.
+
+Every value here is a judgement. Nobody measured any of them.
+
 ## Researching a task
 
 `research-report/SKILL.md` runs the loop that answers a task from the
@@ -95,6 +115,7 @@ skill states them, and the agent obeys them.
 | `MAX_TOTAL_INGESTS` | 20 | How many papers the whole task ingests. It bounds a task that keeps finding one more paper worth reading. |
 | `DRY_ITERATIONS` | 2 | How many iterations can find no new relevant paper before the loop stops. A lower value stops earlier on a subject that the collection covers already. |
 | `MAX_PARALLEL_SCOUTS` | 4 | How many `paper-scout` agents read at one time. A scout calls no API, thus this value trades tokens against waiting. |
+| `MAX_TERMINOLOGY_SCOUTS` | 3 | How many terms of one scan go to a `terminology-scout`. A scout calls no API, thus this value trades tokens against the number of terms that stay unclear. |
 | `CURRENCY_GRACE_MONTHS` | 12 | How young a paper must be for the loop to mark a sub-question answered without a forward-citation search on it. A higher value skips the search more often, and a conclusion can then rest on work that a later paper overtook. A lower value spends one INSPIRE request on a paper that few works can yet cite. This value is a judgement: a preprint of the last year has few citers, and a paper of two years can already carry a correction. Nobody measured it. |
 
 ## Searching the text
@@ -116,6 +137,7 @@ model costs less and reads less well.
 | Parameter | Now | What it does |
 |---|---|---|
 | `model` of `paper-ingestor` | `sonnet` | The model that handles an exception of the ingest script. The script does the mechanical work. Two judgements are left: the identity of a paper, and a name that two works want. Each one decides what the collection holds from then on. `haiku` is the cheaper value to try. A wrong paper, or a tag given to the wrong work, costs more than the saving. |
+| `model` of `terminology-scout` | `sonnet` | The model that says how one term relates to the subject. This is judgement about a referent, and not extraction. `haiku` is the cheaper value to try, and a smaller model tends to answer `yes` where the true answer is `narrower` — which is the failure this agent exists to prevent. |
 | `model` of `paper-scout` | `haiku` | The model that reads one paper against the sub-questions. This is targeted extraction, and not synthesis. `sonnet` is the value to try when scouts miss a passage that answers a question. |
 | `model` of `literature-researcher` | `inherit` | The model that runs the loop and writes the report. It reads no full text, and it makes every judgement. |
 
