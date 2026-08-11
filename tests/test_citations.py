@@ -26,6 +26,7 @@ CHAPTER = "jeong_2023_shallow_deep_inelastic/chapters/02_introduction.md"
 LIPARI = "lipari_2002_neutrino_oscillation_neutrino_cross"
 BODEK = "bodek_2008_axial_mass_quasielastic"
 JEONG = "jeong_2023_shallow_deep_inelastic"
+OTHER = "juszczak_2003_recoil_nucleon_spectrum"
 
 
 def relink(collection: Path) -> tuple[int, str]:
@@ -299,6 +300,71 @@ def test_the_pages_do_not_count_as_citing_anything(collection: Path) -> None:
               for where in files}
 
     assert citing == {CHAPTER}
+
+
+def test_a_scoped_check_ignores_another_papers_dangling_reference(
+    collection: Path,
+) -> None:
+    other = collection / OTHER / "INDEX.md"
+    other.write_text(other.read_text(encoding="utf-8") + "\nSee [ref: eq:foo].\n",
+                     encoding="utf-8")
+
+    report = check_references.check(collection, paper=JEONG)
+
+    assert report["dangling_refs"] == []
+    assert report["elsewhere"]["dangling_refs"] == 1
+
+
+def test_a_scoped_check_fails_on_the_papers_own_unresolved_tag(collection: Path) -> None:
+    report = check_references.check(collection, paper=JEONG)
+
+    assert [item["tag"] for item in report["unresolved"]] == ["Katori:2016yel"]
+    assert check_references.main(
+        ["--literature-root", str(collection), "--paper", JEONG]
+    ) == 1
+
+
+def test_a_scoped_check_passes_when_the_paper_is_clean(collection: Path) -> None:
+    """The Jeong tag stays unresolved; it is not this paper's to answer for."""
+    report = check_references.check(collection, paper=OTHER)
+
+    assert report["unresolved"] == []
+    assert report["elsewhere"]["unresolved"] == 1
+    assert check_references.main(
+        ["--literature-root", str(collection), "--paper", OTHER]
+    ) == 0
+
+
+def test_an_unscoped_check_answers_for_the_whole_collection(collection: Path) -> None:
+    other = collection / OTHER / "INDEX.md"
+    other.write_text(other.read_text(encoding="utf-8") + "\nSee [ref: eq:foo].\n",
+                     encoding="utf-8")
+
+    report = check_references.check(collection)
+
+    assert "scope" not in report
+    assert "elsewhere" not in report
+    assert [item["tag"] for item in report["unresolved"]] == ["Katori:2016yel"]
+    assert [item["in"] for item in report["dangling_refs"]] == ["%s/INDEX.md" % OTHER]
+
+
+def test_a_tag_many_papers_cite_stays_in_scope(collection: Path) -> None:
+    """`cited_in` keeps five files; the partition must read all of them.
+
+    The six files sit in a paper whose slug sorts before this one, so this
+    paper's own file falls outside the cut.
+    """
+    chapters = collection / "abbott_1999_earlier_by_name" / "chapters"
+    chapters.mkdir(parents=True)
+    for number in range(6):
+        (chapters / ("%02d_more.md" % number)).write_text(
+            "A claim [cite: Katori:2016yel].\n", encoding="utf-8"
+        )
+
+    report = check_references.check(collection, paper=JEONG)
+
+    assert [item["tag"] for item in report["unresolved"]] == ["Katori:2016yel"]
+    assert CHAPTER not in report["unresolved"][0]["cited_in"]
 
 
 def test_the_json_says_what_it_wrote(

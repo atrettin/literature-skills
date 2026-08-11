@@ -25,9 +25,18 @@ fail: an orphan is what a re-ingested paper leaves behind, an unverified row is
 honest about itself, and a cross-reference the paper's own source never defined
 cannot be made to resolve.
 
+`--paper <slug>` says which paper the caller ingested. The read stays
+collection-wide either way — a citation in one paper is answered by a store the
+whole collection shares. The flag scopes the answer. Every list at the top level
+then holds only what belongs to that paper, `elsewhere` counts what belongs to
+the rest of the collection, and `ok` and the exit status speak for that paper
+alone. Without the flag, the report answers for the whole collection, which is
+what a person auditing the collection wants.
+
 Usage:
     check_references.py
     check_references.py --literature-root literature
+    check_references.py --paper jeong_2023_shallow_deep_inelastic
 """
 
 from __future__ import annotations
@@ -121,7 +130,74 @@ def read_cross_references(root: Path) -> list[dict]:
     return broken
 
 
-def check(root: Path) -> dict:
+def belongs_to(where: str, paper: str) -> bool:
+    """Whether a path in the collection is one of the paper's own files."""
+    return where == paper or where.startswith(paper + "/")
+
+
+def scope_report(report: dict, paper: str, store: list[dict],
+                 cited: dict[str, list[str]]) -> dict:
+    """The same findings, answering for one paper.
+
+    Each list keeps the entries that belong to `paper` and hands the count of
+    the rest to `elsewhere`. A citation defect belongs to the paper whose file
+    carries the citation; a store defect belongs to the paper the record is
+    held as, or the paper that cites it.
+
+    The partition reads the full file list of `cited`, never the `cited_in`
+    field of the report: that field keeps the first five files, so a tag ten
+    papers cite can lose this paper's own file in the cut.
+    """
+    records = {record.get("tag", ""): record for record in store}
+
+    def cites(tag: str) -> bool:
+        """Whether any file of the paper cites the tag."""
+        return any(belongs_to(where, paper) for where in cited.get(tag, []))
+
+    def cited_by_paper(tag: str) -> bool:
+        """Whether the record's own `cited_by` names the paper."""
+        record = records.get(tag) or {}
+        return any(entry.get("slug") == paper for entry in record.get("cited_by") or [])
+
+    def held_as_paper(tag: str) -> bool:
+        return (records.get(tag) or {}).get("held_as") == paper
+
+    mine: dict = {}
+    elsewhere: dict = {}
+    for field, belongs in (
+        ("unresolved", lambda item: cites(item["tag"])),
+        ("missing_pages", cites),
+        ("dangling_refs", lambda item: belongs_to(item["in"], paper)),
+        ("duplicates", lambda item: any(
+            cites(tag) or held_as_paper(tag) for tag in item["tags"])),
+        ("stale", lambda tag: held_as_paper(tag) or cites(tag)),
+        ("orphans", cited_by_paper),
+    ):
+        mine[field] = [item for item in report[field] if belongs(item)]
+        elsewhere[field] = len(report[field]) - len(mine[field])
+
+    unverified = sum(
+        1
+        for record in store
+        if not record.get("verified") and cited_by_paper(record.get("tag", ""))
+    )
+
+    scoped = {"scope": paper, "records": report["records"],
+              "cited_tags": report["cited_tags"]}
+    for field in ("unresolved", "duplicates", "missing_pages", "stale", "orphans"):
+        scoped[field] = mine[field]
+    scoped["unverified"] = unverified
+    scoped["dangling_refs"] = mine["dangling_refs"]
+    elsewhere["unverified"] = report["unverified"] - unverified
+    scoped["elsewhere"] = {
+        field: elsewhere[field]
+        for field in ("unresolved", "duplicates", "missing_pages", "stale",
+                      "orphans", "unverified", "dangling_refs")
+    }
+    return scoped
+
+
+def check(root: Path, paper: str | None = None) -> dict:
     store = reference_store.load(root)
     tags = {record.get("tag", "") for record in store}
     cited = read_citations(root)
@@ -138,7 +214,7 @@ def check(root: Path) -> dict:
                 duplicates.append({"identity": key, "tags": sorted([seen[key], record.get("tag", "")])})
             seen.setdefault(key, record.get("tag", ""))
 
-    return {
+    report = {
         "records": len(store),
         "cited_tags": len(cited),
         "unresolved": sorted(
@@ -163,12 +239,19 @@ def check(root: Path) -> dict:
         "unverified": sum(1 for record in store if not record.get("verified")),
         "dangling_refs": read_cross_references(root),
     }
+    if paper is None:
+        return report
+    return scope_report(report, paper, store, cited)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument(
         "--literature-root", type=Path, default=reference_store.default_root()
+    )
+    parser.add_argument(
+        "--paper",
+        help="slug of the paper the answer is about; the read stays collection-wide",
     )
     args = parser.parse_args(argv)
 
@@ -177,7 +260,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        report = check(args.literature_root)
+        report = check(args.literature_root, args.paper)
     except RuntimeError as error:
         print(json.dumps({"error": str(error)}, indent=2))
         return 1

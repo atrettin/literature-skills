@@ -307,7 +307,7 @@ the paper.
 
 ```bash
 $PY $SKILL/scripts/update_references.py --manifest <manifest file>
-$PY $SKILL/scripts/check_references.py
+$PY $SKILL/scripts/check_references.py --paper <slug>
 ```
 
 Write the manifest from step 4 to a file if you have not already, and pass it
@@ -317,6 +317,16 @@ and writes the citations into the chapters — `relinked` in its output counts t
 files it touched. The second checks that every citation in the collection still
 names a work and still has a page to open; it prints `"ok": true` and exits 0
 when all is well.
+
+Give the second script the slug from step 3. The script still reads the whole
+collection, because one store answers the citations of every paper. The flag
+`--paper` scopes the answer. `unresolved`, `missing_pages`, `dangling_refs` and
+every other list then hold only this paper's entries. `ok` speaks for this paper
+alone.
+
+`elsewhere` counts the defects of the other papers. Report `elsewhere` to the
+user as one line of counts. Leave those defects alone. They belong to papers you
+did not touch.
 
 Run this **after** `INDEX.md` exists, not before. The merge reads each paper's
 `INDEX.md` to work out which cited works this collection also holds in full, and
