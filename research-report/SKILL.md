@@ -323,7 +323,10 @@ It checks five things:
 1. Each link opens a file that exists.
 2. Each anchor is in the file that the link names.
 3. Each tag has a record in the store.
-4. The body and the references name the same works.
+4. The body and the references name the same works. `cited_but_not_listed`
+   names a work the body cites and the references omit: add the work to the
+   references. `listed_but_not_cited` names a work the references list and the
+   body cites nowhere: cite the work in the body, or remove the entry.
 5. Each unconfirmed work carries its mark.
 
 **The report is not finished until `"ok": true`.** Correct what it reports and

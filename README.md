@@ -86,8 +86,10 @@ anchor of the section the claim came from:
 
 `check_report.py` then checks the report the way `check_references.py` checks the
 collection: every link opens a file that exists, every anchor is in that file,
-every tag has a record, the body and the references agree, and every
-unconfirmed work carries its ⚠.
+every tag has a record, the body and the references name the same works
+(`cited_but_not_listed` names a work the body cites and the references omit,
+`listed_but_not_cited` a work the references list and the body cites nowhere),
+and every unconfirmed work carries its ⚠.
 
 [EVALUATION.md](EVALUATION.md) says how to measure whether the agent does this
 well.
@@ -356,6 +358,43 @@ that is later ingested keeps one identifier throughout — `held_as` then names
 the directory holding it in full. Author lists collapse to three by default,
 with `authors_total` beside them: a high-energy physics paper can carry several
 thousand authors, and a citation never turns on the four hundredth of them.
+
+The answer is one object with three fields:
+
+| Field | Type | Holds |
+|---|---|---|
+| `found` | integer | how many records the answer holds |
+| `missing` | list of strings | each tag that no record answers, each DOI as `doi:<doi>`, each arXiv identifier as `arxiv:<id>` |
+| `references` | list of objects | one object per record, most cited first; a record with no count sorts after every record that has one |
+
+One record holds these fields. Every field but `tag` can be absent: the store
+holds only what a lookup confirmed.
+
+| Field | Type | Holds |
+|---|---|---|
+| `tag` | string | the name the chapters cite the work by |
+| `title` | string | the title of the work |
+| `title_source` | string | present only when no lookup confirmed the work: the title is then the bibliography line of the citing paper |
+| `authors` | list of strings | at most `--authors N` names (3 by default), then `et al. (N more)`; `--all-authors` gives every name |
+| `authors_total` | integer | how many authors the work has |
+| `year` | integer | the year of publication |
+| `journal` | string | the journal, volume, year and pages, as one line |
+| `doi` | string | the DOI |
+| `doi_url` | string | present only with a DOI: the resolver link |
+| `arxiv_id` | string | the arXiv identifier |
+| `arxiv_url` | string | present only with an arXiv identifier: the abstract page |
+| `inspire_id` | string | the INSPIRE-HEP record number |
+| `citation_count` | integer | how many papers INSPIRE-HEP counts as citing the work |
+| `source` | string | which service answered |
+| `match` | string | which identifier matched |
+| `verified` | boolean | true when a lookup confirmed the work |
+| `held_as` | string or null | the directory that holds the work in full, or null when the collection holds it only as a reference |
+| `cited_by` | list of strings | the slug of each paper of the collection that cites the work, sorted |
+
+The answer holds no bookkeeping field of the store: `journal_key`, `raw`,
+`about` and `first_seen` stay out. The exit status is 1 when `missing` holds one
+entry or more. The script prints `{"error": "…"}` and exits 1 when it cannot
+read the store.
 
 **Storage is separate from presentation.** `.references.jsonl` is the store —
 one JSON object per line, written atomically, deduplicated on DOI, arXiv

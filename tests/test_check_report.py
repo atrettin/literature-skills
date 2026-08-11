@@ -124,7 +124,7 @@ def test_a_marker_copied_out_of_a_chapter_is_reported(
     assert report["cite_markers"] == ["lipari_2002_neutrino_oscillation_neutrino_cross"]
 
 
-def test_a_work_cited_in_the_text_and_missing_from_the_references_is_reported(
+def test_a_work_the_body_cites_and_the_references_omit_is_cited_but_not_listed(
     project: Path, collection: Path
 ) -> None:
     broken = GOOD.replace(
@@ -135,10 +135,10 @@ def test_a_work_cited_in_the_text_and_missing_from_the_references_is_reported(
     )
     report = check_report.check(write(project, broken, collection), collection)
 
-    assert report["uncited_in_references"] == ["tag:bodek_2008_axial_mass_quasielastic"]
+    assert report["cited_but_not_listed"] == ["tag:bodek_2008_axial_mass_quasielastic"]
 
 
-def test_a_work_listed_in_the_references_and_cited_nowhere_is_reported(
+def test_a_work_the_references_list_and_the_body_omits_is_listed_but_not_cited(
     project: Path, collection: Path
 ) -> None:
     broken = GOOD.replace(
@@ -148,7 +148,7 @@ def test_a_work_listed_in_the_references_and_cited_nowhere_is_reported(
     )
     report = check_report.check(write(project, broken, collection), collection)
 
-    assert report["unlisted_in_references"] == [
+    assert report["listed_but_not_cited"] == [
         "tag:lipari_2002_neutrino_oscillation_neutrino_cross"
     ]
 
@@ -157,8 +157,8 @@ def test_one_work_cited_two_ways_is_one_work(project: Path, collection: Path) ->
     """A held paper cited at a chapter, and listed by its record, is not two papers."""
     report = check_report.check(write(project, GOOD, collection), collection)
 
-    assert report["uncited_in_references"] == []
-    assert report["unlisted_in_references"] == []
+    assert report["cited_but_not_listed"] == []
+    assert report["listed_but_not_cited"] == []
 
 
 def test_a_held_paper_is_listed_by_its_index(project: Path, collection: Path) -> None:
@@ -175,8 +175,8 @@ def test_a_held_paper_is_listed_by_its_index(project: Path, collection: Path) ->
     report = check_report.check(write(project, by_index, collection), collection)
 
     assert report["broken_links"] == []
-    assert report["uncited_in_references"] == []
-    assert report["unlisted_in_references"] == []
+    assert report["cited_but_not_listed"] == []
+    assert report["listed_but_not_cited"] == []
 
 
 def test_a_work_the_collection_could_not_confirm_must_carry_its_mark(
