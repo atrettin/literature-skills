@@ -160,6 +160,7 @@ from the root of the project that holds `literature/` — or with
 | `convert_figures.py <paper-dir>` | converts the figures of a paper again |
 | `check_references.py` | asserts that every citation and `[ref: …]` in the collection still resolves |
 | `reference_lookup.py <tag>` | resolves one citation, or searches the reference store |
+| `search_literature.py "<phrase>"` | finds a phrase in the text of the papers, and gives the chapter, the anchor and the line |
 | `update_references.py` | renders `REFERENCES.md` from the store |
 | `inspire_lookup.py <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
 | `inspire_citations.py <arxiv-id>` | finds the papers that cite one paper, and the works it draws on |
@@ -181,7 +182,8 @@ paper directory that exists.
 The tests cover the parts that fail quietly: the queries the scripts send to
 arXiv, the ranking, the answers the collection gives about a paper, the
 citations written into the chapters, the citations written into a report, the
-queries sent to INSPIRE for the citation graph, and which collection a script
+queries sent to INSPIRE for the citation graph, the phrase search over the text
+of the papers (`tests/test_search_literature.py`), and which collection a script
 reads.
 
 They call no network. `tests/data/` holds the arXiv responses they run against.
@@ -259,6 +261,17 @@ renumbers by hand can end up a little out; the link still lands on the right
 object. A label the source never defined keeps its `[ref: …]` marker, which is
 how it stays visible. `check_references.py` reports both, alongside the
 citations it checks.
+
+An anchor is written `<a id="sec-pcac"></a>`, and never as the pandoc form
+`{#sec-pcac}`. `search_literature.py` is what turns a phrase into that address.
+It exists because `grep` cannot: chapter text wraps, so a line break splits a
+phrase and the search finds nothing, and a file that holds a NUL byte reads as
+binary, so `grep` prints nothing for the whole file. Neither failure reports
+itself, and both make text that is present look absent — a correct quotation
+then looks invented. The script matches against a flattened copy of the text and
+answers with the paper, the chapter, the anchor above the match, the line and
+the sentence. When the phrase matches nothing, it drops words from the end until
+something matches, and reports that shorter phrase under `partial_matches`.
 
 ## Citations that go somewhere
 

@@ -13,15 +13,17 @@ and gives you no more answers.
 project with no `literature/` at all has no database yet — the `init-literature`
 skill starts one.
 
-## Two shorthands
+## Three shorthands
 
-Resolving a citation runs one script, which ships with the `add-paper` skill.
-Neither path is fixed, so:
+Resolving a citation and searching the text each run one script, and both ship
+with the `add-paper` skill. No path is fixed, so:
 
 - **`$LOOKUP`** — `<the add-paper skill's directory>/scripts/reference_lookup.py`.
   The `add-paper` skill prints its own base directory when it loads; if it is
   not installed alongside this one, `find ~/.claude/skills -name reference_lookup.py`
   finds it.
+- **`$SEARCH`** — `<the add-paper skill's directory>/scripts/search_literature.py`,
+  beside `$LOOKUP`.
 - **`$PY`** — the project's Python: `.venv/bin/python` when the project has a
   virtual environment, otherwise `python3`.
 
@@ -69,6 +71,11 @@ another. The number in the link is the number the object carries in this
 collection, and the file named before the `#` is the chapter to read for it. A `[ref: label]` with no link is a reference
 whose target the paper's own source never defined; treat it as the paper saying
 "see elsewhere in this paper".
+
+The target of such a link is an anchor, written `<a id="sec-pcac"></a>` on a
+line of its own. It is never the pandoc form `{#sec-pcac}`, and a search for
+that form finds nothing anywhere. You do not have to find an anchor yourself:
+`$SEARCH` gives the anchor above each match it reports.
 
 Inline maths stays as `$…$` and display maths as `$$…$$`, so a Markdown preview
 renders it. A numbered equation carries its number as `\tag{6}`. A figure is
@@ -145,6 +152,40 @@ Do not read either to resolve a tag: the table holds one row per work across
 every paper here and grows without limit, and a page tells you less than the
 lookup does at the same cost.
 
+## To verify a quotation
+
+Before you write a quotation into a report, find it in the paper it is said to
+come from:
+
+```bash
+$PY $SEARCH "<the words>" --paper <slug>
+```
+
+**Do not use `grep` for this.** Chapter text wraps at about 70 characters. A
+phrase that a line break splits thus gives no match. Some files hold a NUL byte,
+and `grep` then prints nothing for the whole file — no error, and no "binary
+file matches". Both failures make text that is present look absent.
+
+The answer gives the chapter, the anchor and the line of each match. `Read` that
+chapter at that line. Check the words around the quotation. A paper can write a
+sentence as a condition, or give it to somebody else. Such a sentence does not
+support the claim that you were about to make with it.
+
+**When a search returns nothing, suspect the search before you conclude
+absence.** Read `partial_matches`: it names the longest shorter phrase the
+papers do carry, which tells you the word the paper never wrote. Try fewer
+words. Try the term the field uses for the same thing.
+
+A hit in a paper you did not expect is a paper of another task. The collection
+serves more than one question, and it keeps the papers of each. Such a hit is
+evidence about that paper. It is not evidence about yours. Read it, and decide.
+
+```bash
+$PY $SEARCH "axial mass" --paper <slug> --paper <slug>   # your working set
+$PY $SEARCH "axial mass"                                 # the whole collection
+$PY $SEARCH "M_A\s*=\s*1.03" --regex
+```
+
 ## To find a figure
 
 1. Read or grep `literature/<slug>/figures/FIGURES.md`.
@@ -198,6 +239,15 @@ the slug. Say that you did it and why.
 - Never edit `literature/REFERENCES.md`, `literature/references/` or
   `.references.jsonl`. The first two are rendered from the store and rewritten
   in full whenever a paper is added; all three belong to `add-paper`.
+- A claim that a paper does not hold something needs a search method that you
+  can state. A `grep` that found nothing is not such a method: it fails silently
+  on wrapped text and on a file with a NUL byte. Search with `$SEARCH`, and say
+  which phrases you searched for.
+- Give `$SEARCH` a scope. The collection serves more than one task and keeps the
+  papers of each, so name the papers with `--paper` when the question is about
+  your task. Leave `--paper` out when the question is about the collection
+  itself. Read the `scope` block of the answer, and check that it holds the
+  papers that you meant.
 - Never answer from a citation alone. Its text and its tag both carry an author
   and a year, which is enough to look convincing and not enough to be right —
   they are identifiers, not citations. Resolve the tag with `$LOOKUP`.

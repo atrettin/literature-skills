@@ -33,13 +33,14 @@ file below the literature root.
 
 ## Before you start
 
-Four shorthands are used below. The `add-paper` skill prints its own base
+Five shorthands are used below. The `add-paper` skill prints its own base
 directory when it loads; its `scripts/` directory holds each script.
 
 - **`$PY`** — the project's Python. Use `.venv/bin/python` when the project has
   a virtual environment. If it does not, use `python3`.
 - **`$LOOKUP`** — `<add-paper>/scripts/reference_lookup.py`
 - **`$CITE`** — `<add-paper>/scripts/inspire_citations.py`
+- **`$SEARCH`** — `<add-paper>/scripts/search_literature.py`
 - **`$AUDIT`** — `<add-paper>/scripts/check_report.py`
 
 **Find the collection first.** It is at `$LITERATURE_ROOT` when that variable is
@@ -126,8 +127,18 @@ one. That is what a scout is for: it reads the whole paper against the questions
 that you have.
 
 **Verify before you cite.** A scout report tells you where to look. It is not a
-source. Open the chapter at the anchor that the scout names. Check that the text
-there supports the claim. Then write the finding in the log:
+source. Find the quotation with `search_literature.py`:
+
+```bash
+$PY $SEARCH "<the words the scout quoted>" --paper <slug>
+```
+
+Then read the chapter at the line that the answer gives. Check that the text
+there supports the claim. **Never search for a quotation with `grep`.** The text
+wraps, thus `grep` misses a phrase that a line break splits. `grep` also prints
+nothing for a file that holds a NUL byte. A quotation that the search cannot
+place is not verified, whatever the scout wrote. Then write the finding in the
+log:
 
 ```
 SQ2: <the claim, in one sentence> — <slug>/chapters/03_results.md#sec-axialff
