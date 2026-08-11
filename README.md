@@ -100,6 +100,24 @@ every tag has a record, the body and the references name the same works
 `listed_but_not_cited` a work the references list and the body cites nowhere),
 and every unconfirmed work carries its ⚠.
 
+It reads each link from the report, the way a reader reads it. A link that
+opens nothing there is broken, however `--literature-root` is set. The root
+tells the reader which repair the link needs. `broken_links` gives one of three
+answers:
+
+| `why` | What it means | The repair |
+|---|---|---|
+| `no such file` | the link opens nothing, and the root holds no such path either | get the paper, or correct the name of the chapter |
+| `the collection holds this file, the link does not reach it` | `in_collection` gives the path under the root, and `anchor_in_collection` says whether the anchor is there | write the link for the collection this reader opens |
+| `no such anchor` | the file opens and the section is not in it | cite the anchor the chapter now carries |
+
+`citations` counts the works the body cites, whether or not their links open.
+A report that names twelve papers cites twelve papers. A count that fell with
+the reader's `LITERATURE_ROOT` would describe the collection and call itself a
+description of the report. `works_not_in_collection` names the cited works this
+collection does not hold. That list describes the collection, thus it alone
+does not fail the check.
+
 [EVALUATION.md](EVALUATION.md) says how to measure whether the agent does this
 well.
 

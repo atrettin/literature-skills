@@ -252,6 +252,91 @@ def test_a_link_to_a_project_file_is_checked_too(project: Path, collection: Path
     assert again["broken_links"] == []
 
 
+def elsewhere(reports: Path, text: str, name: str = "axial-mass.md") -> Path:
+    """A report written for a collection that is not where this reader looks."""
+    path = reports / name
+    path.write_text(text.format(root="../../elsewhere/literature"), encoding="utf-8")
+    return path
+
+
+def test_a_link_that_misses_the_collection_says_the_collection_holds_the_file(
+    project: Path, collection: Path
+) -> None:
+    """The repair is then the path in the report, not the paper."""
+    report = check_report.check(elsewhere(project, GOOD), collection)
+    chapter = next(
+        item for item in report["broken_links"] if "02_introduction" in item["link"]
+    )
+
+    assert chapter["why"] == "the collection holds this file, the link does not reach it"
+    assert (
+        chapter["in_collection"]
+        == "jeong_2023_shallow_deep_inelastic/chapters/02_introduction.md"
+    )
+    assert chapter["anchor_in_collection"] is True
+
+
+def test_a_link_that_misses_the_collection_is_still_broken(
+    project: Path, collection: Path
+) -> None:
+    """A citation a reader cannot open has failed, whatever the root holds."""
+    path = elsewhere(project, GOOD)
+
+    assert check_report.main([str(path), "--literature-root", str(collection)]) == 1
+
+
+def test_a_link_that_misses_the_collection_still_names_its_work(
+    project: Path, collection: Path
+) -> None:
+    """A report that names two works cites two works, wherever its links land."""
+    report = check_report.check(elsewhere(project, GOOD), collection)
+
+    assert report["citations"] == 2
+    assert report["works_not_in_collection"] == []
+    assert report["cited_but_not_listed"] == []
+    assert report["listed_but_not_cited"] == []
+
+
+def test_a_work_this_collection_does_not_hold_is_named(
+    project: Path, collection: Path
+) -> None:
+    """Nothing here answers the path, so the repair is to get the paper."""
+    other = GOOD.replace("jeong_2023_shallow_deep_inelastic/chapters", "reno_2050_z/chapters")
+    report = check_report.check(elsewhere(project, other), collection)
+    chapter = next(item for item in report["broken_links"] if "reno_2050_z" in item["link"])
+
+    assert chapter["why"] == "no such file"
+    assert "in_collection" not in chapter
+    assert "slug:reno_2050_z" in report["works_not_in_collection"]
+
+
+def test_an_anchor_the_collection_lost_is_told_from_a_path_that_misses_it(
+    project: Path, collection: Path
+) -> None:
+    """Two repairs, and a reader must be able to tell them apart."""
+    gone = GOOD.replace("#sec-introduction", "#sec-conclusions")
+    report = check_report.check(elsewhere(project, gone), collection)
+    chapter = next(
+        item for item in report["broken_links"] if "02_introduction" in item["link"]
+    )
+
+    assert chapter["why"] == "the collection holds this file, the link does not reach it"
+    assert chapter["anchor_in_collection"] is False
+
+
+def test_a_project_file_is_not_read_as_a_place_in_the_collection(
+    project: Path, collection: Path
+) -> None:
+    """A bare file name is the project's own, and the collection has one too."""
+    (collection / "README.md").write_text("# the collection\n", encoding="utf-8")
+    own = GOOD.replace("## References", "Written up in [the notes](../README.md).\n\n## References")
+    report = check_report.check(write(project, own, collection), collection)
+    notes = next(item for item in report["broken_links"] if "README" in item["link"])
+
+    assert notes["why"] == "no such file"
+    assert report["citations"] == 2
+
+
 def test_a_missing_log_is_reported_and_does_not_fail(
     project: Path, collection: Path
 ) -> None:

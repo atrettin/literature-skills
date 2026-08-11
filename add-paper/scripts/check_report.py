@@ -7,9 +7,16 @@ link is easy to write and easy to get wrong: the chapter is renamed, the anchor
 never existed, the work is cited in the text and missing from the references.
 A reader finds out by clicking. This finds out first.
 
+This reads every link the way a reader reads it: relative to the report. A
+link that does not open there is broken, wherever else the file sits. The
+collection root gives the diagnosis and not the verdict. A root that holds the
+file the link names tells the reader to repair the path in the report. A root
+that holds nothing for the link tells the reader to get the paper.
+
 What it reports:
 
-    broken link     a link whose file is not there, or whose anchor is not in it
+    broken link     a link whose file is not there, whose file the collection
+                    holds at another place, or whose anchor is not in it
     unknown tag     a link to a reference page no record in the store answers
     cite marker     a `[cite: tag]` marker copied out of a chapter, unresolved
     bibliography    cited_but_not_listed: a work the text cites and the
@@ -17,9 +24,12 @@ What it reports:
                     references list and the text cites nowhere
     unflagged       a work the collection could not confirm, cited without the
                     ⚠ that says so
+    absent work     a work the report cites and the collection does not hold
     no citations    a report that attributes nothing to anything
 
-Exit status is 1 when any of those was found.
+Exit status is 1 when any of those was found. An absent work is the one
+exception. The report names such a work and a reader can go and get it, thus
+the list of them describes the collection and not the report.
 
 A missing research log is reported and does not fail: the log is the record of
 how the report was reached, and a report written another way is still auditable.
@@ -35,7 +45,7 @@ import argparse
 import json
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import reference_store  # noqa: E402
@@ -55,6 +65,19 @@ BIBLIOGRAPHY = re.compile(r"^#{1,6}\s+References\s*$", re.IGNORECASE | re.MULTIL
 UNVERIFIED_MARK = "⚠"
 
 MARKDOWN_SUFFIXES = (".md", ".markdown")
+
+# The shape of the collection, as a link writes it. A paper directory holds an
+# INDEX.md, its chapters in one directory and its figures in another. The pages
+# of the reference store sit together under one more directory. These names let
+# a link that reaches no file still say which work it cites.
+PAPER_SUBDIRS = ("chapters", "figures", "figures_raw")
+PAPER_INDEX = "INDEX.md"
+
+# How much of a link must name a place in the collection before the collection
+# is searched for it. Two parts is a directory and a name, which the layout
+# above always gives. One part is a bare file name, and a report that links
+# `../README.md` means the README of its own project.
+COLLECTION_TAIL_PARTS = 2
 
 
 # --------------------------------------------------------------------------
@@ -109,14 +132,24 @@ def local_links(text: str, report: Path) -> list[dict]:
     return found
 
 
-def check_links(links: list[dict]) -> list[dict]:
-    """Every link that leads nowhere, and why."""
+def check_links(links: list[dict], root: Path) -> list[dict]:
+    """Every link that leads nowhere, and why.
+
+    Each link starts at the report, because that is where a reader starts. A
+    link that opens nothing from there is broken. What the collection holds
+    names the repair:
+
+    - the root holds the file. The report was written for a collection at
+      another place, and the path in the report is what to repair.
+    - the root holds nothing for the link. This collection does not hold the
+      work, and the paper is what to get.
+    """
     broken = []
     anchors: dict[Path, set[str]] = {}
     for link in links:
         path = link["path"]
         if not path.is_file():
-            broken.append({"link": link["link"], "why": "no such file"})
+            broken.append(elsewhere(link, root))
             continue
         if not link["anchor"] or path.suffix.lower() not in MARKDOWN_SUFFIXES:
             # A fragment on anything but Markdown is the renderer's business,
@@ -131,17 +164,91 @@ def check_links(links: list[dict]) -> list[dict]:
     return broken
 
 
+def in_collection(link: dict, root: Path) -> Path | None:
+    """The file the collection holds for a link, or None when it holds none.
+
+    The longest tail of the link that names a file under the root is the file
+    the link meant. A longer tail leaves less of the answer to guesswork. A
+    tail too short to carry the layout is thus not searched for at all.
+    """
+    parts = PurePosixPath(link["target"]).parts
+    for start in range(len(parts) - COLLECTION_TAIL_PARTS + 1):
+        tail = parts[start:]
+        if any(part in (".", "..") for part in tail):
+            # A step out of a directory is how a link reaches the collection
+            # from the report. It says nothing about where a file sits inside
+            # the collection, so a tail that carries one is not a tail.
+            continue
+        candidate = root.joinpath(*tail)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def elsewhere(link: dict, root: Path) -> dict:
+    """A broken link, told apart by what the collection holds for it."""
+    found = in_collection(link, root)
+    if found is None:
+        return {"link": link["link"], "why": "no such file"}
+    broken = {
+        "link": link["link"],
+        "why": "the collection holds this file, the link does not reach it",
+        "in_collection": str(found.relative_to(root)),
+    }
+    if link["anchor"] and found.suffix.lower() in MARKDOWN_SUFFIXES:
+        broken["anchor_in_collection"] = link["anchor"] in anchors_of(found)
+    return broken
+
+
 # --------------------------------------------------------------------------
 # what each link cites
 # --------------------------------------------------------------------------
 
 
-def under(path: Path, root: Path) -> Path | None:
-    """The part of `path` below the collection, or None when it is outside."""
+def under(path: Path, root: Path) -> tuple[str, ...] | None:
+    """The parts of `path` below the collection, or None when it is outside."""
     try:
-        return path.resolve().relative_to(root.resolve())
+        return path.resolve().relative_to(root.resolve()).parts
     except ValueError:
         return None
+
+
+def collection_parts(link: dict, root: Path) -> tuple[str, ...] | None:
+    """Where in a collection a link points, whichever collection that is.
+
+    A link that misses this collection still names the work its writer read.
+    Three rules read a link as a place in a collection, in this order:
+
+    1. the link lands under the root.
+    2. the root holds a file at a tail of the link.
+    3. the shape of the link is the shape of the layout.
+
+    Rule 3 answers for a work that nothing here holds. That is what lets the
+    report count such a work and name it, rather than drop it.
+    """
+    inside = under(link["path"], root)
+    if inside is not None:
+        return inside
+    found = in_collection(link, root)
+    if found is not None:
+        return found.relative_to(root).parts
+    return by_layout(PurePosixPath(link["target"]).parts)
+
+
+def by_layout(parts: tuple[str, ...]) -> tuple[str, ...] | None:
+    """The tail of a written path that names a place in a collection.
+
+    The last directory of the layout wins, so a project whose own directory
+    carries one of these names does not take the link away from the paper.
+    """
+    for index in range(len(parts) - 1, 0, -1):
+        if parts[index] == reference_store.RECORDS_DIR and index == len(parts) - 2:
+            return parts[index:]
+        if parts[index] in PAPER_SUBDIRS and parts[index - 1] not in (".", ".."):
+            return parts[index - 1 :]
+    if len(parts) > 1 and parts[-1] == PAPER_INDEX and parts[-2] not in (".", ".."):
+        return parts[-2:]
+    return None
 
 
 def cited_work(link: dict, root: Path) -> tuple[str, str] | None:
@@ -152,12 +259,15 @@ def cited_work(link: dict, root: Path) -> tuple[str, str] | None:
     names the paper by its directory; a work known only from a bibliography is
     cited at its reference page, which names it by its tag.
     """
-    inside = under(link["path"], root)
-    if inside is None:
+    parts = collection_parts(link, root)
+    if parts is None:
         return None
-    parts = inside.parts
-    if parts[0] == reference_store.RECORDS_DIR and inside.suffix.lower() == ".md":
-        return ("tag", inside.stem)
+    if (
+        parts[0] == reference_store.RECORDS_DIR
+        and len(parts) == 2
+        and parts[1].lower().endswith(".md")
+    ):
+        return ("tag", parts[1][: -len(".md")])
     if len(parts) > 1:
         return ("slug", parts[0])
     return None
@@ -200,6 +310,14 @@ def canonical(work: tuple[str, str], slugs: dict[str, str]) -> str:
     if kind == "tag" and name in slugs:
         return "slug:%s" % slugs[name]
     return "%s:%s" % (kind, name)
+
+
+def is_held(name: str, root: Path) -> bool:
+    """Whether the collection holds the work that a canonical name names."""
+    kind, _, rest = name.partition(":")
+    if kind == "tag":
+        return (root / reference_store.RECORDS_DIR / ("%s.md" % rest)).is_file()
+    return (root / rest).is_dir()
 
 
 def split_bibliography(text: str) -> tuple[str, str]:
@@ -250,6 +368,7 @@ def check(report_path: Path, root: Path) -> dict:
 
     body_works = works(body_links)
     bibliography_works = works(bibliography_links)
+    absent = sorted(name for name in works(links) if not is_held(name, root))
 
     cited_tags = sorted(
         {
@@ -281,8 +400,13 @@ def check(report_path: Path, root: Path) -> dict:
     return {
         "report": str(report_path),
         "literature_root": str(root),
+        # What the report cites, whether or not the collection holds it, and
+        # whether or not the link opens. A report that names twelve papers
+        # cites twelve papers. `works_not_in_collection` says which of them
+        # this collection holds, and `broken_links` which of them open.
         "citations": len(body_works),
-        "broken_links": check_links(links),
+        "works_not_in_collection": absent,
+        "broken_links": check_links(links, root),
         "unknown_tags": sorted(tag for tag in cited_tags if tag not in tags),
         "cite_markers": markers,
         "cited_but_not_listed": sorted(set(body_works) - set(bibliography_works)),

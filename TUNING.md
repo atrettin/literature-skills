@@ -162,6 +162,7 @@ model costs less and reads less well.
 | `DEFAULT_AUTHORS` | `reference_lookup.py` | 3 | How many authors a resolved citation names. |
 | `MAX_AUTHORS` | `update_references.py` | 3 | The same, for the rendered `REFERENCES.md` table. |
 | `MAX_CITED_BY` | `update_references.py` | 8 | How many citing papers one row of that table lists. |
+| `COLLECTION_TAIL_PARTS` | `check_report.py` | 2 | How many parts of a broken link must name a place in the collection before the root is searched for it. A lower value finds the collection's copy of a bare file name. It can also answer `../README.md` with the README of the collection, which is a different file. A higher value leaves a link with a short path undiagnosed. The value is a judgement: a directory and a name is the shortest path that the layout writes. Nobody measured it. |
 
 ## Ingesting a paper
 
