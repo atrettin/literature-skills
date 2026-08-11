@@ -13,7 +13,7 @@ it.
 | [init-literature](init-literature/SKILL.md) | Starts an empty collection: creates the directory with its index, and makes git ignore it. |
 | [add-paper](add-paper/SKILL.md) | Finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, asks INSPIRE-HEP where it was published, resolves its bibliography, and indexes the result. |
 | [use-literature](use-literature/SKILL.md) | How to find and read a paper already in the collection. |
-| [find-papers](find-papers/SKILL.md) | Searches arXiv by the subject of a paper's abstract, ranks the hits against the question with a local cross-encoder, and marks the ones the collection already holds. |
+| [find-papers](find-papers/SKILL.md) | Searches arXiv by the subject of a paper's abstract, ranks the hits against the question with a local cross-encoder, describes each hit with its length and its citation count, and marks the ones the collection already holds. |
 | [follow-citations](follow-citations/SKILL.md) | Finds the papers that cite a given paper, with INSPIRE-HEP, and the works it draws on, from the reference store. |
 | [research-report](research-report/SKILL.md) | Answers a task that needs a literature review, in a bounded loop of search, read and assess, and writes a report whose every claim links to the chapter it came from. |
 
@@ -155,7 +155,7 @@ from the root of the project that holds `literature/` — or with
 | Script | Does |
 |---|---|
 | `arxiv_search.py --title … --author … --year …` | finds the paper on arXiv and prints the candidates |
-| `arxiv_discover.py --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, and marks the ones the collection holds |
+| `arxiv_discover.py --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, describes each hit with its length and its citation count, and marks the ones the collection holds |
 | `arxiv_fetch.py <arxiv-id> --slug <dir>` | ingests one paper: source, chapters, figures, bibliography |
 | `convert_figures.py <paper-dir>` | converts the figures of a paper again |
 | `check_references.py` | asserts that every citation and `[ref: …]` in the collection still resolves |
@@ -164,6 +164,14 @@ from the root of the project that holds `literature/` — or with
 | `inspire_lookup.py <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
 | `inspire_citations.py <arxiv-id>` | finds the papers that cite one paper, and the works it draws on |
 | `check_report.py <report.md>` | asserts that every citation of a report opens the text it names |
+
+`arxiv_discover.py` sends one INSPIRE request for its shortlist, after its arXiv
+requests. That request gives the citation count, the document type and the page
+count of each candidate. A candidate INSPIRE does not hold keeps `null` in those
+fields, and its length then comes from the arXiv comment. `--kind review` keeps
+the papers whose venue or INSPIRE document type names them a review, and
+`--sort {relevance,recent,cited}` re-orders the shortlist without changing which
+papers are on it.
 
 Two options of `arxiv_fetch.py` matter while the conversion is worked on:
 `--dry-run` prints the manifest and writes nothing, and `--keep-source <dir>`

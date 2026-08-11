@@ -1,0 +1,84 @@
+{
+  "hits": {
+    "total": 7,
+    "hits": [
+      {
+        "metadata": {
+          "control_number": 900001,
+          "arxiv_eprints": [{"value": "1112.2123"}],
+          "citation_count": 12,
+          "document_type": ["article"],
+          "number_of_pages": 4,
+          "publication_info": [
+            {"journal_title": "Phys.Rev.C", "journal_volume": "85", "year": 2012, "page_start": "025502"}
+          ]
+        }
+      },
+      {
+        "metadata": {
+          "control_number": 900002,
+          "arxiv_eprints": [{"value": "1110.4739"}],
+          "citation_count": 3,
+          "document_type": ["conference paper"],
+          "number_of_pages": 9,
+          "publication_info": []
+        }
+      },
+      {
+        "metadata": {
+          "control_number": 900003,
+          "arxiv_eprints": [{"value": "2105.09079"}],
+          "citation_count": 645,
+          "document_type": ["article"],
+          "number_of_pages": 13,
+          "publication_info": [
+            {"journal_title": "Phys.Rev.C", "journal_volume": "104", "year": 2021, "page_start": "025501"}
+          ]
+        }
+      },
+      {
+        "metadata": {
+          "control_number": 900004,
+          "arxiv_eprints": [{"value": "1010.1708"}],
+          "citation_count": 87,
+          "document_type": ["article", "review"],
+          "number_of_pages": 6,
+          "publication_info": [
+            {"journal_title": "Phys.Lett.B", "journal_volume": "696", "year": 2011, "page_start": "151"}
+          ]
+        }
+      },
+      {
+        "metadata": {
+          "control_number": 900005,
+          "arxiv_eprints": [{"value": "1012.4265"}],
+          "citation_count": 1,
+          "document_type": ["conference paper"],
+          "publication_info": []
+        }
+      },
+      {
+        "metadata": {
+          "control_number": 900006,
+          "arxiv_eprints": [{"value": "1108.5202"}],
+          "citation_count": 0,
+          "document_type": ["conference paper"],
+          "number_of_pages": 3,
+          "publication_info": []
+        }
+      },
+      {
+        "metadata": {
+          "control_number": 900007,
+          "arxiv_eprints": [{"value": "1201.3673"}],
+          "citation_count": 231,
+          "document_type": ["article"],
+          "number_of_pages": 63,
+          "publication_info": [
+            {"journal_title": "Phys.Rept.", "journal_volume": "928", "year": 2012, "page_start": "1", "page_end": "63"}
+          ]
+        }
+      }
+    ]
+  }
+}

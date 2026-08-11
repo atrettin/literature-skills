@@ -143,3 +143,28 @@ def no_pace(monkeypatch: pytest.MonkeyPatch) -> None:
     import references
 
     monkeypatch.setattr(references.time, "sleep", lambda seconds: None)
+
+
+@pytest.fixture(autouse=True)
+def offline(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+    """Refuse a real INSPIRE request in a test that did not ask for one.
+
+    A search now describes its shortlist from INSPIRE. Without this, every test
+    of the search would call the API, and the suite would answer differently on
+    a machine with no network than on one with it. A test that means to reach
+    INSPIRE replaces `fetch_record` itself, and its patch wins over this one.
+    `references.search_payload` reads the failure as "INSPIRE said nothing",
+    which is the case this guards.
+    """
+    if "network" in request.keywords:
+        return
+
+    import inspire_lookup
+
+    def refuse(path: str) -> dict | None:
+        raise RuntimeError(
+            "the offline tests do not call INSPIRE; patch inspire_lookup.fetch_record (%s)"
+            % path
+        )
+
+    monkeypatch.setattr(inspire_lookup, "fetch_record", refuse)
