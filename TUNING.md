@@ -120,6 +120,7 @@ model costs less and reads less well.
 |---|---|---|---|
 | `DEFAULT_MAX_CHAPTER_BYTES` | `arxiv_fetch.py` | 40000 | The script divides a section larger than this across more than one file. The value sets how much context one chapter costs an agent that reads it. |
 | `FIGURE_WIDTH_PX` | `arxiv_fetch.py` | 500 | The display width of a figure in a chapter. |
+| `ID_BATCH` | `arxiv_search.py` | 100 | How many identifiers one `id_list` request asks arXiv about. A bibliography holds fewer references than this, so one request answers a whole paper. A lower value sends more requests, and each one waits `COURTESY_DELAY_S`. The API accepts up to 2000. |
 | `RENDER_DPI` | `convert_figures.py` | 300 | The resolution that the script renders a vector figure at. A higher value is easier to read and larger on disk. |
 | `MAX_PIXELS` | `convert_figures.py` | 2000 | The longest edge of a converted figure. |
 | `CROP_MARGIN` | `convert_figures.py` | 8 | How many pixels of whitespace stay around a cropped figure. |

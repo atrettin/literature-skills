@@ -38,6 +38,11 @@ COURTESY_DELAY_S = 3.0
 REQUEST_TIMEOUT_S = 30.0
 MAX_RETRIES = 3
 
+# How many identifiers one id_list request carries. The arXiv API accepts up to
+# 2000, and a bibliography holds far fewer references than that, so this value
+# only decides whether a very long one costs one request or two.
+ID_BATCH = 100
+
 EXACT_TITLE_RATIO = 0.95
 APPROX_TITLE_RATIO = 0.60
 SUMMARY_CHARS = 400
@@ -163,17 +168,8 @@ def build_loose_query(title: str | None, author: str | None) -> str | None:
     return " AND ".join(clauses)
 
 
-def fetch_feed(search_query: str, max_results: int) -> str:
-    params = urllib.parse.urlencode(
-        {
-            "search_query": search_query,
-            "start": 0,
-            "max_results": max_results,
-            "sortBy": "relevance",
-            "sortOrder": "descending",
-        }
-    )
-    url = "%s?%s" % (API_URL, params)
+def read_feed(params: dict) -> str:
+    url = "%s?%s" % (API_URL, urllib.parse.urlencode(params))
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     last_error: Exception | None = None
     for attempt in range(MAX_RETRIES):
@@ -185,6 +181,35 @@ def fetch_feed(search_query: str, max_results: int) -> str:
         except (urllib.error.URLError, TimeoutError) as error:  # noqa: PERF203
             last_error = error
     raise RuntimeError("arXiv API request failed: %s" % last_error)
+
+
+def fetch_feed(search_query: str, max_results: int) -> str:
+    return read_feed(
+        {
+            "search_query": search_query,
+            "start": 0,
+            "max_results": max_results,
+            "sortBy": "relevance",
+            "sortOrder": "descending",
+        }
+    )
+
+
+def fetch_by_ids(arxiv_ids: list[str]) -> list[dict]:
+    """The record of each identifier given, as far as arXiv knows it.
+
+    arXiv answers an identifier it does not know with an error entry, which
+    carries no identifier of its own and thus drops out here. The caller gets
+    fewer records than it asked for, and never a wrong one.
+    """
+    entries = []
+    for start in range(0, len(arxiv_ids), ID_BATCH):
+        if start:
+            time.sleep(COURTESY_DELAY_S)
+        batch = arxiv_ids[start : start + ID_BATCH]
+        feed = read_feed({"id_list": ",".join(batch), "start": 0, "max_results": len(batch)})
+        entries.extend(entry for entry in parse_entries(feed) if entry["arxiv_id"] in batch)
+    return entries
 
 
 # --------------------------------------------------------------------------
@@ -228,8 +253,12 @@ def parse_entries(feed_xml: str) -> list[dict]:
 
 
 def split_id(raw_id: str) -> tuple[str, str]:
-    """'http://arxiv.org/abs/1706.03621v3' -> ('1706.03621', 'v3')."""
-    tail = raw_id.rsplit("/", 1)[-1]
+    """'http://arxiv.org/abs/1706.03621v3' -> ('1706.03621', 'v3').
+
+    An old-style identifier names its archive, and the archive is part of it:
+    '.../abs/hep-ph/0207172v1' -> ('hep-ph/0207172', 'v1').
+    """
+    tail = raw_id.split("/abs/", 1)[-1] if "/abs/" in raw_id else raw_id.rsplit("/", 1)[-1]
     match = re.match(r"^(.*?)(v\d+)?$", tail)
     if not match:
         return tail, ""

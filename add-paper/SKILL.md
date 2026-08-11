@@ -341,8 +341,8 @@ the same manifest changes nothing, so it is safe to repeat.
 Tell the user the count of unverified references, as you do for warnings. Those
 rows are marked ⚠ in the table: they come from the paper's own bibliography or
 from a title match, and their fields may be wrong. Every other row was confirmed
-against INSPIRE-HEP or Crossref by DOI, arXiv identifier, or journal, volume and
-page.
+against INSPIRE-HEP, Crossref or arXiv by DOI, arXiv identifier, or journal,
+volume and page.
 
 If `check_references.py` reports anything under `unresolved`, say so — a
 citation in a chapter is naming a record that does not exist, and the claim it

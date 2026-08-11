@@ -25,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import datetime
 import difflib
 import json
 import re
@@ -43,6 +44,7 @@ from arxiv_search import (  # noqa: E402
     EXACT_TITLE_RATIO,
     USER_AGENT,
     collapse_whitespace,
+    fetch_by_ids,
     normalize_title,
 )
 
@@ -112,6 +114,17 @@ ARXIV_PATTERNS = (
     re.compile(r"\barxiv\s*[:=]\s*\{?([\w.\-]+/\d{7}|\d{4}\.\d{4,5})", re.IGNORECASE),
     re.compile(r"\beprint\s*[:=]\s*\{?\"?([\w.\-]+/\d{7}|\d{4}\.\d{4,5})", re.IGNORECASE),
     re.compile(r"\b((?:hep-(?:ph|ex|th|lat)|nucl-(?:th|ex)|astro-ph|gr-qc|math-ph|quant-ph)/\d{7})"),
+)
+
+# An identifier carries four digits that read as a year and are not one. The
+# arXiv number 2004.06601 belongs to April 2020, and hep-ph/0207172 to July
+# 2002. A DOI suffix and a URL hold digits of their own. Take all of them out
+# of the text before anything looks in it for a year.
+IDENTIFIER_PATTERNS = (
+    re.compile(r"https?://\S+", re.IGNORECASE),
+    re.compile(r"\b\d{4}\.\d{4,5}(?:v\d+)?\b"),
+    re.compile(r"\b[\w.\-]+/\d{7}(?:v\d+)?\b"),
+    re.compile(r"\b10\.\d{4,9}/\S+"),
 )
 
 
@@ -474,9 +487,32 @@ def guess_authors(text: str) -> tuple[list[str], str]:
     return authors, ""
 
 
+def mask_identifiers(text: str) -> str:
+    """The text with each identifier replaced by as many spaces.
+
+    Spaces rather than nothing: the words on either side of an identifier must
+    stay two words.
+    """
+    for pattern in IDENTIFIER_PATTERNS:
+        text = pattern.sub(lambda match: " " * len(match.group(0)), text)
+    return text
+
+
 def find_year(text: str) -> int | None:
-    years = re.findall(r"\((\d{4})\)", text) or re.findall(r"\b(1[89]\d\d|20\d\d)\b", text)
-    return int(years[-1]) if years else None
+    """The year that a bibliography entry states, and None where it states none.
+
+    A year in parentheses is the year of the work. Where the entry gives none,
+    the last four digits that can be a year are the best that the line offers.
+    A year later than next year is neither: a page range or a report number
+    reached the pattern.
+    """
+    plain = mask_identifiers(text)
+    limit = datetime.date.today().year + 1
+    years = re.findall(r"\((\d{4})\)", plain) or re.findall(r"\b(1[89]\d\d|20\d\d)\b", plain)
+    for year in reversed(years):
+        if int(year) <= limit:
+            return int(year)
+    return None
 
 
 def from_bbl_entry(raw: str) -> dict:
@@ -924,6 +960,46 @@ def fetch_crossref(doi: str) -> dict | None:
 
 
 # --------------------------------------------------------------------------
+# arXiv, for the works that only arXiv holds
+# --------------------------------------------------------------------------
+
+
+def fill_from_arxiv(entries: list[dict]) -> None:
+    """Ask arXiv about the entries that neither INSPIRE nor Crossref answered.
+
+    A comment, a note, a preprint that no journal published: INSPIRE holds many
+    of them and not all, and Crossref holds only what carries a DOI. The
+    bibliography prints an arXiv number for such a work, and arXiv answers that
+    number with the title, the authors and the date it received the paper.
+
+    That date gives the year. The digits of the number do not: 2004.06601 is
+    from April 2020.
+
+    Fills an empty field and keeps a full one, because the bibliography states
+    the work as its own authors read it.
+    """
+    wanted: dict[str, list[dict]] = {}
+    for entry in entries:
+        arxiv_id = reference_store.normalize_arxiv(entry.get("arxiv_id") or "")
+        if arxiv_id and not entry.get("inspire_id") and entry["source"] != "crossref":
+            wanted.setdefault(arxiv_id, []).append(entry)
+    if not wanted:
+        return
+
+    for record in fetch_by_ids(sorted(wanted)):
+        for entry in wanted[record["arxiv_id"]]:
+            for name in ("title", "authors", "year"):
+                if not entry.get(name) and record.get(name):
+                    entry[name] = record[name]
+            if not entry.get("doi") and record.get("doi"):
+                entry["doi"] = reference_store.normalize_doi(record["doi"])
+            # arXiv answered the number that the bibliography itself printed,
+            # which is the strongest match there is.
+            entry["source"] = "arxiv"
+            entry["match"] = "arxiv"
+
+
+# --------------------------------------------------------------------------
 # INSPIRE by title, the last resort
 # --------------------------------------------------------------------------
 
@@ -1029,6 +1105,8 @@ def resolve(entries: list[dict], arxiv_id: str, warnings: list[str]) -> list[dic
                 if value not in (None, "", []):
                     entry[name] = value
             entry["match"] = "doi"
+
+    fill_from_arxiv(entries)
 
     for entry in entries:
         entry["verified"] = entry["match"] in VERIFIED_MATCHES

@@ -18,7 +18,7 @@ import pytest
 
 import arxiv_discover
 import rerank
-from arxiv_search import fetch_feed
+from arxiv_search import fetch_by_ids, fetch_feed
 
 pytestmark = pytest.mark.network
 
@@ -69,6 +69,23 @@ def test_a_category_does_not_include_its_subcategories() -> None:
 
     assert parent > 0 and child > 0
     assert parent != child
+
+
+def test_arxiv_states_the_year_that_a_number_does_not() -> None:
+    """The reason `fill_from_arxiv` asks, rather than reading the digits.
+
+    2004.06601 opens with 2004 and is from 2020. hep-ph/0207172 opens with 02
+    and is from 2002. Only the date that arXiv reports says either.
+    """
+    records = {entry["arxiv_id"]: entry for entry in fetch_by_ids(["2004.06601", "hep-ph/0207172"])}
+
+    assert records["2004.06601"]["year"] == 2020
+    assert records["hep-ph/0207172"]["year"] == 2002
+
+
+def test_arxiv_answers_an_unknown_number_with_no_record() -> None:
+    """The reason a caller gets fewer records than it asked for, and no wrong one."""
+    assert fetch_by_ids(["9999.99999"]) == []
 
 
 def test_the_index_stems_its_terms() -> None:

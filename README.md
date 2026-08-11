@@ -269,8 +269,9 @@ it means, and a claim a paper borrowed could not be traced back to whoever
 established it.
 
 So the bibliography is read from the TeX source, each entry is resolved against
-[INSPIRE-HEP](https://inspirehep.net/) and [Crossref](https://www.crossref.org/),
-and the citation becomes a link on to that work's own page:
+[INSPIRE-HEP](https://inspirehep.net/), [Crossref](https://www.crossref.org/)
+and [arXiv](https://arxiv.org/), and the citation becomes a link on to that
+work's own page:
 
 ```markdown
 … and for searches for physics beyond the standard model
@@ -348,6 +349,14 @@ verified. A match on a title alone, or on a reference's position in the
 bibliography, does not — those drift, and a confidently wrong publication
 attached to a real claim is worse than no citation at all. Unresolvable entries
 keep whatever their own bibliography said, marked, rather than disappearing.
+
+**A number that identifies a work says nothing about its date.** An entry that
+INSPIRE and Crossref do not answer often prints an arXiv number, and the script
+asks arXiv about that number: arXiv reports the date it received the paper, the
+title and the authors, and the entry counts as verified on the identifier its own
+bibliography printed. The digits of the number are never read as a date —
+`2004.06601` is from 2020, and `hep-ph/0207172` is from 2002. An entry that
+states no date and that no lookup answers keeps no year, and its tag says `nd`.
 
 `check_references.py` reads every citation in the collection and asserts each one
 still resolves — against the store, and against the anchors of the table it links
