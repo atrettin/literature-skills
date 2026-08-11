@@ -158,12 +158,16 @@ def search_file(
     for match in pattern.finditer(flat):
         offset = offsets[match.start()] if match.start() < len(offsets) else len(text)
         anchor = anchor_above(text, offset)
+        line = line_of(text, offset)
         results.append({
             "paper": slug,
             "file": where,
             "anchor": anchor,
             "location": where + ("#" + anchor if anchor else ""),
-            "line": line_of(text, offset),
+            "line": line,
+            # A scout reports `chapters/03_results.md:181`. The same form here
+            # lets a caller compare the two answers without building a string.
+            "line_location": "%s:%d" % (where, line),
             "sentence": sentence_around(flat, match.start(), match.end()),
         })
     return results, "\x00" in text
