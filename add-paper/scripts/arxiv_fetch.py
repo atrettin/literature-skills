@@ -1188,6 +1188,12 @@ def figure_block(
     # Maths reads as noise in an alt attribute, and its backslashes and quotes
     # would have to be escaped anyway. The caption below the image keeps it.
     alt = re.sub(r"\$[^$]*\$", "", caption)
+    # A citation marker goes too, and it must go before the cut below. A tag cut
+    # in half leaves `[cite: Alvarez-Ru...` with no closing bracket, and the
+    # citation reader then matches on to the next `]` anywhere in the file and
+    # reports the whole run of text as a tag no record answers. The caption
+    # under the image carries the citation, where it resolves.
+    alt = reference_store.CITE_TAG.sub("", alt)
     alt = collapse_whitespace(re.sub(r'["\\<>]', " ", alt))
     alt = re.sub(r"\s+([,.;:])", r"\1", alt).strip(" ,;:") or "figure"
     if len(alt) > 120:

@@ -60,6 +60,16 @@ CHAPTER_ROW = re.compile(r"^\|[^|]*\|\s*\[([^\]]+)\]\([^)]*\)\s*\|(.*)\|\s*$")
 # What a cell holds when nothing has filled it in.
 EMPTY = "—"
 
+# A cross-reference the conversion could not resolve keeps this marker. A
+# subsection title can carry one, usually inside its own brackets, as
+# "Challenges (Section [ref: expt_motive])". The first pattern takes the
+# brackets with it, and the second takes a bare marker.
+REF_IN_BRACKETS = re.compile(
+    r"\s*\(\s*(?:Section|Sec\.?|Chapter|Chap\.?|Figure|Fig\.?|Table|Tab\.?"
+    r"|Equation|Eq\.?)?\s*\[ref:[^\]]*\]\s*\)"
+)
+REF_MARKER = re.compile(r"\s*\[ref:[^\]]*\]")
+
 
 def escape(text: str) -> str:
     """Make a value safe to sit in a Markdown table cell.
@@ -108,13 +118,27 @@ def chapter_rows(manifest: dict, paper_dir: Path) -> list[dict]:
     return rows
 
 
+def plain_title(title: str) -> str:
+    """A subsection title with no cross-reference marker left in it.
+
+    A heading of the source can refer to another section, and a reference the
+    conversion could not resolve keeps its `[ref: label]` marker. That marker
+    addresses a label of the TeX source, which is nothing `INDEX.md` can reach,
+    so carrying it here would put a reference that leads nowhere into a file
+    that had none. The words of the title are what names the subsection.
+    """
+    return collapse_whitespace(REF_MARKER.sub("", REF_IN_BRACKETS.sub("", title)))
+
+
 def show_subsections(titles: list[str]) -> str:
-    if not titles:
+    shown = [plain_title(title) for title in titles]
+    shown = [title for title in shown if title]
+    if not shown:
         return EMPTY
-    shown = "; ".join(escape(title) for title in titles[:INDEX_SUBSECTIONS_SHOWN])
-    if len(titles) > INDEX_SUBSECTIONS_SHOWN:
-        shown += " …"
-    return shown
+    text = "; ".join(escape(title) for title in shown[:INDEX_SUBSECTIONS_SHOWN])
+    if len(shown) > INDEX_SUBSECTIONS_SHOWN:
+        text += " …"
+    return text
 
 
 # --------------------------------------------------------------------------

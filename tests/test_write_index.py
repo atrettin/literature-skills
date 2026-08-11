@@ -201,6 +201,29 @@ def test_pending_names_the_chapters_with_no_summary(tmp_path: Path) -> None:
     assert write_index.pending(index, manifest) == []
 
 
+def test_a_subsection_title_carries_no_reference_marker(tmp_path: Path) -> None:
+    """A `[ref: …]` addresses a label of the TeX. `INDEX.md` cannot reach one."""
+    paper_dir, manifest = build(tmp_path)
+    manifest["chapters"][0]["subsections"] = [
+        "Challenges: Oscillation Parameters (Section [ref: expt_motive])",
+        "How the generators work [ref: generators]",
+    ]
+
+    row = chapter_row(write_index.render(manifest))
+
+    assert "ref:" not in row[4]
+    assert row[4] == (
+        "Challenges: Oscillation Parameters; How the generators work"
+    )
+
+
+def test_a_title_that_is_only_a_marker_is_dropped(tmp_path: Path) -> None:
+    paper_dir, manifest = build(tmp_path)
+    manifest["chapters"][0]["subsections"] = ["[ref: nothing]"]
+
+    assert chapter_row(write_index.render(manifest))[4] == "—"
+
+
 def test_a_pipe_in_a_summary_does_not_split_the_row(tmp_path: Path) -> None:
     paper_dir, manifest = build(tmp_path)
 
