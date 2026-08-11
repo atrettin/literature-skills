@@ -95,6 +95,23 @@ _process_lock = threading.Lock()
 _local_times: dict[str, float] = {}
 _local_only = False
 
+# The collection this process works on. A script that takes `--literature-root`
+# sets it after it parses its arguments, so the gate locks the collection the
+# caller named rather than whichever one the working directory happens to hold.
+_root: Path | None = None
+
+
+def use_root(root: Path) -> None:
+    """Name the collection whose gate file this process shares.
+
+    Without this the gate falls back to `reference_store.default_root()`, which
+    is relative to the working directory. Two processes on one collection,
+    started from two directories, would then take two different locks and neither
+    would hold the other back — which is the whole of what the gate promises.
+    """
+    global _root
+    _root = root
+
 
 def local_only() -> bool:
     """Whether any request so far fell back to a lock inside this process."""
@@ -102,17 +119,20 @@ def local_only() -> bool:
 
 
 def reset() -> None:
-    """Forget the fallback flag and the local times. For the tests."""
-    global _local_only
+    """Forget the fallback flag, the local times and the root. For the tests."""
+    global _local_only, _root
     _local_only = False
+    _root = None
     _local_times.clear()
 
 
 def gate_path(root: Path | None = None) -> Path:
-    # Imported here rather than at the top: `reference_store` reaches
-    # `arxiv_search`, which reaches this module, and a top-level import would
-    # close that ring while `arxiv_search` is still half built.
     if root is None:
+        root = _root
+    if root is None:
+        # Imported here rather than at the top: `reference_store` reaches
+        # `arxiv_search`, which reaches this module, and a top-level import
+        # would close that ring while `arxiv_search` is still half built.
         import reference_store
 
         root = reference_store.default_root()
@@ -127,16 +147,22 @@ def gate_path(root: Path | None = None) -> Path:
 def _open_gate_file(root: Path | None):
     """The gate file, opened for reading and writing, or None.
 
-    None means this machine cannot hold the shared state: no `fcntl`, a root
-    that does not exist and cannot be made, or a root nothing may write. Each
-    of those is a reason to pace inside this process instead of failing — the
-    request itself is still worth sending.
+    None means this machine cannot hold the shared state: no `fcntl`, a
+    collection that is not there, or a root nothing may write. Each of those is
+    a reason to pace inside this process instead of failing — the request itself
+    is still worth sending.
+
+    It never creates the collection directory. A gate that made one would leave
+    an empty `literature/` behind in whatever directory a script ran from, and
+    would take its lock there rather than on the collection the caller named.
+    `init-literature` makes a collection; this only locks one.
     """
     if fcntl is None:
         return None
     path = gate_path(root)
+    if not path.parent.is_dir():
+        return None
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
         return open(path, "a+", encoding="utf-8")
     except OSError:
         return None

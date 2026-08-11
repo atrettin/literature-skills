@@ -36,6 +36,7 @@ from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import paper_facts  # noqa: E402
+import rate_gate  # noqa: E402
 import reference_store  # noqa: E402
 import rerank  # noqa: E402
 from arxiv_search import (  # noqa: E402
@@ -467,6 +468,7 @@ def main() -> int:
     args = build_parser().parse_args()
     if not args.topic:
         return fail("give --topic", 2)
+    rate_gate.use_root(args.literature_root)
     for name in args.categories:
         if not CATEGORY.match(name):
             return fail("'%s' is not an arXiv category, such as hep-ph" % name, 2)

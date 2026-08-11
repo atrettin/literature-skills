@@ -268,6 +268,9 @@ def fetch(arxiv_id: str, args) -> tuple[dict, str]:
         except arxiv_fetch.ParserFailure as error:
             raise Exception2("PARSER_FAILURE", str(error), main_tex=error.main_tex,
                              sections_found=error.sections_found)
+        except arxiv_fetch.MetadataUnavailable as error:
+            raise Exception2("NETWORK_UNAVAILABLE", str(error),
+                             host="export.arxiv.org", reason=str(error))
         except rate_gate.GateTimeout as error:
             raise Exception2("NETWORK_UNAVAILABLE", str(error),
                              host="the request gate", reason=str(error))
@@ -643,6 +646,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(
             {"error": "give exactly one of --auto, --summarize, --index-only"}))
         return 1
+
+    # The collection this run writes is the collection whose gate it locks. The
+    # directory comes first, because the gate locks a collection and never
+    # creates one.
+    args.literature_root.mkdir(parents=True, exist_ok=True)
+    rate_gate.use_root(args.literature_root)
 
     if args.auto:
         if not args.arxiv_ids and not (args.title or args.author or args.year):

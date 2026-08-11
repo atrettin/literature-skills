@@ -257,6 +257,13 @@ and for Crossref. It takes an exclusive lock on
 file, thus a second shell, or an agent beside a running ingest, cannot double
 the rate between them.
 
+The collection that lock belongs to is the one the caller named. Every script
+that takes `--literature-root` passes it to the gate, so a run started from
+another directory locks the same collection and waits its turn. The gate locks a
+collection and never makes one: a gate that made one would leave an empty
+`literature/` behind in whatever directory a script ran from, and would take its
+lock there instead.
+
 The limit counts requests, and not agents. One command can therefore resolve the
 references of one paper while it downloads the next. A collection root that
 nothing can write gives a lock inside one process, and the report says so with

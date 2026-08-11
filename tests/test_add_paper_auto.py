@@ -16,7 +16,7 @@ import pytest
 import add_paper
 import check_references
 import inspire_lookup
-from conftest import FakeInspire
+from conftest import DATA, FakeInspire
 
 ARXIV_ID = "2501.00001"
 SLUG = "lovelace_2025_small_paper"
@@ -155,6 +155,75 @@ def test_no_source_is_its_own_exception(
     assert status == 2
     assert reports[0]["exception"]["code"] == "NO_ARXIV_SOURCE"
     assert reports[0]["exception"]["http_status"] == 403
+
+
+def test_a_metadata_failure_is_reported_and_writes_nothing(
+    collection: Path, small_paper: dict, inspire_silent: FakeInspire,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A lookup that failed once put a paper on disk as `anon_nd`.
+
+    The title, the authors and the year build the slug, the index and the
+    collection row. A lookup that answered `{}` gave a paper with none of them,
+    a meaningless directory name, and an exit code of 0.
+    """
+    import arxiv_fetch
+
+    def refuse(arxiv_id: str) -> dict:
+        raise arxiv_fetch.MetadataUnavailable("arXiv did not answer for %s" % arxiv_id)
+
+    monkeypatch.setattr(arxiv_fetch, "fetch_metadata_by_id", refuse)
+    status, reports = run(collection, "--auto", ARXIV_ID)
+
+    assert status == 2
+    assert reports[0]["exception"]["code"] == "NETWORK_UNAVAILABLE"
+    assert reports[0]["exception"]["host"] == "export.arxiv.org"
+    assert not (collection / "anon_nd").exists()
+    assert not list(collection.glob("*_nd"))
+
+
+def test_an_identifier_arxiv_does_not_know_is_not_ingestable(
+    gate_off: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty feed means arXiv holds no such paper. It never means `{}`."""
+    import arxiv_fetch
+
+    monkeypatch.setattr(
+        arxiv_fetch, "read_feed",
+        lambda params: (DATA / "feed_empty.xml").read_text(encoding="utf-8"),
+    )
+
+    with pytest.raises(arxiv_fetch.NoSource):
+        arxiv_fetch.fetch_metadata_by_id("2501.99999")
+
+
+def test_an_arxiv_that_does_not_answer_raises(
+    gate_off: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import arxiv_fetch
+
+    def refuse(params: dict) -> str:
+        raise RuntimeError("arXiv API request failed: timed out")
+
+    monkeypatch.setattr(arxiv_fetch, "read_feed", refuse)
+
+    with pytest.raises(arxiv_fetch.MetadataUnavailable):
+        arxiv_fetch.fetch_metadata_by_id("2501.00001")
+
+
+def test_metadata_comes_back_whole(gate_off: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    import arxiv_fetch
+
+    monkeypatch.setattr(
+        arxiv_fetch, "read_feed",
+        lambda params: (DATA / "feed_quasielastic.xml").read_text(encoding="utf-8"),
+    )
+
+    found = arxiv_fetch.fetch_metadata_by_id("nothing-in-particular")
+
+    assert found["title"]
+    assert found["authors"]
+    assert found["year"]
 
 
 def test_a_citation_the_store_cannot_answer_fails_the_check(

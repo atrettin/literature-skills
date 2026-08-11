@@ -194,7 +194,9 @@ def small_paper(monkeypatch: pytest.MonkeyPatch, gate_off: None) -> dict:
 
     monkeypatch.setattr(arxiv_fetch, "fetch_metadata_by_id", metadata)
     monkeypatch.setattr(arxiv_fetch, "download_source", source)
+    # Both bindings, because `arxiv_fetch` imported the name for itself.
     monkeypatch.setattr(arxiv_search, "read_feed", empty_feed)
+    monkeypatch.setattr(arxiv_fetch, "read_feed", empty_feed)
     return dict(SMALL_PAPER_METADATA)
 
 
@@ -228,6 +230,8 @@ def offline(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> 
     if "network" in request.keywords:
         return
 
+    import arxiv_fetch
+    import arxiv_search
     import inspire_lookup
 
     def refuse(path: str) -> dict | None:
@@ -237,3 +241,16 @@ def offline(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> 
         )
 
     monkeypatch.setattr(inspire_lookup, "fetch_record", refuse)
+
+    def refuse_arxiv(params: dict) -> str:
+        raise RuntimeError(
+            "the offline tests do not call arXiv; patch read_feed or fetch_feed (%s)"
+            % params
+        )
+
+    # Both bindings. `arxiv_fetch` does `from arxiv_search import read_feed`, so
+    # it holds a name of its own, and a patch of one module leaves the other
+    # calling the real API. That is how a test came to wait on arXiv for three
+    # seconds a retry while it believed it was offline.
+    monkeypatch.setattr(arxiv_search, "read_feed", refuse_arxiv)
+    monkeypatch.setattr(arxiv_fetch, "read_feed", refuse_arxiv)

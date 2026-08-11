@@ -161,6 +161,38 @@ def test_a_damaged_gate_file_is_an_empty_one(tmp_path: Path) -> None:
     assert "damaged.example" in state
 
 
+def test_use_root_points_the_gate_at_the_named_collection(tmp_path: Path) -> None:
+    """The lock belongs to the collection the caller named, not to the cwd.
+
+    Without this the gate falls back to a root relative to the working
+    directory. Two processes on one collection, started from two directories,
+    would take two different locks and neither would hold the other back.
+    """
+    rate_gate.set_interval("rooted.example", 0.0)
+    named = tmp_path / "somewhere" / "literature"
+    named.mkdir(parents=True)
+
+    rate_gate.use_root(named)
+    with rate_gate.request("rooted.example"):
+        pass
+
+    assert (named / rate_gate.GATE_NAME).is_file()
+
+
+def test_the_gate_never_creates_the_collection(tmp_path: Path) -> None:
+    """A gate that made a collection would leave an empty one in any cwd."""
+    rate_gate.set_interval("absent.example", 0.0)
+    absent = tmp_path / "not-a-collection"
+
+    rate_gate.use_root(absent)
+    with rate_gate.request("absent.example"):
+        pass
+
+    assert not absent.exists()
+    # It paced this process instead, and it says so.
+    assert rate_gate.local_only() is True
+
+
 def test_every_api_this_repository_calls_has_a_pace() -> None:
     """Each host a script sends a request to is registered by the module owning it."""
     import arxiv_search  # noqa: F401

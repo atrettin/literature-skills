@@ -33,6 +33,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import date
 from pathlib import Path
 
@@ -43,11 +44,11 @@ import rate_gate  # noqa: E402
 import reference_store  # noqa: E402
 import references  # noqa: E402
 from arxiv_search import (  # noqa: E402
-    API_HOST,
     USER_AGENT,
     collapse_whitespace,
     fetch_feed,
     parse_entries,
+    read_feed,
     slugify,
 )
 
@@ -87,8 +88,13 @@ GRAPHIC_COMMAND = re.compile(
     r"\\(?:includegraphics|epsfbox|epsffile|plotone|plottwo)\*?\s*"
     r"(?:\[[^\]]*\])?\s*\{([^}]*)\}"
 )
+# `psfig` and `epsfig` name the file with a key, and they accept two spellings
+# of that key. `figure=` is the older one and the commoner one in a paper of the
+# 1990s or 2000s. A pattern that reads `file=` alone drops every such figure
+# without a word, and the paper's own \ref commands then point at figures that
+# are not there.
 GRAPHIC_KEYVALUE = re.compile(
-    r"\\(?:psfig|epsfig)\s*\{[^}]*?\bfile\s*=\s*([^,}]+)[^}]*\}"
+    r"\\(?:psfig|epsfig)\s*\{[^}]*?\b(?:figure|file)\s*=\s*([^,}]+)[^}]*\}"
 )
 FIGURE_ENVIRONMENTS = ("figure*", "figure", "wrapfigure", "SCfigure")
 TABLE_ENVIRONMENTS = ("table*", "table", "longtable", "sidewaystable")
@@ -268,6 +274,14 @@ class NoSource(RuntimeError):
         super().__init__(message)
         self.http_status = http_status
         self.reason = message
+
+
+class MetadataUnavailable(RuntimeError):
+    """arXiv did not answer for the paper, so its identity is unknown.
+
+    Carries what the driver reports as `NETWORK_UNAVAILABLE`. It says nothing
+    about the paper: the same request usually answers a minute later.
+    """
 
 
 class ParserFailure(RuntimeError):
@@ -1708,18 +1722,34 @@ def resolve_publication(arxiv_id: str, metadata: dict, warnings: list[str]) -> d
 
 
 def fetch_metadata_by_id(arxiv_id: str) -> dict:
-    """Query the arXiv API for a single paper's metadata."""
-    params = urllib.parse.urlencode({"id_list": arxiv_id, "max_results": 1})
-    url = "http://export.arxiv.org/api/query?%s" % params
-    query = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    """The arXiv record of one paper: its title, its authors and its date.
+
+    It raises rather than answering with an empty record. The title, the authors
+    and the submission year are what the slug, the index and the collection row
+    are built from. A lookup that failed and answered `{}` used to put a paper
+    on disk under `anon_nd`, with no title and no author, and the ingest still
+    reported success. A paper whose identity nothing established must not enter
+    the collection quietly.
+
+    `read_feed` sends the request, so it retries and it waits at the gate.
+    """
     try:
-        with rate_gate.request(API_HOST):
-            with urllib.request.urlopen(query, timeout=30) as response:
-                feed = response.read().decode("utf-8", errors="replace")
+        feed = read_feed({"id_list": arxiv_id, "max_results": 1})
+    except (RuntimeError, urllib.error.URLError, TimeoutError) as error:
+        raise MetadataUnavailable(
+            "arXiv did not answer for %s (%s), so the title, the authors and "
+            "the year of the paper are unknown" % (arxiv_id, error)
+        )
+
+    try:
         entries = parse_entries(feed)
-        return entries[0] if entries else {}
-    except Exception:
-        return {}
+    except ET.ParseError as error:
+        raise MetadataUnavailable("arXiv sent no readable record for %s (%s)"
+                                  % (arxiv_id, error))
+    if not entries:
+        raise NoSource("arXiv holds no record for %s; check the identifier"
+                       % arxiv_id)
+    return entries[0]
 
 
 # ==========================================================================
@@ -1984,6 +2014,7 @@ def convert(args) -> dict:
 
 def main() -> int:
     args = build_parser().parse_args()
+    rate_gate.use_root(args.literature_root)
 
     paper_dir = args.literature_root / args.slug
     if paper_dir.exists() and not args.force and not args.dry_run:
@@ -1992,7 +2023,7 @@ def main() -> int:
 
     try:
         manifest = convert(args)
-    except (NoSource, ParserFailure) as error:
+    except (NoSource, ParserFailure, MetadataUnavailable) as error:
         fail(str(error))
         return 1
 
