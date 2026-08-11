@@ -54,6 +54,10 @@ follow through the citation graph. The loop stops when each sub-question is
 answered, or when a limit in [TUNING.md](TUNING.md) stops it — and the report
 says which of the two happened.
 
+A sub-question counts as answered only after the loop asks INSPIRE which papers
+cite the paper that supplies the answer. The research log holds that search,
+under `Currency checks`, so a reader can see it.
+
 Three agents divide the work, and the division is about context rather than
 speed:
 
@@ -66,7 +70,9 @@ speed:
 `rate_gate.py` holds every script to one request at a time, at the pace each API
 asks for, across processes. So one `add_paper.py --auto` command ingests a whole
 queue of papers, and no agent has to serialise them. A scout reads local files,
-so several run together.
+so several run together. They read the papers of the last command while the next
+command runs. The constraint is one request at a time, not one agent at a
+time.
 
 A scout reports a location as `chapters/03_results.md:181`, with the anchor above
 the text and the words of the paper. The researcher opens the chapter at that

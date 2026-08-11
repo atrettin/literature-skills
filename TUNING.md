@@ -95,6 +95,7 @@ skill states them, and the agent obeys them.
 | `MAX_TOTAL_INGESTS` | 20 | How many papers the whole task ingests. It bounds a task that keeps finding one more paper worth reading. |
 | `DRY_ITERATIONS` | 2 | How many iterations can find no new relevant paper before the loop stops. A lower value stops earlier on a subject that the collection covers already. |
 | `MAX_PARALLEL_SCOUTS` | 4 | How many `paper-scout` agents read at one time. A scout calls no API, thus this value trades tokens against waiting. |
+| `CURRENCY_GRACE_MONTHS` | 12 | How young a paper must be for the loop to mark a sub-question answered without a forward-citation search on it. A higher value skips the search more often, and a conclusion can then rest on work that a later paper overtook. A lower value spends one INSPIRE request on a paper that few works can yet cite. This value is a judgement: a preprint of the last year has few citers, and a paper of two years can already carry a correction. Nobody measured it. |
 
 ## Searching the text
 

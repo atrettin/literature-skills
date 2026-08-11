@@ -13,9 +13,12 @@ Four rules hold for each task:
 - Check a quotation of a scout with `search_literature.py`. It gives the
   chapter, the anchor and the line. Never check a quotation with `grep`. The
   text wraps, thus `grep` misses a phrase that a line break splits.
-- Give each ingest to a `paper-ingestor` agent, one at a time, and give each
-  deep read of a paper to `paper-scout` agents. arXiv and INSPIRE limit their
-  rate, and only the ingestor calls them.
+- Ingest a queue of papers with one `add_paper.py --auto` command. Give each
+  deep read of a paper to `paper-scout` agents. Read the papers of the last
+  command while the next command runs. arXiv and INSPIRE limit their rate: one
+  request at a time, and a scout sends no request.
+- Before you mark a sub-question as answered, ask INSPIRE which papers cite the
+  paper that supplies the answer. Write the result in the research log.
 - Never read the full text of a paper into your own context. A scout reads it
   and reports the locations that matter.
 - A `paper-scout` gives each quotation as `chapters/NN_name.md:181`. Read the
