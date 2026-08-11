@@ -126,14 +126,28 @@ one. That is what a scout is for: it reads the whole paper against the questions
 that you have.
 
 **Verify before you cite.** A scout report tells you where to look. It is not a
-source. Open the chapter at the anchor that the scout names. Check that the text
-there supports the claim. Then write the finding in the log:
+source. Each location it gives carries a line number, as
+`chapters/03_results.md:181`. Read the chapter at that line with the `offset`
+option of `Read`, and compare the words there with the quotation. Then write the
+finding in the log:
 
 ```
 SQ2: <the claim, in one sentence> — <slug>/chapters/03_results.md#sec-axialff
 ```
 
-A finding with no chapter and no anchor is not a finding.
+A finding with no chapter and no anchor is not a finding. The finding and the
+report both carry the anchor, and not the line. The line addresses the file on
+disk. The anchor addresses the section.
+
+**Discard a quotation that carries no line number.** Do not read the chapter to
+rescue it. Do not cite it. Ask the scout again for that sub-question, or drop the
+location. The scout has the file open, thus a missing line number means that the
+scout did not read the text that it quoted.
+
+When the text at the line does not hold the quotation, do not conclude that the
+scout invented it. Read 20 lines around the number first. Plain `grep` gives a
+false negative on these files. The text wraps across lines, and some chapters
+hold a NUL byte.
 
 ### Step 4. Assess
 
@@ -319,6 +333,7 @@ Then tell the user:
   of the agents, the JSON of the scripts, and the chapters that you cite.
   Never read a paper from beginning to end yourself. That is what a scout does.
 - **Cite only what you read.** Not an abstract. Not a summary. Not a quotation
-  from a scout that you did not verify at the anchor.
+  from a scout that you did not check at the line that the scout gave. Discard a
+  quotation that carries no line number. Never check such a quotation by hand.
 - **Report the limit that stopped you.** A budget is not an answer.
 - **Never commit a file below the literature root.** The papers are copyrighted.

@@ -21,28 +21,41 @@ slug that you were given.
 Report one line for each location:
 
 ```
-SQ2 | chapters/03_results.md | #sec-axialff | "<quotation>" | <how it bears, in one line>
+SQ2 | chapters/03_results.md:181 | #sec-axialff | "<quotation>" | <how it bears, in one line>
 ```
 
 | Part | What it holds |
 |---|---|
 | SQn | the sub-question. |
-| file | the chapter, as a path below the paper's directory. |
+| file:line | the chapter, as a path below the paper's directory, then a colon and the number of the line that starts the quotation. Write a range, `181-182`, when the quotation covers more than one line. |
 | anchor | the nearest `<a id="…"></a>` above the text, written with its `#`. Leave it empty if the chapter has none. |
 | quotation | the words of the paper. Two sentences at most. |
 | how it bears | supports it, contradicts it, gives the number, or gives the method. |
 
 Then report the sub-questions that this paper does not touch, by number.
 
-Four rules:
+Six rules:
 
+- **Give a line number for each quotation.** The `Read` tool prints a number in
+  front of each line. Copy the number of the line that starts the quotation. The
+  caller reads the chapter at that line and compares. The caller discards a
+  quotation that carries no line number.
+- **Never guess a line number.** Report only a line that you read. A wrong number
+  wastes the caller's read. It also breaks the caller's trust in the quotation
+  beside it.
 - **Quote exactly.** Copy the words of the paper inside the quotation marks.
-  Never paraphrase there. The caller opens the anchor and compares. A chapter
-  writes its mathematics as LaTeX, and you can write `$\nu_\mu$` as `ν_μ` in a
-  quotation. The words must stay the words of the paper.
+  Never paraphrase there. The text of a chapter wraps across lines, thus a
+  quotation of one sentence can cover two lines. Join the two lines with one
+  space. A chapter writes its mathematics as LaTeX, and you can write
+  `$\nu_\mu$` as `ν_μ` in a quotation. The words must stay the words of the
+  paper.
 - **"Nothing relevant" is an answer.** Report it. It is not a failure, and it
   saves the caller a read.
 - **Give the anchor that is above the text**, and not the anchor of the chapter,
   when the chapter has more than one.
 - **Report only this list.** No summary of the paper, and no answer to the
   sub-questions. The caller draws the conclusion.
+
+A line number addresses the file as you read it now. A new ingest of the paper
+rewrites the chapter and moves the numbers. The line number serves the caller's
+check. A report cites the anchor.
