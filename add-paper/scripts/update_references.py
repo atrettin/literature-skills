@@ -455,18 +455,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def run(argv: list[str] | None = None) -> tuple[int, dict]:
+    """Merge and render. Returns (exit status, the report `main` prints).
+
+    `add_paper.py` calls this rather than the command line, so the counts come
+    back as an object instead of as text it would have to parse off stdout.
+    """
     args = build_parser().parse_args(argv)
     root = args.literature_root
     if not root.exists():
-        print(json.dumps({"error": "%s does not exist" % root}, indent=2))
-        return 1
+        return 1, {"error": "%s does not exist" % root}
 
     try:
         store = reference_store.load(root)
     except RuntimeError as error:
-        print(json.dumps({"error": str(error)}, indent=2))
-        return 1
+        return 1, {"error": str(error)}
 
     counts = {"added": 0, "updated": 0, "unchanged": 0}
     rewrites: dict[str, str] = {}
@@ -477,8 +480,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
         slug = manifest.get("slug", "")
         if not slug:
-            print(json.dumps({"error": "the manifest names no slug"}, indent=2))
-            return 1
+            return 1, {"error": "the manifest names no slug"}
         store, rewrites, counts = reference_store.merge(
             store, manifest.get("references") or [], slug
         )
@@ -486,11 +488,10 @@ def main(argv: list[str] | None = None) -> int:
     # literature/ is not in version control, so a store this run damaged cannot
     # be recovered from anywhere. Adding a paper only ever grows it.
     if len(store) < before and not args.force:
-        print(json.dumps({
+        return 1, {
             "error": "this would leave the store with %d records instead of %d; "
                      "pass --force if that is meant" % (len(store), before),
-        }, indent=2))
-        return 1
+        }
 
     retagged = apply_rewrites(root, slug, rewrites)
     relinked = relink_citations(root, slug, store)
@@ -500,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
     (root / reference_store.VIEW_NAME).write_text(render_table(store), encoding="utf-8")
     written, removed = write_records(root, store)
 
-    print(json.dumps({
+    return 0, {
         "slug": slug,
         "records": len(store),
         "unverified": sum(1 for record in store if not record.get("verified")),
@@ -513,8 +514,13 @@ def main(argv: list[str] | None = None) -> int:
         "store": str(reference_store.store_path(root)),
         "view": str(root / reference_store.VIEW_NAME),
         "pages": str(root / RECORDS_DIR),
-    }, indent=2))
-    return 0
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    status, report = run(argv)
+    print(json.dumps(report, indent=2))
+    return status
 
 
 if __name__ == "__main__":

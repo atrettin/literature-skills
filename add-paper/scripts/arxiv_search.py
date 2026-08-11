@@ -21,20 +21,28 @@ import difflib
 import json
 import re
 import sys
-import time
 import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import rate_gate  # noqa: E402
 
 API_URL = "http://export.arxiv.org/api/query"
+API_HOST = "export.arxiv.org"
 USER_AGENT = "neutrino-factory-literature/0.1 (local research tooling)"
 ATOM = "{http://www.w3.org/2005/Atom}"
 ARXIV_NS = "{http://arxiv.org/schemas/atom}"
 
-# arXiv asks for no more than one request every three seconds.
+# arXiv asks for no more than one request every three seconds. `rate_gate` keeps
+# that pace for every script that calls arXiv, in this process and in any other.
 COURTESY_DELAY_S = 3.0
+rate_gate.set_interval(API_HOST, COURTESY_DELAY_S)
+rate_gate.set_interval("arxiv.org", COURTESY_DELAY_S)
+
 REQUEST_TIMEOUT_S = 30.0
 MAX_RETRIES = 3
 
@@ -188,14 +196,15 @@ def build_loose_query(title: str | None, author: str | None) -> str | None:
 
 def read_feed(params: dict) -> str:
     url = "%s?%s" % (API_URL, urllib.parse.urlencode(params))
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    query = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     last_error: Exception | None = None
-    for attempt in range(MAX_RETRIES):
-        if attempt:
-            time.sleep(COURTESY_DELAY_S)
+    for _ in range(MAX_RETRIES):
         try:
-            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
-                return response.read().decode("utf-8", errors="replace")
+            # The gate holds the three seconds arXiv asks for, so a retry waits
+            # exactly as long as a first attempt does.
+            with rate_gate.request(API_HOST):
+                with urllib.request.urlopen(query, timeout=REQUEST_TIMEOUT_S) as response:
+                    return response.read().decode("utf-8", errors="replace")
         except (urllib.error.URLError, TimeoutError) as error:  # noqa: PERF203
             last_error = error
     raise RuntimeError("arXiv API request failed: %s" % last_error)
@@ -222,8 +231,6 @@ def fetch_by_ids(arxiv_ids: list[str]) -> list[dict]:
     """
     entries = []
     for start in range(0, len(arxiv_ids), ID_BATCH):
-        if start:
-            time.sleep(COURTESY_DELAY_S)
         batch = arxiv_ids[start : start + ID_BATCH]
         feed = read_feed({"id_list": ",".join(batch), "start": 0, "max_results": len(batch)})
         entries.extend(entry for entry in parse_entries(feed) if entry["arxiv_id"] in batch)
@@ -371,45 +378,33 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
-    args = build_parser().parse_args()
-    if not (args.title or args.author or args.year):
-        print(
-            json.dumps(
-                {
-                    "match": "none",
-                    "error": "give at least one of --title, --author, --year",
-                    "results": [],
-                },
-                indent=2,
-            )
-        )
-        return 2
+def run_search(
+    title: str | None, author: str | None, year: int | None, max_results: int = 10
+) -> dict:
+    """The query ladder, scored: what `main` prints and what `identity` reads.
 
-    query = build_search_query(args.title, args.author, args.year)
-    try:
-        entries = parse_entries(fetch_feed(query, args.max_results))
-    except (RuntimeError, ET.ParseError) as error:
-        print(json.dumps({"match": "none", "error": str(error), "results": []}, indent=2))
-        return 1
+    Three rungs, each looser than the one before, and the first that answers
+    wins. Raises `RuntimeError` when arXiv answers none of them.
+    """
+    query = build_search_query(title, author, year)
+    entries = parse_entries(fetch_feed(query, max_results))
 
     used_query = query
     for build in (build_fallback_query, build_loose_query):
         if entries:
             break
-        looser = build(args.title, args.author)
+        looser = build(title, author)
         if not looser or looser == used_query:
             continue
-        time.sleep(COURTESY_DELAY_S)
         try:
-            entries = parse_entries(fetch_feed(looser, args.max_results))
+            entries = parse_entries(fetch_feed(looser, max_results))
             used_query = looser
         except (RuntimeError, ET.ParseError):
             entries = []
 
     results = []
     for entry in entries:
-        score, match, agreement = score_entry(entry, args.title, args.author, args.year)
+        score, match, agreement = score_entry(entry, title, author, year)
         if match == "none":
             continue
         entry = dict(entry)
@@ -431,21 +426,40 @@ def main() -> int:
     else:
         overall = "none"
 
-    print(
-        json.dumps(
-            {
-                "query": {
-                    "title": args.title,
-                    "author": args.author,
-                    "year": args.year,
-                    "search_query": used_query,
+    return {
+        "query": {
+            "title": title,
+            "author": author,
+            "year": year,
+            "search_query": used_query,
+        },
+        "match": overall,
+        "results": results,
+    }
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    if not (args.title or args.author or args.year):
+        print(
+            json.dumps(
+                {
+                    "match": "none",
+                    "error": "give at least one of --title, --author, --year",
+                    "results": [],
                 },
-                "match": overall,
-                "results": results,
-            },
-            indent=2,
+                indent=2,
+            )
         )
-    )
+        return 2
+
+    try:
+        report = run_search(args.title, args.author, args.year, args.max_results)
+    except (RuntimeError, ET.ParseError) as error:
+        print(json.dumps({"match": "none", "error": str(error), "results": []}, indent=2))
+        return 1
+
+    print(json.dumps(report, indent=2))
     return 0
 
 

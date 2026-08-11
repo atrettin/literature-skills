@@ -30,7 +30,6 @@ import shutil
 import sys
 import tarfile
 import tempfile
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -40,10 +39,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import convert_figures  # noqa: E402
 import inspire_lookup  # noqa: E402
+import rate_gate  # noqa: E402
 import reference_store  # noqa: E402
 import references  # noqa: E402
 from arxiv_search import (  # noqa: E402
-    COURTESY_DELAY_S,
+    API_HOST,
     USER_AGENT,
     collapse_whitespace,
     fetch_feed,
@@ -52,6 +52,7 @@ from arxiv_search import (  # noqa: E402
 )
 
 EPRINT_URL = "https://arxiv.org/e-print/%s"
+EPRINT_HOST = "arxiv.org"
 REQUEST_TIMEOUT_S = 120.0
 DEFAULT_MAX_CHAPTER_BYTES = 40000
 
@@ -256,22 +257,50 @@ def strip_comments(text: str) -> str:
 # ==========================================================================
 
 
+class NoSource(RuntimeError):
+    """arXiv served no TeX for this paper: a PDF, an empty archive, or an error.
+
+    Carries what the driver reports as `NO_ARXIV_SOURCE`. It is a fact about
+    the submission, so no retry and no other paper answers it.
+    """
+
+    def __init__(self, message: str, http_status: int | None = None) -> None:
+        super().__init__(message)
+        self.http_status = http_status
+        self.reason = message
+
+
+class ParserFailure(RuntimeError):
+    """The source parsed to no section, or to no chapter holding text.
+
+    Carries what the driver reports as `PARSER_FAILURE`. Such a paper needs a
+    conversion by hand, or none.
+    """
+
+    def __init__(self, message: str, main_tex: str = "", sections_found: int = 0) -> None:
+        super().__init__(message)
+        self.main_tex = main_tex
+        self.sections_found = sections_found
+
+
 def download_source(arxiv_id: str, work_dir: Path) -> Path:
     url = EPRINT_URL % arxiv_id
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    query = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
-            payload = response.read()
+        with rate_gate.request(EPRINT_HOST):
+            with urllib.request.urlopen(query, timeout=REQUEST_TIMEOUT_S) as response:
+                payload = response.read()
     except urllib.error.HTTPError as error:
-        raise RuntimeError(
+        raise NoSource(
             "arXiv returned HTTP %s for %s. The submission may be PDF-only, "
-            "which carries no TeX source." % (error.code, url)
+            "which carries no TeX source." % (error.code, url),
+            http_status=error.code,
         )
     except (urllib.error.URLError, TimeoutError) as error:
-        raise RuntimeError("download of %s failed: %s" % (url, error))
+        raise NoSource("download of %s failed: %s" % (url, error))
 
     if not payload:
-        raise RuntimeError("arXiv served an empty source archive for %s" % arxiv_id)
+        raise NoSource("arXiv served an empty source archive for %s" % arxiv_id)
 
     source_dir = work_dir / "source"
     source_dir.mkdir(parents=True, exist_ok=True)
@@ -282,7 +311,7 @@ def download_source(arxiv_id: str, work_dir: Path) -> Path:
         payload_plain = payload
 
     if payload_plain[:5] == b"%PDF-":
-        raise RuntimeError(
+        raise NoSource(
             "arXiv served a PDF for %s, not TeX source. This paper cannot be "
             "ingested automatically." % arxiv_id
         )
@@ -312,7 +341,7 @@ def extract_safely(archive: tarfile.TarFile, destination: Path) -> None:
 def find_main_tex(source_dir: Path) -> Path:
     candidates = sorted(source_dir.rglob("*.tex"))
     if not candidates:
-        raise RuntimeError("no .tex file in the downloaded source")
+        raise NoSource("no .tex file in the downloaded source")
 
     full = []
     for path in candidates:
@@ -1676,10 +1705,11 @@ def fetch_metadata_by_id(arxiv_id: str) -> dict:
     """Query the arXiv API for a single paper's metadata."""
     params = urllib.parse.urlencode({"id_list": arxiv_id, "max_results": 1})
     url = "http://export.arxiv.org/api/query?%s" % params
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    query = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            feed = response.read().decode("utf-8", errors="replace")
+        with rate_gate.request(API_HOST):
+            with urllib.request.urlopen(query, timeout=30) as response:
+                feed = response.read().decode("utf-8", errors="replace")
         entries = parse_entries(feed)
         return entries[0] if entries else {}
     except Exception:
@@ -1715,14 +1745,33 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
-    args = build_parser().parse_args()
-    warnings: list[str] = []
+ANCHOR_TAG = re.compile(r'<a id="[^"]*"></a>')
+HEADING_LINE = re.compile(r"^#+ .*$", re.MULTILINE)
 
-    paper_dir = args.literature_root / args.slug
-    if paper_dir.exists() and not args.force and not args.dry_run:
-        fail("%s already exists; pass --force to replace it" % paper_dir)
-        return 1
+
+def chapter_has_text(chapter: dict) -> bool:
+    """Whether a chapter holds any of the paper under its headings.
+
+    Headings and anchors do not count. A conversion that found the structure of
+    a document and none of its words produces exactly those, and reporting that
+    as a chapter would put an empty file into the collection.
+    """
+    body = HEADING_LINE.sub("", chapter.get("text", ""))
+    return bool(ANCHOR_TAG.sub("", body).strip())
+
+
+def convert(args) -> dict:
+    """Fetch one paper and write its chapters. Returns the manifest.
+
+    `args` is what `build_parser()` produces, or anything carrying the same
+    attributes: `add_paper.py` calls this rather than the command line, so the
+    manifest comes back as an object instead of as text on stdout.
+
+    It raises `NoSource` when arXiv has no TeX for the paper, and
+    `ParserFailure` when the source yields no chapter. Both are facts about the
+    paper, and the driver reports each as its own exception code.
+    """
+    warnings: list[str] = []
 
     work_dir = Path(tempfile.mkdtemp(prefix="arxiv_fetch_"))
     try:
@@ -1735,12 +1784,9 @@ def main() -> int:
             except Exception as error:  # the TeX matters more than the journal
                 publication = arxiv_only_publication(metadata)
                 warnings.append("the INSPIRE-HEP lookup failed (%s)" % error)
-        time.sleep(COURTESY_DELAY_S)
-        try:
-            source_dir = download_source(args.arxiv_id, work_dir)
-        except RuntimeError as error:
-            fail(str(error))
-            return 1
+        # No courtesy delay here: the gate paces every arXiv request, and this
+        # one waits behind the metadata request above by itself.
+        source_dir = download_source(args.arxiv_id, work_dir)
 
         main_tex = find_main_tex(source_dir)
         raw = inline_inputs(strip_comments(read_text(main_tex)), main_tex.parent, source_dir)
@@ -1828,6 +1874,17 @@ def main() -> int:
             for record in section_figures:
                 record["chapter"] = title
 
+        # A chapter that is only its own heading holds none of the paper. A
+        # source that yields nothing else converted to nothing, whatever the
+        # section split found.
+        if not any(chapter_has_text(chapter) for chapter in chapters):
+            raise ParserFailure(
+                "the source of %s produced no chapter holding text; it needs a "
+                "conversion by hand, or none" % args.arxiv_id,
+                main_tex=str(main_tex.relative_to(source_dir)),
+                sections_found=len(sections),
+            )
+
         if key_tags:
             for chapter in chapters:
                 chapter["text"] = apply_cite_tags(chapter["text"], key_tags)
@@ -1865,12 +1922,12 @@ def main() -> int:
             record["anchor"] = entry["anchor"] if entry else ""
 
         if args.dry_run:
-            print(json.dumps(build_manifest(
+            return build_manifest(
                 args, metadata, publication, cited, abstract, parser_used, chapters,
                 [dict(record, file=record["file_hint"]) for record in figure_records],
-                warnings, main_tex, source_dir, numbering, unresolved_refs), indent=2))
-            return 0
+                warnings, main_tex, source_dir, numbering, unresolved_refs)
 
+        paper_dir = args.literature_root / args.slug
         if paper_dir.exists():
             shutil.rmtree(paper_dir)
         chapters_dir = paper_dir / "chapters"
@@ -1912,12 +1969,29 @@ def main() -> int:
         for chapter in chapters:
             chapter.pop("text", None)
 
-        print(json.dumps(build_manifest(
+        return build_manifest(
             args, metadata, publication, cited, abstract, parser_used, chapters, resolved,
-            warnings, main_tex, source_dir, numbering, unresolved_refs), indent=2))
-        return 0
+            warnings, main_tex, source_dir, numbering, unresolved_refs)
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+
+    paper_dir = args.literature_root / args.slug
+    if paper_dir.exists() and not args.force and not args.dry_run:
+        fail("%s already exists; pass --force to replace it" % paper_dir)
+        return 1
+
+    try:
+        manifest = convert(args)
+    except (NoSource, ParserFailure) as error:
+        fail(str(error))
+        return 1
+
+    print(json.dumps(manifest, indent=2))
+    return 0
 
 
 def build_manifest(

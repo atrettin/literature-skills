@@ -114,7 +114,7 @@ model costs less and reads less well.
 
 | Parameter | Now | What it does |
 |---|---|---|
-| `model` of `paper-ingestor` | `sonnet` | The model that ingests a paper. Most of that work is mechanical. The judgement is in the summary of each chapter and in the match of the paper to the request. `haiku` is the cheaper value to try, and a worse `INDEX.md` costs every later read. |
+| `model` of `paper-ingestor` | `sonnet` | The model that handles an exception of the ingest script. The script does the mechanical work. Two judgements are left: the identity of a paper, and a name that two works want. Each one decides what the collection holds from then on. `haiku` is the cheaper value to try. A wrong paper, or a tag given to the wrong work, costs more than the saving. |
 | `model` of `paper-scout` | `haiku` | The model that reads one paper against the sub-questions. This is targeted extraction, and not synthesis. `sonnet` is the value to try when scouts miss a passage that answers a question. |
 | `model` of `literature-researcher` | `inherit` | The model that runs the loop and writes the report. It reads no full text, and it makes every judgement. |
 
@@ -153,6 +153,13 @@ model costs less and reads less well.
 | `PARAGRAPH_ANCHOR_MIN_CHARS` | `arxiv_fetch.py` | 80 | The length under which a block of text gets no paragraph anchor. A lower value addresses more of the chapter, and writes an anchor line above shorter blocks. A higher value leaves a short paragraph addressable only through the paragraph above it. The value is a judgement: one sentence of prose is longer than 80 characters. |
 | `RESTORE_PASSES` | `arxiv_fetch.py` | 4 | How often the placeholder restore walks its items. Each pass answers one further level of nesting, such as the maths of a table inside that table. A lower value can leave a `PH<number>` in the text, which the manifest then reports as a warning. A higher value costs one more walk over a text that already holds no key. |
 | `SLUG_MIN_CHARS` | `arxiv_search.py` | 24 | The length under which a chapter file name keeps a cut word rather than lose more of the title. A higher value returns more names that end in half a word. A lower value returns shorter and less exact names. |
+| `MAX_CONCURRENT_FETCHES` | `add_paper.py` | 2 | How many papers run the fetch stage together. The gate still sends one request at a time. A higher value fills the wait of one request with the work of another paper. It never sends more requests, and each paper in the stage costs memory. |
+| `INDEX_SUBSECTIONS_SHOWN` | `write_index.py` | 6 | How many subsection titles one chapter row lists. A higher value says more about a long chapter, and makes the table harder to read. |
+| `SLUG_TITLE_WORDS` | `identity.py` | 2 | How many title words the derived slug carries. A higher value separates two papers of one author in one year more often, and gives a longer directory name. |
+| `ROW_DESCRIPTION_CHARS` | `collection_index.py` | 160 | How much of the abstract the collection row carries before a summary pass replaces it. |
+| `REPORT_WARNINGS_SHOWN` | `add_paper.py` | 10 | How many warnings the compact report prints. The full manifest holds them all. |
+| `CANDIDATES_SHOWN` | `identity.py` | 5 | How many candidates an `AMBIGUOUS_TITLE` exception carries for an agent to choose between. A higher value describes more papers, and each one costs the agent context at the moment it has to decide. |
+| `AUTHORS_SHOWN` | `write_index.py` and `add_paper.py` | 3 | How many authors the identity table and the report name before `et al.`. `authors_total` gives the count of the rest. |
 
 ## Not tunable
 
@@ -164,6 +171,12 @@ repository sets each one. A lower value makes nothing faster.
 | `COURTESY_DELAY_S` | `arxiv_search.py`, 3.0 | arXiv asks for three seconds between calls. A lower value causes a rate limit, and that costs more time than the change saves. |
 | `RATE_LIMIT_WINDOW_S` | `inspire_lookup.py`, 5.0 | The rate-limit window of INSPIRE-HEP. The script answers a 429 and then waits out the whole window. |
 | `MAX_RETRY_DELAY_S` | `inspire_lookup.py`, 60.0 | A ceiling on the delay that a `Retry-After` header can ask for. A wrong header cannot then stop a run. |
-| `INSPIRE_PACE_S` and `BATCH_SIZE` | `references.py`, 0.5 and 40 | The pace and the batch size that the INSPIRE API accepts. `inspire_citations.py` sends its requests through the same functions, and thus at the same pace. |
+| `INSPIRE_PACE_S` | `inspire_lookup.py`, 0.5 | The pace the INSPIRE API accepts. It sits beside `fetch_record`, which is the one function every INSPIRE request in these scripts passes through. `references.py` reads the name from there. |
+| `BATCH_SIZE` | `references.py`, 40 | The batch size the INSPIRE API accepts. `inspire_citations.py` sends its requests through the same functions. |
+| `CROSSREF_PACE_S` | `references.py`, 0.5 | The pace Crossref asks of a client with no polite-pool token. |
+| `HOST_INTERVALS` | `rate_gate.py` | The pace each API asks for, one entry per host. Each value is registered by the module that owns the constant, so a pace has one definition. |
+| `DEFAULT_INTERVAL_S` | `rate_gate.py`, 1.0 | What a host nobody registered gets. It is slower than every pace registered, so an unknown host is paced conservatively rather than not at all. |
+| `GATE_WAIT_TIMEOUT_S` | `rate_gate.py`, 120.0 | How long a caller waits for the lock. It bounds a wait, and it makes nothing faster. |
+| `LOCK_POLL_S` | `rate_gate.py`, 0.05 | How often a waiting caller retries the lock. Short enough that a caller takes the gate promptly after the holder releases it. |
 | `REQUEST_TIMEOUT_S` and `CROSSREF_TIMEOUT_S` | four scripts, 20 to 120 | How long a script waits for a server. `arxiv_fetch.py` waits the longest, at 120, because it downloads an archive of the source. |
 | `MAX_RETRIES` | two scripts, 3 | How many times a script repeats a failed request. |
