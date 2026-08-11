@@ -23,7 +23,7 @@ Then report these, and nothing else:
 | chapters | how many, and what each covers, in a few words. |
 | parser | `texsoup` or `fallback`. |
 | warnings | each warning that the fetch reported. |
-| references | the counts that `check_references.py` printed. |
+| references | the counts `check_references.py --paper <slug>` printed for this paper, then its `elsewhere` counts in one line. |
 
 **Never report the text of the paper.** The caller asked where the paper is, not
 what it says.

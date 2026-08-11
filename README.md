@@ -158,7 +158,7 @@ from the root of the project that holds `literature/` — or with
 | `arxiv_discover.py --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, and marks the ones the collection holds |
 | `arxiv_fetch.py <arxiv-id> --slug <dir>` | ingests one paper: source, chapters, figures, bibliography |
 | `convert_figures.py <paper-dir>` | converts the figures of a paper again |
-| `check_references.py` | asserts that every citation and `[ref: …]` in the collection still resolves |
+| `check_references.py` | asserts that every citation and `[ref: …]` in the collection still resolves; `--paper <slug>` scopes the verdict to one paper |
 | `reference_lookup.py <tag>` | resolves one citation, or searches the reference store |
 | `update_references.py` | renders `REFERENCES.md` from the store |
 | `inspire_lookup.py <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
@@ -362,6 +362,15 @@ states no date and that no lookup answers keeps no year, and its tag says `nd`.
 still resolves — against the store, and against the anchors of the table it links
 to. It is the only guard against a tag quietly going stale, and `add-paper` runs
 it after every ingest.
+
+`--paper <slug>` scopes the verdict to one paper. The read stays
+collection-wide: one store answers the citations of every paper, so the check
+cannot ask a smaller question of the files. The answer is the smaller question.
+Each list then holds only that paper's defects, `elsewhere` counts the defects
+of the rest of the collection, and `ok` and the exit status speak for that paper
+alone. An agent that has just ingested a paper wants that answer. Without the
+flag, the report answers for the whole collection, which is what a person
+auditing the collection wants.
 
 `INDEX.md` records both the year the preprint went to arXiv and the journal it
 was published in. arXiv cannot answer the second question — its `journal_ref`
