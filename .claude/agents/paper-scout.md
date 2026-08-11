@@ -34,8 +34,13 @@ SQ2 | chapters/03_results.md | #sec-axialff | "<quotation>" | <how it bears, in 
 
 Then report the sub-questions that this paper does not touch, by number.
 
-Four rules:
+Five rules:
 
+- **Grep a few words at most.** Chapter text wraps at about 70 characters. A
+  grep for a whole sentence thus finds nothing while the sentence is there. You
+  have no `Bash` tool, thus you cannot run `search_literature.py`. The caller
+  runs it. When a grep finds nothing, read the chapter. Never say the paper does
+  not hold a text because a grep missed it.
 - **Quote exactly.** Copy the words of the paper inside the quotation marks.
   Never paraphrase there. The caller opens the anchor and compares. A chapter
   writes its mathematics as LaTeX, and you can write `$\nu_\mu$` as `ν_μ` in a

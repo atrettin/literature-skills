@@ -81,6 +81,17 @@ skill states them, and the agent obeys them.
 | `DRY_ITERATIONS` | 2 | How many iterations can find no new relevant paper before the loop stops. A lower value stops earlier on a subject that the collection covers already. |
 | `MAX_PARALLEL_SCOUTS` | 4 | How many `paper-scout` agents read at one time. A scout calls no API, thus this value trades tokens against waiting. |
 
+## Searching the text
+
+`add-paper/scripts/search_literature.py` finds a phrase in the text of the
+papers. Nobody measured these values. Each one is a judgement.
+
+| Parameter | Now | What it does |
+|---|---|---|
+| `CONTEXT_CHARS` | 300 | How many characters of the matching sentence the answer prints. A higher value shows more of the paragraph and costs more context. A lower value can cut the words that decide whether the passage supports the claim. |
+| `MAX_RESULTS` | 20 | How many matches one search reports. A common word matches hundreds of times. A higher value shows more of them, and `--max-results` raises it for one call. |
+| `MIN_BACKOFF_WORDS` | 3 | The shortest phrase the backoff tries after the full phrase fails. A lower value finds a match for two words, which most papers carry, and that match says little. A higher value reports no partial match at all. |
+
 ## Choosing a model for an agent
 
 The frontmatter of each agent in `.claude/agents/` names its model. A cheaper

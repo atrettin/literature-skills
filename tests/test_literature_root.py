@@ -16,6 +16,7 @@ import check_references
 import inspire_citations
 import reference_lookup
 import reference_store
+import search_literature
 
 
 def test_default_root_is_the_project_collection(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -40,6 +41,7 @@ def test_an_empty_variable_is_no_variable(monkeypatch: pytest.MonkeyPatch) -> No
         (lambda: arxiv_discover.build_parser(), ["--topic", "quasielastic"]),
         (lambda: reference_lookup.build_parser(), ["some_tag"]),
         (lambda: inspire_citations.build_parser(), ["1706.03621"]),
+        (lambda: search_literature.build_parser(), ["axial mass"]),
     ],
 )
 def test_each_parser_reads_the_variable(
@@ -69,6 +71,22 @@ def test_a_search_reads_the_collection_the_variable_names(
 
     assert counts["held"] == 1
     assert entries[0]["held_as"] == "jeong_2023_shallow_deep_inelastic"
+
+
+def test_a_phrase_search_reads_the_collection_the_variable_names(
+    monkeypatch: pytest.MonkeyPatch, collection: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The variable reaches the search itself, and the flag still wins over it."""
+    monkeypatch.setenv("LITERATURE_ROOT", str(collection))
+
+    assert search_literature.main(["axial mass extracted"]) == 0
+    assert "jeong_2023_shallow_deep_inelastic" in capsys.readouterr().out
+
+    elsewhere = collection.parent / "nothing"
+    assert search_literature.main(
+        ["axial mass extracted", "--literature-root", str(elsewhere)]
+    ) == 2
+    assert str(elsewhere) in capsys.readouterr().out
 
 
 def test_a_check_names_the_collection_it_could_not_find(

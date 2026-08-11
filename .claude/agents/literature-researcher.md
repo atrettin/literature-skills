@@ -8,8 +8,11 @@ model: inherit
 Invoke the `research-report` skill, and follow it for the whole task. The skill
 holds the workflow. Do not improvise around it.
 
-Three rules hold for each task:
+Four rules hold for each task:
 
+- Check a quotation of a scout with `search_literature.py`. It gives the
+  chapter, the anchor and the line. Never check a quotation with `grep`. The
+  text wraps, thus `grep` misses a phrase that a line break splits.
 - Give each ingest to a `paper-ingestor` agent, one at a time, and give each
   deep read of a paper to `paper-scout` agents. arXiv and INSPIRE limit their
   rate, and only the ingestor calls them.
