@@ -80,6 +80,32 @@ Each kind of task divides:
 against your memory of the task. You can add a sub-question that the reading
 uncovers. Never delete one without a line in the log that says why.
 
+**Open the working set.** The working set is the list of papers of the
+collection that bear on this question. It starts empty. Write it in the log
+under `## Working set`, and add to it as the task runs.
+
+A paper enters the working set in one of two ways:
+
+| How | When |
+|---|---|
+| You ingested it for this task | at the ingest, with the sub-question that needed it |
+| The collection held it, and you read text in it that bears on a sub-question | at the read, and never at the search |
+
+A paper that a search reports as held does **not** enter the set. A held paper
+enters when you read it and the text bears on a sub-question. The collection
+holds papers from other tasks, thus "held" says nothing about this question.
+
+**Give the working set to every tool that reads more than one paper.** A tool of
+that kind takes its scope as a flag that you repeat for each paper. The working
+set is that scope:
+
+| Tool | How you pass the set |
+|---|---|
+| `$SEARCH` | `--paper <slug>` for each paper of the set, when you verify a claim of this task |
+
+A tool that you run over the whole collection answers a question about the
+collection. It does not answer a question about your task.
+
 ## The loop
 
 These limits hold for the whole task:
@@ -91,6 +117,7 @@ These limits hold for the whole task:
 | `MAX_TOTAL_INGESTS` | 20 |
 | `DRY_ITERATIONS` | 2 |
 | `MAX_PARALLEL_SCOUTS` | 4 |
+| `CURRENCY_GRACE_MONTHS` | 12 |
 
 ### Step 1. Plan the iteration
 
@@ -109,23 +136,51 @@ the best candidates with their `missing_terms`.
 ### Step 3. Ingest and read
 
 **Ingest** at most `MAX_NEW_PAPERS_PER_ITERATION` new papers, and at most
-`MAX_TOTAL_INGESTS` in the whole task. Pass the whole queue of identifiers to
+`MAX_TOTAL_INGESTS` in the whole task. A paper that the collection holds already
+needs no ingest, and it counts against no limit. Pass a queue of identifiers to
 one command:
 
 ```bash
-<add-paper skill>/scripts/add_paper.py --auto <arxiv-id> [<arxiv-id> …]
+$PY <add-paper>/scripts/add_paper.py --auto <arxiv-id> [<arxiv-id> …]
 ```
 
-The script sends one request at a time by itself. One command therefore ingests
-the whole queue. It prints one JSON report per paper, as one object per line. It
+The script sends one request at a time by itself, thus one command ingests the
+whole queue. It prints one JSON report per paper, as one object per line. It
 exits 2 when any paper raised an exception.
 
 **Start a `paper-ingestor` agent only for a paper whose report carries an
 `exception`.** Give that agent the identifier of that paper. The exception is
 the one part of an ingest that needs judgement.
 
-Write one line in the log for each paper: which sub-question needs it. A paper
-that the collection holds already needs no ingest and counts against no limit.
+**Order the queue by value, and read while it runs.** Put the paper that answers
+the most open sub-questions first. Then run the queue in two commands:
+
+1. Ingest the first paper alone, and wait for its report.
+2. Start the command for the rest of the queue in the background.
+3. While it runs, read the paper of point 1: open its chapters yourself, or
+   start `paper-scout` agents on it.
+4. When that command reports, read the papers it ingested the same way.
+
+Write one line in the log for each paper: which sub-question needs it. Each
+paper that you ingest enters the working set, with that sub-question.
+
+**One request at a time is the rule. One agent at a time is not the rule.** The
+limit belongs to arXiv and to INSPIRE. A scout reads files on disk, and your own
+reading opens files on disk. Neither one sends a request.
+
+| Beside a running ingest | Permitted |
+|---|---|
+| a `paper-scout` on a paper that is on disk | yes |
+| your own read of a chapter | yes |
+| `$PY $LOOKUP <tag>`, which reads the local store | yes |
+| `$PY $SEARCH "<phrase>"`, which reads the chapters on disk | yes |
+| a second `add_paper.py --auto` command, or a `paper-ingestor` | **no** |
+| a `find-papers` search | **no** |
+| `$PY $CITE …`, which asks INSPIRE | **no** |
+
+**Read a paper only after the command that ingests it reports.** The chapters
+are incomplete until then, and a scout that starts early reads a part of the
+paper.
 
 **Read in two tiers.** The tier depends on how much you must read:
 
@@ -133,6 +188,9 @@ that the collection holds already needs no ingest and counts against no limit.
 |---|---|
 | One paper, and its `INDEX.md` names the chapter you need | Read that chapter yourself, as `use-literature` says. |
 | Several papers, or an `INDEX.md` that does not settle it | Start one `paper-scout` agent for each paper. Give it the slug and the open sub-questions. Run at most `MAX_PARALLEL_SCOUTS` at one time. |
+
+A paper that the collection held enters the working set here, and not at the
+search: it enters when you read text in it that bears on a sub-question.
 
 A chapter summary in `INDEX.md` says what the chapter covers. Nobody knew your
 sub-questions when they wrote it, thus it can miss the paragraph that answers
@@ -187,6 +245,36 @@ Read the sub-questions **from the log**, and not from memory. Mark each one:
 
 A closed-negative sub-question is an answer. It goes in the report.
 
+**A sub-question is not answered until you look for later work.** This holds for
+the mark `answered`, and for that mark alone. A `partial` sub-question stays in
+the loop, and a `closed-negative` one leans on no paper.
+
+Name the paper that supplies the answer. Remove that paper's text, and the
+answer goes with it. Ask INSPIRE which papers cite that paper, newest first:
+
+```bash
+$PY $CITE <arxiv-id> --direction citing --sort mostrecent
+```
+
+Read the titles and the summaries, and act:
+
+| What the result shows | What you do |
+|---|---|
+| no later paper that bears on the sub-question | Mark it answered. |
+| a later paper that supports the answer | Mark it answered. Ingest that paper when the report needs its text. |
+| a later paper that can change the answer | The sub-question stays open. Ingest that paper in the next iteration, and read it before you mark the sub-question again. |
+
+One search covers each sub-question that leans on that paper. A sub-question
+that leans on two papers needs a search on each of the two.
+
+**One exemption.** A paper whose preprint is younger than
+`CURRENCY_GRACE_MONTHS` needs no search. A paper of that age has few citers, and
+the request answers nothing. Log the exemption in the same place as a search
+that ran.
+
+**Write each search in the log, under `### Currency checks`.** A mark of
+`answered` beside no entry there is a defect, and the reader can see it.
+
 Three things answer nothing. Say so each time:
 
 - An abstract. You read 400 characters, and that is a choice of paper, not a source.
@@ -201,6 +289,7 @@ Three things answer nothing. Say so each time:
 | Each sub-question is answered or closed-negative | Stop. Write the report. |
 | You used `MAX_ITERATIONS`, or `MAX_TOTAL_INGESTS` | Stop. Write the report. Put the limit in "Limitations". |
 | The last `DRY_ITERATIONS` iterations found no new relevant paper | Stop. Write the report. Say that the search stopped finding papers. |
+| A limit stops you, and a sub-question has no currency check | Stop. Write the report. Name that sub-question in "Limitations", with the paper that supplies its answer. |
 | Anything else | Write the refinement and the reason in the log. Go to step 1. |
 
 **Never present a limit as an exhausted subject.** They are different, and the
@@ -217,11 +306,22 @@ reader must know which one stopped you.
 | A sub-question is about a subject that no paper you read reaches | A new search, with a narrower phrase. This is the one case where a search beats the citation graph. |
 | Each result is broad and shallow | Divide the sub-question in two. Work on the halves. |
 
+The forward search of Step 4 is required. It is not one of these moves. These
+rows are the moves that you choose in Step 1. A currency check can give you the
+reason to choose the forward search.
+
 ## The research log
 
 Write one entry for each iteration, in this shape:
 
 ```markdown
+## Working set
+
+| Slug | How it entered | Sub-questions |
+|---|---|---|
+| <slug> | ingested, iteration 1 | SQ2, SQ3 |
+| <slug> | held, read at iteration 2 | SQ5 |
+
 ## Iteration <n> — <date>
 
 ### Plan
@@ -230,26 +330,40 @@ Write one entry for each iteration, in this shape:
 ### Actions
 - search: topic="…" backend=… counts={held:…, cited:…, new:…}
 - cite:   <arxiv-id> direction=… sort=… returned=… of …
+- cite:   <arxiv-id> direction=citing sort=mostrecent returned=… of … — currency for SQ2
 - ingest: <slug> — because <sub-question>
+- skip:   <arxiv-id> — found, not ingested, because <reason>
+- scope:  working set = <slug>, <slug>, <slug>
 - scout:  <slug> for SQ2, SQ3
 - read:   <slug>/chapters/03_results.md
+- lookup: <tag>, <tag> — verified: <n> of <n>
 
 ### Findings
 - SQ2: <the claim> — <slug>/chapters/03_results.md#sec-axialff
 
+### Currency checks
+- SQ2, SQ7: <slug> (<arxiv-id>) — searched <date>, newest citer <year>, nothing that changes the answer
+- SQ4: <slug> — skipped, preprint <date>, younger than CURRENCY_GRACE_MONTHS
+
 ### Assessment
-SQ1 answered · SQ2 partial · SQ3 open · SQ4 closed-negative (searched: "…", "…")
+SQ1 answered (currency: <slug>) · SQ2 partial · SQ3 open · SQ4 closed-negative (searched: "…", "…")
 
 ### Decision
 <continue, with the refinement and the reason | stop, with the reason>
 ```
 
-Two rules hold the log together:
+The `## Working set` table stands once, above the first iteration entry. Write
+the `scope:` line each time the set grows. A reader can then see which papers a
+tool covered at that point of the task.
+
+Three rules hold the log together:
 
 - **Write it as the iteration runs.** A log that you write at the end is a
   memory of the work. Step 4 must not judge the work by memory.
 - **Add to it. Do not edit it.** An assessment that a later iteration disproves
   gets a new entry. The old one stays.
+- **The working set table is the one exception to that rule.** A row enters the
+  table, and no row leaves it. The iteration entries stay append-only.
 
 ## Write the report
 
@@ -268,6 +382,8 @@ Write it in the form of a scientific paper:
 
 - the sub-questions that you closed as negative, and how you searched for them;
 - a limit that stopped the loop, and which limit it was;
+- each sub-question that you marked answered with no currency check, and the
+  paper that supplies its answer;
 - the searches that you planned and did not run;
 - the papers that you found and did not ingest;
 - each claim that rests on a `verified: false` record.
@@ -356,9 +472,11 @@ Then tell the user:
 
 - **One request at a time reaches arXiv and INSPIRE.** `rate_gate.py` holds
   every script to that, across processes, so one `add_paper.py --auto` command
-  ingests a whole queue. Do not call these APIs from two agents at once: run a
-  search or a `paper-ingestor` while no ingest is running. A scout uses no API,
-  thus several scouts can run together.
+  ingests a whole queue. Do not start a search, a `$CITE` lookup or a second
+  ingest beside a running ingest. A scout and your own reading call no API, thus
+  they run beside an ingest.
+- **Check for later work before you call a sub-question answered.** Step 4 says
+  how, and the log says that you did it.
 - **Keep the full text out of your context.** Read `INDEX.md` files, the reports
   of the agents, the JSON of the scripts, and the chapters that you cite.
   Never read a paper from beginning to end yourself. That is what a scout does.
