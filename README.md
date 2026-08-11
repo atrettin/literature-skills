@@ -158,7 +158,7 @@ from the root of the project that holds `literature/` — or with
 | `arxiv_discover.py --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, and marks the ones the collection holds |
 | `arxiv_fetch.py <arxiv-id> --slug <dir>` | ingests one paper: source, chapters, figures, bibliography |
 | `convert_figures.py <paper-dir>` | converts the figures of a paper again |
-| `check_references.py` | asserts that every citation and `[ref: …]` in the collection still resolves |
+| `check_references.py` | asserts that every citation and `[ref: …]` in the collection still resolves, and reports placeholder residue |
 | `reference_lookup.py <tag>` | resolves one citation, or searches the reference store |
 | `update_references.py` | renders `REFERENCES.md` from the store |
 | `inspire_lookup.py <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
@@ -237,6 +237,14 @@ literature/
 Chapters are written to render in a Markdown preview: display maths as
 `$$ … $$`, figures as centred `<img>` blocks with their captions beneath.
 
+The conversion writes one line for one paragraph. TeX wraps its prose at about
+70 characters. A phrase that crosses such a break answers no search for that
+phrase. The preview wraps the long line again, so the page reads the same.
+
+Every paragraph, every heading and every labelled equation, figure and table
+carries an anchor. A citation can then name the place a claim comes from, and
+not the file alone.
+
 ## Cross-references that go somewhere
 
 A paper refers to itself constantly — "as shown in eq. (5)", "see Fig. 3", "in
@@ -253,6 +261,12 @@ when that is a different one:
 eq. ([6](#eq-ckmt))
 Section [4](04_partially_conserved_axial_vector_current.md#sec-pcac)
 ```
+
+A heading the source never labelled carries an anchor named after its title, as
+`#sec-nuclear-effects`. Every paragraph carries a number of its own, as
+`04_partially_conserved_axial_vector_current.md#p12`. The title and the count of
+paragraphs are the stable names. A new section renumbers every section after it,
+and an anchor that a report cites must not move.
 
 The numbers are recomputed rather than read off the published paper, so one that
 renumbers by hand can end up a little out; the link still lands on the right

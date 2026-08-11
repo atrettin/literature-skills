@@ -55,6 +55,28 @@ EPRINT_URL = "https://arxiv.org/e-print/%s"
 REQUEST_TIMEOUT_S = 120.0
 DEFAULT_MAX_CHAPTER_BYTES = 40000
 
+# The sentinel that brackets a placeholder key. Private-use characters, so a
+# key that survives the restore stays readable text rather than turning the
+# file into something `grep` treats as binary.
+SENTINEL_OPEN = "\ue000"
+SENTINEL_CLOSE = "\ue001"
+# How often restore walks its items. One pass answers a payload that holds a
+# key; each further pass answers one more level of nesting.
+RESTORE_PASSES = 4
+# What a placeholder key leaves behind when the restore misses it. The text
+# then reads `$\sim PH5 13$%` where the paper wrote a number, so it is a defect
+# to report and not a thing to repair in place.
+RESIDUE = re.compile(r"PH\d+")
+# Every C0 control character other than the newline and the tab. None of them
+# carries meaning in Markdown, and a NUL byte hides the rest of the file from
+# `grep`.
+CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b-\x1f]")
+# The length under which a block gets no paragraph anchor and no number. A
+# block this short is a stub, a caption line or a fragment the conversion left
+# standing, and an anchor line above it costs more noise than the address earns.
+# One sentence of prose is longer than this.
+PARAGRAPH_ANCHOR_MIN_CHARS = 80
+
 FIGURE_EXTENSIONS = (".pdf", ".png", ".jpg", ".jpeg", ".eps", ".ps", ".gif", ".svg")
 
 # How a figure names its file. \includegraphics carries a star form, and older
@@ -593,7 +615,15 @@ def split_sections(body: str, positions: list[int]) -> list[tuple[str, str]]:
 
 
 class Placeholder:
-    """Holds verbatim chunks (math, tables) out of harm's way while cleaning."""
+    """Holds verbatim chunks (math, tables) out of harm's way while cleaning.
+
+    The sentinel around a key is a private-use character, U+E000 and U+E001. A
+    key that escapes the restore is then still readable text. A NUL byte in its
+    place makes `grep` read the whole file as binary, which hides every line of
+    it, including the lines that are correct.
+    """
+
+    KEY = "PH%d"
 
     def __init__(self) -> None:
         self.items: dict[str, str] = {}
@@ -601,14 +631,140 @@ class Placeholder:
 
     def stash(self, payload: str) -> str:
         self.counter += 1
-        key = "\x00PH%d\x00" % self.counter
+        key = self.KEY % self.counter
         self.items[key] = payload
         return key
 
     def restore(self, text: str) -> str:
-        for key, payload in self.items.items():
-            text = text.replace(key, payload)
+        """Put every payload back, the innermost key last.
+
+        A payload holds only the keys of the chunks stashed before it: the
+        maths of a table's cells is stashed before the table itself. Reverse
+        insertion order therefore restores the outer payload first, and the key
+        it carries is then still waiting for its own turn. The loop covers a
+        nesting deeper than one level.
+        """
+        for _ in range(RESTORE_PASSES):
+            for key, payload in reversed(list(self.items.items())):
+                text = text.replace(key, payload)
+            if SENTINEL_OPEN not in text:
+                break
         return text
+
+
+def sanitise(text: str) -> str:
+    """Drop every character that has no place in a Markdown file.
+
+    This runs last, just before a write, and it is the guarantee. The sentinel
+    decides only what a leaked placeholder key looks like; this decides that
+    nothing below U+0020 other than a newline or a tab reaches the disk.
+    """
+    text = CONTROL_CHARACTERS.sub("", text)
+    return text.replace(SENTINEL_OPEN, "").replace(SENTINEL_CLOSE, "")
+
+
+# A line that opens one of these carries its own break: a heading, a list item,
+# a table row, an HTML block, a quote or a maths delimiter.
+LINE_BREAK_PREFIXES = ("#", "-", "*", "|", "<", ">", "$$", "```")
+
+
+def reflow(text: str) -> str:
+    """Join the lines of each paragraph with one space.
+
+    TeX hard-wraps its prose at about 70 characters, and the break lands
+    wherever the author's editor put it. A phrase that crosses such a break
+    answers no search for that phrase, and a reader then concludes, wrongly,
+    that the paper does not hold it. The renderer wraps the long line again, so
+    the page reads as it did.
+
+    A break stays where it carries meaning: inside a fenced block, inside a
+    `$$ ... $$` block, and on a line that opens one of LINE_BREAK_PREFIXES.
+    """
+    out: list[str] = []
+    paragraph: list[str] = []
+    in_fence = False
+    in_math = False
+
+    def flush() -> None:
+        if paragraph:
+            out.append(" ".join(paragraph))
+            paragraph.clear()
+
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if in_fence:
+            out.append(line)
+            in_fence = not stripped.startswith("```")
+        elif in_math:
+            out.append(line)
+            in_math = stripped != "$$"
+        elif stripped.startswith("```"):
+            flush()
+            out.append(line)
+            in_fence = True
+        elif stripped == "$$":
+            flush()
+            out.append(line)
+            in_math = True
+        elif not stripped:
+            flush()
+            out.append("")
+        elif stripped.startswith(LINE_BREAK_PREFIXES):
+            flush()
+            out.append(line)
+        else:
+            paragraph.append(stripped)
+    flush()
+    return "\n".join(out)
+
+
+# A block that opens with one of these is not prose. `[FIGURE:` names a figure
+# the conversion could not resolve, which is a marker and not a sentence.
+PARAGRAPH_BLOCK_PREFIXES = ("#", "<", "|", "-", "*", ">", "$$", "```", "[FIGURE:")
+
+
+def paragraph_anchors(text: str) -> str:
+    """Write `<a id="pN"></a>` above every prose paragraph of a chapter.
+
+    A heading anchor addresses a section, and a section runs for pages.
+    `chapter.md#p12` addresses the paragraph that carries the claim. The count
+    starts at `p1` in every file, so it has to run after a long chapter is
+    split, and the anchor is no target of a `\\ref`, so it stays out of the
+    label map.
+    """
+    parts = re.split(r"(\n{2,})", text)
+    out: list[str] = []
+    number = 0
+    in_fence = False
+    in_math = False
+    for index, part in enumerate(parts):
+        if index % 2:
+            out.append(part)  # the blank lines between two blocks
+            continue
+        block = part.strip()
+        prose = (
+            bool(block)
+            and not in_fence
+            and not in_math
+            and not block.startswith(PARAGRAPH_BLOCK_PREFIXES)
+            and len(block) >= PARAGRAPH_ANCHOR_MIN_CHARS
+        )
+        if prose:
+            number += 1
+            out.append('<a id="p%d"></a>\n\n%s' % (number, part))
+        else:
+            out.append(part)
+        for line in block.split("\n"):
+            stripped = line.strip()
+            if in_fence:
+                in_fence = not stripped.startswith("```")
+            elif in_math:
+                in_math = stripped != "$$"
+            elif stripped.startswith("```"):
+                in_fence = True
+            elif stripped == "$$":
+                in_math = True
+    return "".join(out)
 
 
 def clean_inline(text: str) -> str:
@@ -691,6 +847,23 @@ class Numbering:
             "chapter": self.chapter_title,
             "file": "",
         }
+        return anchor
+
+    def reserve(self, anchor: str) -> str:
+        """Take an anchor that no label names, and return the unique form of it.
+
+        A heading the source never labelled is no target of a `\\ref`, so it
+        gets no entry in `self.labels`. It still needs an address: a citation
+        that can name a file alone leaves the reader searching the file.
+        """
+        if not anchor:
+            return ""
+        if anchor in self.taken:
+            suffix = 2
+            while "%s-%d" % (anchor, suffix) in self.taken:
+                suffix += 1
+            anchor = "%s-%d" % (anchor, suffix)
+        self.taken.add(anchor)
         return anchor
 
     def point_at(self, label: str, kind: str, number: str, anchor: str) -> None:
@@ -849,6 +1022,11 @@ def number_headings(text: str, numbering: Numbering | None) -> str:
         if label_match:
             anchor = numbering.register(label_match.group(1), "section", number)
             end = label_match.end()
+        else:
+            # Named after the title, never after the number: an author who adds
+            # a section renumbers every section after it, and a re-ingest must
+            # not move an anchor a report already cites.
+            anchor = numbering.reserve("sec-" + anchor_slug(title))
 
         out.append(text[cursor : match.start()])
         out.append("%s\n\n%s %s %s\n\n" % (anchor_tag(anchor), "#" * level, number, title))
@@ -1023,6 +1201,10 @@ def clean_text(
         if opening:
             chapter_anchor = numbering.register(
                 opening.group(1), "section", str(numbering.chapter_index)
+            )
+        else:
+            chapter_anchor = numbering.reserve(
+                "sec-" + anchor_slug(numbering.chapter_title)
             )
 
     # --- verbatim-ish environments, kept as fenced blocks -----------------
@@ -1199,6 +1381,9 @@ def clean_text(
     text = "\n".join(line.rstrip() for line in text.split("\n"))
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
+    # Last, and after the blank lines have settled: a paragraph is one line,
+    # and reflow needs the blank line that ends one to be a blank line.
+    text = reflow(text)
 
     if chapter_anchor:
         text = anchor_tag(chapter_anchor).lstrip("\n") + "\n" + text.lstrip("\n")
@@ -1618,7 +1803,9 @@ def main() -> int:
                 for piece_index, (piece_title, piece_text) in enumerate(pieces, start=1):
                     chapters.append(
                         {
-                            "file": "%02d-%02d_%s.md" % (index, piece_index, slugify(piece_title)),
+                            "file": "%02d-%02d_%s.md"
+                            % (index, piece_index,
+                               slugify(piece_title, whole_words=True)),
                             "number": "%d.%d" % (index, piece_index),
                             "title": "%s — %s" % (title, piece_title),
                             "subsections": re.findall(
@@ -1631,7 +1818,7 @@ def main() -> int:
             else:
                 chapters.append(
                     {
-                        "file": "%02d_%s.md" % (index, slugify(title)),
+                        "file": "%02d_%s.md" % (index, slugify(title, whole_words=True)),
                         "number": str(index),
                         "title": title,
                         "subsections": subsections,
@@ -1655,6 +1842,18 @@ def main() -> int:
                 "%d cross-reference label(s) had no target in the source and keep "
                 "their [ref: ...] marker: %s"
                 % (len(unresolved_refs), ", ".join(unresolved_refs[:10]))
+            )
+        residue = {
+            chapter["file"]: len(RESIDUE.findall(chapter["text"]))
+            for chapter in chapters
+            if RESIDUE.search(chapter["text"])
+        }
+        if residue:
+            warnings.append(
+                "%d placeholder residue match(es) in %d chapter(s), where the "
+                "text now reads PH<number> instead of what the paper wrote: %s"
+                % (sum(residue.values()), len(residue),
+                   ", ".join(sorted(residue)[:10]))
             )
         by_title = chapter_files_by_title(chapters)
         for record in figure_records:
@@ -1699,8 +1898,11 @@ def main() -> int:
                 )
 
         for chapter in chapters:
-            (chapters_dir / chapter["file"]).write_text(chapter["text"], encoding="utf-8")
-            chapter["bytes"] = len(chapter["text"].encode("utf-8"))
+            # Last of all: the paragraph numbers count the paragraphs of the
+            # file that holds them, and sanitise answers for what reaches disk.
+            text = sanitise(paragraph_anchors(chapter["text"]))
+            (chapters_dir / chapter["file"]).write_text(text, encoding="utf-8")
+            chapter["bytes"] = len(text.encode("utf-8"))
 
         write_figures_index(resolved, paper_dir / "figures")
 

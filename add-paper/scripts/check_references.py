@@ -17,13 +17,16 @@ What it reports:
     stale        a record points at a paper directory that is not there
     missing page a cited work has no page under references/ to open
     dangling ref a link to an equation, figure or section that is not there
+    residue      a chapter holds PH<number> text, or a control character
 
 Exit status is 1 when anything unresolved, duplicated, stale or missing a page
 was found.
-Orphans, unverified rows and dangling cross-references are reported but do not
-fail: an orphan is what a re-ingested paper leaves behind, an unverified row is
-honest about itself, and a cross-reference the paper's own source never defined
-cannot be made to resolve.
+Orphans, unverified rows, dangling cross-references and residue are reported but
+do not fail: an orphan is what a re-ingested paper leaves behind, an unverified
+row is honest about itself, and a cross-reference the paper's own source never
+defined cannot be made to resolve. `ok` answers whether the citations resolve,
+and residue is a defect of the text: a fetch of that paper again, with --force,
+is what removes it.
 
 Usage:
     check_references.py
@@ -48,6 +51,11 @@ REF_TAG = re.compile(r"\[ref:\s*([^\]]*)\]")
 # `[5](03_model.md#eq-ckmt)` and `[5](#eq-ckmt)` for a target in the same file.
 REF_LINK = re.compile(r"\]\(([^)#]*)#([^)\s]+)\)")
 ANCHOR = re.compile(r'<a id="([^"]*)"></a>')
+# What a placeholder key left behind when the conversion failed to restore it.
+RESIDUE = re.compile(r"PH\d+")
+# Every C0 control character other than the newline and the tab. A NUL byte
+# makes `grep` read the whole file as binary, and report nothing at all.
+CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b-\x1f]")
 
 
 def written_files(root: Path) -> list[Path]:
@@ -64,7 +72,21 @@ def written_files(root: Path) -> list[Path]:
     )
 
 
-def read_citations(root: Path) -> dict[str, list[str]]:
+def read_markdown(root: Path) -> dict[Path, str]:
+    """The text of every written file, read once for every check below.
+
+    `errors="replace"` rather than a failure: a file holding a byte no decoder
+    answers is exactly the file this has something to report about.
+    """
+    return {
+        path: path.read_text(encoding="utf-8", errors="replace")
+        for path in written_files(root)
+    }
+
+
+def read_citations(
+    root: Path, texts: dict[Path, str] | None = None
+) -> dict[str, list[str]]:
     """tag -> the files citing it, over every paper in the collection.
 
     Both forms count. A citation normally reads
@@ -74,8 +96,8 @@ def read_citations(root: Path) -> dict[str, list[str]]:
     kind this is here to report.
     """
     found: dict[str, list[str]] = collections.defaultdict(list)
-    for path in written_files(root):
-        text = path.read_text(encoding="utf-8", errors="replace")
+    texts = texts if texts is not None else read_markdown(root)
+    for path, text in texts.items():
         where = str(path.relative_to(root))
         for tag in reference_store.CITE_LINK.findall(text):
             found[tag].append(where)
@@ -87,7 +109,29 @@ def read_citations(root: Path) -> dict[str, list[str]]:
     return found
 
 
-def read_cross_references(root: Path) -> list[dict]:
+def read_residue(root: Path, texts: dict[Path, str]) -> list[dict]:
+    """Every file whose text carries the marks of a conversion that went wrong.
+
+    A `PH<number>` stands where the paper wrote something else, and a control
+    character hides the file from `grep`. Neither can be repaired in the file:
+    only a fetch of the paper again writes the text the paper actually holds.
+    """
+    found = []
+    for path, text in sorted(texts.items()):
+        placeholders = len(RESIDUE.findall(text))
+        controls = len(CONTROL_CHARACTERS.findall(text))
+        if placeholders or controls:
+            found.append({
+                "in": str(path.relative_to(root)),
+                "placeholders": placeholders,
+                "control_characters": controls,
+            })
+    return found
+
+
+def read_cross_references(
+    root: Path, texts: dict[Path, str] | None = None
+) -> list[dict]:
     """Every cross-reference in the collection that lands nowhere.
 
     A chapter links to its own equations, figures and sections by anchor:
@@ -95,11 +139,10 @@ def read_cross_references(root: Path) -> list[dict]:
     names in step, and a `[ref: label]` marker still standing means the label
     had no target when the paper was converted.
     """
-    anchors: dict[Path, set[str]] = {}
-    texts: dict[Path, str] = {}
-    for path in written_files(root):
-        texts[path] = path.read_text(encoding="utf-8", errors="replace")
-        anchors[path.resolve()] = set(ANCHOR.findall(texts[path]))
+    texts = texts if texts is not None else read_markdown(root)
+    anchors: dict[Path, set[str]] = {
+        path.resolve(): set(ANCHOR.findall(text)) for path, text in texts.items()
+    }
 
     broken = []
     for path, text in texts.items():
@@ -124,7 +167,8 @@ def read_cross_references(root: Path) -> list[dict]:
 def check(root: Path) -> dict:
     store = reference_store.load(root)
     tags = {record.get("tag", "") for record in store}
-    cited = read_citations(root)
+    texts = read_markdown(root)
+    cited = read_citations(root, texts)
 
     duplicates = []
     seen: dict[str, str] = {}
@@ -161,7 +205,9 @@ def check(root: Path) -> dict:
         ),
         "orphans": sorted(tag for tag in tags if tag and tag not in cited),
         "unverified": sum(1 for record in store if not record.get("verified")),
-        "dangling_refs": read_cross_references(root),
+        "dangling_refs": read_cross_references(root, texts),
+        # Reported, and it leaves `ok` true: `ok` answers for the citations.
+        "residue": read_residue(root, texts),
     }
 
 

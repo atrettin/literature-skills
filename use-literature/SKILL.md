@@ -70,6 +70,18 @@ collection, and the file named before the `#` is the chapter to read for it. A `
 whose target the paper's own source never defined; treat it as the paper saying
 "see elsewhere in this paper".
 
+An anchor in a chapter is written as `<a id="…"></a>` on a line of its own —
+never as `{#…}`. Three kinds of anchor exist. `#eq-ckmt`, `#fig-f2compare` and
+`#tab-fit` name an object the paper labelled. `#sec-nuclear-effects` names a
+heading, after its title. `#p12` names the twelfth paragraph of prose in that
+one file, counted from `p1` in each file. Cite the paragraph when a claim comes
+from prose: `03_cross_sections.md#p12` leads a reader to the sentence, and the
+file name alone leaves that reader searching the file.
+
+A paragraph is one line, whatever its length. A search for a phrase inside one
+paragraph therefore finds that phrase. No single search finds a phrase that
+spans two paragraphs.
+
 Inline maths stays as `$…$` and display maths as `$$…$$`, so a Markdown preview
 renders it. A numbered equation carries its number as `\tag{6}`. A figure is
 embedded as a centred `<img>` pointing at `../figures/<name>.png`, followed by a

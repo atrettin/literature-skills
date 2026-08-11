@@ -67,13 +67,25 @@ def collapse_whitespace(text: str) -> str:
     return " ".join(text.split())
 
 
-def slugify(text: str, limit: int = 48, default: str = "section") -> str:
+# The length under which a name keeps a cut word rather than lose more of the
+# title. A name that says too little is worse than a name ending in half a word.
+SLUG_MIN_CHARS = 24
+
+
+def slugify(
+    text: str, limit: int = 48, default: str = "section", whole_words: bool = False
+) -> str:
     """Reduce text to the lower-case underscore form used for names on disk.
 
     Directory names, chapter file names and reference tags all pass through
     here, so a work held in full and the same work cited by another paper end
     up under one identifier. Callers naming something other than a section
     should say so: `default` is what comes back when nothing survives.
+
+    `whole_words` cuts back to the last `_` when the cut at `limit` falls
+    inside a word. It is off by default, and only a chapter file name asks for
+    it: a reference tag sits inside the chapters of every paper citing the
+    work, so a tag that moves breaks citations across the whole collection.
     """
     text = re.sub(r"\\[a-zA-Z]+", " ", text)
     # Fold accents onto their base letter first. Stripping them as punctuation
@@ -85,7 +97,13 @@ def slugify(text: str, limit: int = 48, default: str = "section") -> str:
         if not unicodedata.combining(character)
     )
     text = re.sub(r"[^0-9a-zA-Z]+", "_", text).strip("_").lower()
-    return (text[:limit].rstrip("_")) or default
+    cut = text[:limit]
+    if whole_words and len(text) > limit and text[limit] != "_":
+        # The cut fell inside a word. The last `_` is where that word began.
+        shorter = cut.rsplit("_", 1)[0] if "_" in cut else cut
+        if len(shorter) >= SLUG_MIN_CHARS:
+            cut = shorter
+    return cut.rstrip("_") or default
 
 
 def query_words(text: str) -> str:
