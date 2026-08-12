@@ -1140,6 +1140,33 @@ def apply_ref_links(chapters: list[dict], numbering: Numbering) -> list[str]:
     return sorted(set(missing))
 
 
+def apply_figure_targets(
+    figure_records: list[dict], chapters: list[dict], numbering: Numbering
+) -> None:
+    """Give every figure record the chapter file that holds its anchor.
+
+    Runs after `apply_ref_links`, which resolves each label to the file its
+    anchor was written into. That file is not always the first file of the
+    chapter the figure was numbered in, because a long chapter is split into
+    several files and a figure in its later half lands in a later piece. A
+    record whose label resolves to nothing has only the chapter title to go on,
+    and the first file of that chapter is where a reader starts to look.
+
+    The captions are resolved here too. A caption is read in `FIGURES.md`,
+    which sits beside the chapters directory, so its links carry that prefix.
+    """
+    by_title = chapter_files_by_title(chapters)
+    for record in figure_records:
+        record["caption"], _ = link_refs(
+            record.get("caption", ""), numbering.labels, "", prefix="../chapters/"
+        )
+        entry = numbering.labels.get(record.get("label", ""))
+        record["anchor"] = entry["anchor"] if entry else ""
+        record["chapter_file"] = (entry["file"] if entry else "") or by_title.get(
+            record.get("chapter", ""), ""
+        )
+
+
 def sanitize_math(body: str) -> str:
     """Rewrite valid LaTeX that KaTeX cannot parse.
 
@@ -1948,14 +1975,7 @@ def convert(args) -> dict:
                 % (sum(residue.values()), len(residue),
                    ", ".join(sorted(residue)[:10]))
             )
-        by_title = chapter_files_by_title(chapters)
-        for record in figure_records:
-            record["caption"], _ = link_refs(
-                record.get("caption", ""), numbering.labels, "", prefix="../chapters/"
-            )
-            record["chapter_file"] = by_title.get(record.get("chapter", ""), "")
-            entry = numbering.labels.get(record.get("label", ""))
-            record["anchor"] = entry["anchor"] if entry else ""
+        apply_figure_targets(figure_records, chapters, numbering)
 
         if args.dry_run:
             return build_manifest(
