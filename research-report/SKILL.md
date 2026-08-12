@@ -33,7 +33,7 @@ file below the literature root.
 
 ## Before you start
 
-Six shorthands are used below. The `add-paper` skill prints its own base
+Seven shorthands are used below. The `add-paper` skill prints its own base
 directory when it loads; its `scripts/` directory holds each script.
 
 - **`$PY`** — the project's Python. Use `.venv/bin/python` when the project has
@@ -42,6 +42,7 @@ directory when it loads; its `scripts/` directory holds each script.
 - **`$CITE`** — `<add-paper>/scripts/inspire_citations.py`
 - **`$SEARCH`** — `<add-paper>/scripts/search_literature.py`
 - **`$SCAN`** — `<add-paper>/scripts/terminology_scan.py`
+- **`$OVERLAP`** — `<add-paper>/scripts/collection_overlap.py`
 - **`$AUDIT`** — `<add-paper>/scripts/check_report.py`
 
 **Find the collection first.** It is at `$LITERATURE_ROOT` when that variable is
@@ -105,6 +106,7 @@ set is that scope:
 |---|---|
 | `$SEARCH` | `--paper <slug>` for each paper of the set, when you verify a claim of this task |
 | `$SCAN` | `--cited-by <slug>` for each paper of the set, when you look for the other names of your subject |
+| `$OVERLAP` | `--scope <slug>` for each paper of the set, when you weigh a candidate against what you hold |
 
 A tool that you run over the whole collection answers a question about the
 collection. It does not answer a question about your task.
@@ -156,6 +158,26 @@ exits 2 when any paper raised an exception.
 `exception`.** Give that agent the identifier of that paper. The exception is
 the one part of an ingest that needs judgement.
 
+**When more candidates look worth an ingest than the iteration budget allows,
+weigh them against what you already hold.** A rank says how well an abstract
+answers the question. It does not say whether the candidate builds on the same
+works as the papers of your working set, and the reference store does say that.
+
+1. Run `$PY $OVERLAP <arxiv-id> --scope <slug> …` on each candidate. Run one
+   check at a time: it asks INSPIRE, and INSPIRE limits its rate. Give
+   `--scope <slug>` for each paper of your working set, out of the `## Working
+   set` table of the log. Never `--all-papers`: the collection serves other
+   questions, and their papers would decide your band.
+2. Read `outside_scope` first. A paper there is on disk, and it costs no ingest.
+   Read it, and add it to the working set when its text bears on a sub-question.
+3. Ingest the candidate with the lowest overlap first. It brings the most ground
+   you do not hold.
+4. Ignore point 3 when the question needs the words of one specific paper. A
+   high overlap can also mean that the candidate is the best answer there is.
+
+Write the number in the log beside the choice it decided, and write the scope you
+gave beside it. A band with no scope beside it cannot be checked later.
+
 **Order the queue by value, and read while it runs.** Put the paper that answers
 the most open sub-questions first. Then run the queue in two commands:
 
@@ -181,6 +203,7 @@ reading opens files on disk. Neither one sends a request.
 | a second `add_paper.py --auto` command, or a `paper-ingestor` | **no** |
 | a `find-papers` search | **no** |
 | `$PY $CITE …`, which asks INSPIRE | **no** |
+| `$PY $OVERLAP …`, which asks INSPIRE | **no** |
 
 **Read a paper only after the command that ingests it reports.** The chapters
 are incomplete until then, and a scout that starts early reads a part of the

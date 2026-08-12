@@ -13,6 +13,7 @@ import pytest
 
 import arxiv_discover
 import check_references
+import collection_overlap
 import inspire_citations
 import reference_lookup
 import reference_store
@@ -41,6 +42,7 @@ def test_an_empty_variable_is_no_variable(monkeypatch: pytest.MonkeyPatch) -> No
         (lambda: arxiv_discover.build_parser(), ["--topic", "quasielastic"]),
         (lambda: reference_lookup.build_parser(), ["some_tag"]),
         (lambda: inspire_citations.build_parser(), ["1706.03621"]),
+        (lambda: collection_overlap.build_parser(), ["1706.03621", "--all-papers"]),
         (lambda: search_literature.build_parser(), ["axial mass"]),
     ],
 )
