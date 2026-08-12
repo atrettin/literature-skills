@@ -196,10 +196,12 @@ paper.
 A paper that the collection held enters the working set here, and not at the
 search: it enters when you read text in it that bears on a sub-question.
 
-A chapter summary in `INDEX.md` says what the chapter covers. Nobody knew your
-sub-questions when they wrote it, thus it can miss the paragraph that answers
-one. That is what a scout is for: it reads the whole paper against the questions
-that you have.
+Expect `INDEX.md` to settle it rarely. Its `What it covers` column holds `—`
+until somebody runs the summary pass, so what usually names a chapter for you is
+its title, the subsection titles and the word count. A summary that somebody did
+write was written before anybody had your sub-questions, thus it too can miss
+the paragraph that answers one. That is what a scout is for: it reads the whole
+paper against the questions that you have.
 
 **Verify before you cite.** A scout report tells you where to look. It is not a
 source. Each location it gives carries a line number, as

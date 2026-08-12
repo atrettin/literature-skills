@@ -13,9 +13,11 @@ set, it is `literature/` in the project. The paper is the directory named by the
 slug that you were given.
 
 1. Read its `INDEX.md`.
-2. Read each chapter in `chapters/`. Read all of them. A chapter summary can
-   miss the paragraph that answers a question that nobody had when it was
-   written.
+2. Read each chapter in `chapters/`. Read all of them. The `What it covers`
+   column of `INDEX.md` usually holds `—`, because the summary pass is opt-in
+   and most papers never get it. A summary that somebody did write was written
+   before anybody had these questions, thus it can miss the paragraph that
+   answers one. Neither case lets you choose chapters and skip the rest.
 3. For each sub-question, find each location that bears on it.
 
 Report one line for each location:

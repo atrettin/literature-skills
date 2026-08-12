@@ -43,7 +43,7 @@ literature/
   .references.jsonl             the store the two views are rendered from
   references/<tag>.md           one page for each cited work — for a person
   <slug>/                       one directory for each paper
-    INDEX.md                    metadata, abstract, and a summary of each chapter
+    INDEX.md                    metadata, abstract, and one row for each chapter
     chapters/NN_<title>.md      the text of one section
     chapters/NN-MM_<title>.md   one part of a long section
     figures/FIGURES.md          the caption of each figure
@@ -102,8 +102,16 @@ be redone; never read it, and never delete it.
 1. Read `literature/README.md`.
 2. Select the papers that cover the subject.
 3. Read `INDEX.md` of each selected paper.
-4. Read only the chapter files whose summary matches the question.
-5. Read one more chapter when a chapter points to it.
+4. Choose the chapters that the question needs. The `What it covers` column
+   holds `—` until somebody runs the summary pass, so read the chapter title,
+   the subsection titles beside it and the word count. A title names the
+   subject, and the word count says which chapter carries the argument rather
+   than a page of definitions.
+5. Run `$SEARCH` for a phrase of the question when the titles leave the choice
+   open. It answers with the chapter, the anchor and the line, so it selects the
+   chapter and finds the passage in one step.
+6. Read the chapters that steps 4 and 5 name, and one more when a chapter points
+   to it.
 
 Do not read all chapters of a paper.
 

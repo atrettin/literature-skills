@@ -65,7 +65,7 @@ speed:
 |---|---|---|
 | `literature-researcher` | `INDEX.md` files, the reports of the other two, and the chapters it cites | it runs the loop and writes the report. |
 | `paper-ingestor` | one report, and no chapter | it handles an exception of the ingest script — an ambiguous title, a name two works want. The script does the rest, and it reads no paper into any context. |
-| `paper-scout` | the whole paper, against the open sub-questions | a chapter summary was written before anybody had these questions, so it can miss the paragraph that answers one. |
+| `paper-scout` | the whole paper, against the open sub-questions | most papers carry no chapter summary, because that pass is opt-in, and one that exists was written before anybody had these questions. Either way the index cannot say which chapter answers one. |
 | `terminology-scout` | the chapters that use one term | a term the query lacks is a question about the words of the field. The answer must differentiate the two names, and it must never equate them: "heavy neutral lepton" names the heavy mass eigenstates, and "sterile neutrino" also covers a light state. |
 
 `rate_gate.py` holds every script to one request at a time, at the pace each API
