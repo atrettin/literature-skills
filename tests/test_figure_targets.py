@@ -254,3 +254,118 @@ def test_every_figure_row_links_a_file_that_holds_its_anchor(
     first = CHAPTER_LINK.search(rows[0])
     assert first is not None
     assert first.group(1) != pieces[0]
+
+
+# --------------------------------------------------------------------------
+# the rename that follows the figure conversion
+# --------------------------------------------------------------------------
+
+# `\includegraphics{neff}` names no extension, and the file on disk is
+# `neff.png`, so the conversion renames `neff` to `neff.png` in the chapter
+# text. The label is `fig:neff`, thus the anchor is `fig-neff` and it holds
+# `neff` as a run of characters. That is the pair this test exists for.
+RENAME_SOURCE = r"""\documentclass{article}
+\begin{document}
+\title{Neutrinos in Cosmology}
+\begin{abstract}
+A paper with one figure the conversion renames.
+\end{abstract}
+
+\section{Observables}
+\label{sec:observables}
+\begin{figure}
+\includegraphics{neff}
+\caption{The effective number of neutrino species against the multipole.}
+\label{fig:neff}
+\end{figure}
+Figure~\ref{fig:neff} shows the effect.
+
+\end{document}
+"""
+
+
+def convert_the_renamed_paper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    """Run the conversion over a source whose figure the copy renames."""
+    source_dir = tmp_path / "tex"
+    source_dir.mkdir()
+    (source_dir / "main.tex").write_text(RENAME_SOURCE, encoding="utf-8")
+    (source_dir / "neff.png").write_bytes(PNG)
+
+    monkeypatch.setattr(
+        arxiv_fetch,
+        "fetch_metadata_by_id",
+        lambda arxiv_id: {
+            "arxiv_id": arxiv_id,
+            "version": "v1",
+            "title": "Neutrinos in Cosmology",
+            "authors": ["Ada Lovelace"],
+            "year": 2025,
+            "published": "2025-01-02T00:00:00Z",
+            "summary": "A paper with one figure the conversion renames.",
+            "doi": "",
+            "journal_ref": "",
+            "comment": "",
+            "pdf_url": "",
+            "abs_url": "https://arxiv.org/abs/%s" % arxiv_id,
+        },
+    )
+    monkeypatch.setattr(
+        arxiv_fetch, "download_source", lambda arxiv_id, work_dir: source_dir
+    )
+
+    root = tmp_path / "collection"
+    root.mkdir()
+    arguments = [
+        "2501.00003",
+        "--slug", "lovelace_2025_renamed_figure",
+        "--literature-root", str(root),
+        "--no-inspire",
+        "--no-references",
+    ]
+    arxiv_fetch.convert(arxiv_fetch.build_parser().parse_args(arguments))
+    return root / "lovelace_2025_renamed_figure"
+
+
+def test_the_rename_reaches_the_image_and_leaves_the_anchor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gate_off: None
+) -> None:
+    """The renamed name belongs in the `src`, and nowhere else.
+
+    The anchor and the link that points at it hold the same run of characters
+    as the file name. A rename that is not tied to the `src` rewrites them
+    too, and the row of `FIGURES.md` then names an id the chapter lacks.
+    """
+    paper_dir = convert_the_renamed_paper(tmp_path, monkeypatch)
+    chapters = sorted((paper_dir / "chapters").glob("*.md"))
+    body = "\n".join(path.read_text(encoding="utf-8") for path in chapters)
+
+    assert 'src="../figures/neff.png"' in body, "the image must name the file on disk"
+    assert '<a id="fig-neff"></a>' in body, "the rename must leave the anchor alone"
+    assert 'id="fig-neff.png"' not in body
+    assert "#fig-neff.png" not in body
+
+
+def test_every_renamed_figure_row_holds_its_anchor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gate_off: None
+) -> None:
+    """The row of `FIGURES.md` reaches the anchor after a rename."""
+    paper_dir = convert_the_renamed_paper(tmp_path, monkeypatch)
+    rows = [
+        line
+        for line in (paper_dir / "figures" / "FIGURES.md")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.startswith("| ") and "../chapters/" in line
+    ]
+    assert rows, "the paper has a figure, so its table has a row"
+    for row in rows:
+        found = CHAPTER_LINK.search(row)
+        assert found is not None
+        target = paper_dir / "chapters" / found.group(1)
+        assert target.is_file(), "%s names a file that is not there" % row
+        assert (
+            '<a id="%s"></a>' % found.group(2)
+            in target.read_text(encoding="utf-8")
+        ), "%s names an anchor the chapter does not hold" % row

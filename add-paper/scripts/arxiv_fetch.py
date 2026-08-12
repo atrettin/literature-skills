@@ -2002,8 +2002,17 @@ def convert(args) -> dict:
             if hint and final and hint != final:
                 changed[hint] = final
         if changed:
+            # The name reaches the chapter text in one place: the `src` of the
+            # image tag. It also reads as a run of characters inside the anchor
+            # id above that tag, and inside the link that points at the anchor.
+            # A substitution that is not tied to the `src` rewrites those too,
+            # and `FIGURES.md` carries the anchor as the numbering wrote it, so
+            # its link then names an id the chapter does not hold.
             pattern = re.compile(
-                "|".join(re.escape(old) for old in sorted(changed, key=len, reverse=True))
+                r'(?<=src="\.\./figures/)(?:%s)(?=")'
+                % "|".join(
+                    re.escape(old) for old in sorted(changed, key=len, reverse=True)
+                )
             )
             for chapter in chapters:
                 chapter["text"] = pattern.sub(
