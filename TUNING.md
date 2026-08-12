@@ -84,21 +84,40 @@ and the works that it draws on.
 
 ## Discovering the other names of a subject
 
-`add-paper/scripts/terminology_scan.py` counts the multiword terms in the
-titles of the reference store.
+`add-paper/scripts/terminology_scan.py` weighs the multiword terms of the papers
+in scope and of the titles they cite.
 
 | Parameter | Now | What it does |
 |---|---|---|
 | `NGRAM_SIZES` | `(2, 3)` | The lengths of a term. Adding 4 finds a longer name, and most 4-grams are one title each. Adding 1 reports single words, which are what the query's term list already holds. |
-| `MIN_TITLES` | 4 | How many titles must hold a term before it is reported. A lower value finds a name that few papers use, and it reports more phrases that name nothing. A larger collection carries a higher value well. |
+| `STRUCTURE_WEIGHTS` | heading 6, abstract 4, caption 2, body 1, title 1 | What one occurrence of a term is worth, by the kind of text that holds it. A heading is the author naming what a section is about, and a paragraph is the author using the name in passing. Flatten these towards 1 and the report becomes a frequency count of the prose, where the words of the argument outweigh the names of the objects. Raise `heading` further and a paper with few headings offers few terms at all. |
+| `MIN_WEIGHT` | 4 | How much weight a term must carry before it is reported. A cited title weighs 1, so a title-only scan needs this many titles. A lower value finds a name that few papers use, and it reports more phrases that name nothing. |
 | `MAX_TERMS` | 20 | How many terms the report holds. Each one costs the agent a judgement, and some of them cost a scout. |
-| `EXAMPLES_PER_TERM` | 3 | How many titles a term names as evidence. This is what an agent reads to see what the term is about, before it starts a scout. |
-| `SUBSUME_RATIO` | 0.8 | A shorter term goes when a longer term that holds it reaches this share of its count. A lower value keeps both "neutral lepton" and "heavy neutral lepton". A higher value reports the shorter term more often. |
-| `SHARED_WORD_BONUS` | 1.0 | How much a word shared with the topic lifts the score of a term. A term that shares a word is more often another name for the same area. At 0 the order is the count alone, and a frequent term of a neighbouring subject then leads the report. |
+| `EXAMPLES_PER_TERM` | 3 | How many places a term names as evidence. This is what an agent reads to see what the term is about, before it starts a scout. |
+| `SUBSUME_RATIO` | 0.8 | A shorter term goes when a longer term that holds it reaches this share of its weight. A lower value keeps both "neutral lepton" and "heavy neutral lepton". A higher value reports the shorter term more often. |
+| `SHARED_WORD_PENALTY` | 1.0 | How much a word shared with the topic lowers the score of a term. The scan exists to find the names the query could not reach, and a term built from the query's own words is no discovery: it sends the next search where the last one went. At 1.0 a term counts only the share of its words that are new. At 0 the order is the weight alone, and the report then leads with restatements of the query — "sterile neutrino dark", "neutrino dark matter" — because those are the phrases a corpus about the subject repeats most. |
 | `TITLE_FURNITURE` | 27 words | The words that describe a kind of paper and not a subject. A term never begins or ends with one, so "search for heavy" does not reach the report. A word inside a term stays. Add a word here when it leads many titles of your field, and when it separates no subject from another. |
+| `PROSE_FURNITURE` | 16 words | The apparatus of running prose: the words that point at a citation, an equation or a figure. A term never begins or ends with one, so "et al" does not lead the report of every paper. A title holds none of them, and this list is why the text source is readable at all. Add a word only when it names nothing in any field the collection covers — "section" belongs to "cross section", and "right" to "right-handed", so neither is here. |
+| `ALIAS_CUES`, `ALIAS_CUE_PHRASES` | `or`, `also called`, `sometimes referred to as`, a bracket, and 8 more | The constructions with which an author joins two names for one thing. Adding a cue finds an alias written another way, and a cue that is also ordinary prose ("and", "with") turns the block into a list of everything near the subject. |
+| `ALIAS_WINDOW` | 6 | How far from the topic word a cue and a name may stand, in words. Wider finds a name that a long clause separates from the subject, and it reports the words of a neighbouring clause as a name. |
+| `MAX_BRACKET_WORDS` | 3 | How long a bracketed span can be and still count as a name. Above this the brackets hold a clause, and the sentence is doing something other than naming twice. |
+| `MAX_PIVOT_BRACKET_WORDS` | 2 | How long a bracketed span can be and still count as the subject written beside its other name — "right-handed (sterile) neutrinos". A citation carries an author and a year, so it does not fit, and that is what keeps the block from reporting the words beside every citation a paper makes. Raise it and the block fills with the neighbours of citations. |
+| `MAX_ALIASES` | 10 | How many alias claims the report holds. The block exists to be read in full, and each entry costs the reader a sentence. |
 
 `MIN_PREFIX` needs no row of its own. `terminology_scan.py` imports it from
 `rerank.py`, through `term_matches`, and the row there covers it.
+
+Two things here are not tunable, and both are decided by the text.
+
+The word that anchors the alias search is the topic word that the fewest units
+hold. "Sterile" separates the subject; "neutrinos" fires on every sentence of a
+neutrino paper and would report its whole vocabulary. A parameter would only let
+somebody choose the wrong one.
+
+Whether two spellings are one name is settled by what the corpus attests.
+"Leptons" gives "lepton" because the papers write "lepton" too; "mass" keeps its
+`s` because nothing writes "mas". No rule of English is applied, and no
+threshold decides it.
 
 Every value here is a judgement. Nobody measured any of them.
 
@@ -119,8 +138,8 @@ that coefficient into a band and a fixed sentence.
 Every value here is a judgement. Nobody measured any of them.
 
 The scope is not tunable, and it has no default. `--scope <slug>` and
-`--all-papers` are a required pair, the way `--cited-by` and `--all-papers` are
-for `terminology_scan.py`. A collection is persistent and serves every task that
+`--all-papers` are a required pair, the way `--in-text`, `--cited-by` and
+`--all-papers` are for `terminology_scan.py`. A collection is persistent and serves every task that
 came before yours, so a band measured over all of it answers for those tasks and
 not for your question.
 
@@ -138,6 +157,9 @@ skill states them, and the agent obeys them.
 | `DRY_ITERATIONS` | 2 | How many iterations can find no new relevant paper before the loop stops. A lower value stops earlier on a subject that the collection covers already. |
 | `MAX_PARALLEL_SCOUTS` | 4 | How many `paper-scout` agents read at one time. A scout calls no API, thus this value trades tokens against waiting. |
 | `MAX_TERMINOLOGY_SCOUTS` | 3 | How many terms of one scan go to a `terminology-scout`. A scout calls no API, thus this value trades tokens against the number of terms that stay unclear. |
+| `FIRST_PROSPECT_ITERATION` | 2 | The earliest iteration in which a `terminology-prospector` may run. The scan is free and the prospector reads a whole paper, so the free method goes first and gets a whole iteration to work. A value of 1 spends tokens before anybody knows whether they were needed. A higher value delays the only method that finds a name carrying no string to match, and `MAX_ITERATIONS` is 4. |
+| `MAX_PROSPECTORS` | 2 | How many papers one iteration reads for their vocabulary. Each one costs about as much as a `paper-scout`. A higher value covers a working set whose papers use different words; the terms of two papers already overlap heavily, because they are the words of one field. |
+| `MAX_PROPOSED_TERMS` | 6 | How many names one prospector reports. Each one may then cost a scout or a search. A higher value returns the paper's whole vocabulary, and most of a paper's vocabulary names something other than the subject. |
 | `CURRENCY_GRACE_MONTHS` | 12 | How young a paper must be for the loop to mark a sub-question answered without a forward-citation search on it. A higher value skips the search more often, and a conclusion can then rest on work that a later paper overtook. A lower value spends one INSPIRE request on a paper that few works can yet cite. This value is a judgement: a preprint of the last year has few citers, and a paper of two years can already carry a correction. Nobody measured it. |
 
 ## Searching the text
@@ -160,6 +182,7 @@ model costs less and reads less well.
 |---|---|---|
 | `model` of `paper-ingestor` | `sonnet` | The model that handles an exception of the ingest script. The script does the mechanical work. Two judgements are left: the identity of a paper, and a name that two works want. Each one decides what the collection holds from then on. `haiku` is the cheaper value to try. A wrong paper, or a tag given to the wrong work, costs more than the saving. |
 | `model` of `terminology-scout` | `sonnet` | The model that says how one term relates to the subject. This is judgement about a referent, and not extraction. `haiku` is the cheaper value to try, and a smaller model tends to answer `yes` where the true answer is `narrower` — which is the failure this agent exists to prevent. |
+| `model` of `terminology-prospector` | `sonnet` | The model that reads a whole paper for the names it gives the subject. It must separate a name for the subject from a topic the paper discusses beside it, and then judge the referent as a scout does. `haiku` is the cheaper value to try, and a smaller model returns the paper's subject headings as names. |
 | `model` of `paper-scout` | `haiku` | The model that reads one paper against the sub-questions. This is targeted extraction, and not synthesis. `sonnet` is the value to try when scouts miss a passage that answers a question. |
 | `model` of `literature-researcher` | `inherit` | The model that runs the loop and writes the report. It reads no full text, and it makes every judgement. |
 

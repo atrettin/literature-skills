@@ -1,16 +1,21 @@
-"""Discovering the other names of a subject, from the titles of the store.
+"""Discovering the other names of a subject, in the papers and in the store.
 
 Two failures matter here, and both make an answer look better than it is. A
 phrase that no author wrote, reported as a name of the field, sends the next
 search nowhere. A scan that reads the whole collection reports the vocabulary of
 another task as another name for this one, and that answer is worse than none.
 
+A third failure is the one the text source exists for: a name that the papers
+use and the report never reaches. "Sterile neutrino" and "heavy neutral lepton"
+share no word, so no ranking built on the words of the query can find the second
+from the first.
+
 The cases build their own records. `tests/data/collection_fixture/` stays as it
-is: other cases count what is in it. Four cases write a store into `tmp_path`
-and run the script, so the read from disk is covered.
+is: other cases count what is in it. Several cases write a store, or a paper,
+into `tmp_path` and run the script, so the read from disk is covered.
 
 Each case asserts a relationship, and not a value. A case that needs
-`MIN_TITLES` reads the constant.
+`MIN_WEIGHT` reads the constant.
 """
 
 from __future__ import annotations
@@ -51,8 +56,12 @@ def many(title: str, count: int, **fields) -> list[dict]:
 
 
 def enough() -> int:
-    """The count at which a term reaches the report."""
-    return terminology_scan.MIN_TITLES
+    """The number of titles at which a term reaches the report.
+
+    A cited title weighs `STRUCTURE_WEIGHTS["title"]`, which is 1, so the weight
+    a term needs and the number of titles that carry it are the same number.
+    """
+    return terminology_scan.MIN_WEIGHT
 
 
 def scan(records: list[dict], topic: str, **options) -> dict:
@@ -204,16 +213,22 @@ def test_a_shorter_term_stays_when_it_is_far_more_frequent() -> None:
     assert "neutral leptons" in reported(report)
 
 
-def test_a_shared_word_lifts_a_term_above_one_with_the_same_count() -> None:
+def test_a_shared_word_lowers_a_term_below_one_of_the_same_weight() -> None:
+    """This is the rule the scan exists for. A name the query could have reached
+    is no discovery, so a word the topic holds already costs a term its place."""
     records = many("Right-handed neutrino production", enough()) + many(HNL, enough())
 
     report = scan(records, "sterile neutrino mixing")
     order = reported(report)
 
-    assert order.index("right handed neutrino") < order.index("heavy neutral leptons")
-    lifted = report["terms"][order.index("right handed neutrino")]
-    assert lifted["shared_words"] == ["neutrino"]
-    assert lifted["new_words"] == ["right", "handed"]
+    assert order.index("heavy neutral leptons") < order.index("right handed neutrino")
+    lowered = report["terms"][order.index("right handed neutrino")]
+    assert lowered["shared_words"] == ["neutrino"]
+    assert lowered["new_words"] == ["right", "handed"]
+    # The same weight, and the term of no shared word keeps the whole of it.
+    whole = report["terms"][order.index("heavy neutral leptons")]
+    assert lowered["weight"] == whole["weight"]
+    assert lowered["score"] < whole["score"]
 
 
 def test_max_terms_cuts_the_report() -> None:
@@ -240,7 +255,7 @@ def test_the_report_names_the_titles_a_term_came_from() -> None:
         item for item in report["terms"] if item["term"] == "heavy neutral leptons"
     )
 
-    assert term["titles"] == count
+    assert term["weight"] == count
     assert len(term["examples"]) == terminology_scan.EXAMPLES_PER_TERM
     assert all(example["tag"] and example["title"] for example in term["examples"])
 
@@ -317,9 +332,10 @@ def test_all_papers_reads_the_whole_store(
 
 
 def test_the_scan_refuses_to_run_with_no_scope(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Neither flag is an error. A default would answer somebody else's question."""
+    """No flag is an error. A default would answer somebody else's question."""
     write_store(tmp_path, many(HNL, enough()))
     reads: list[Path] = []
     monkeypatch.setattr(
@@ -327,13 +343,24 @@ def test_the_scan_refuses_to_run_with_no_scope(
         lambda root: reads.append(root) or [],
     )
 
-    with pytest.raises(SystemExit) as refused:
-        terminology_scan.main(
-            ["--topic", "sterile neutrino", "--literature-root", str(tmp_path)]
-        )
+    status, report = run(tmp_path, "--topic", "sterile neutrino", capsys=capsys)
 
-    assert refused.value.code == 2
+    assert status == 2
+    assert report["terms"] == []
     assert reads == []
+
+
+def test_all_papers_combines_with_no_other_scope(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One asks about the collection, one asks about a task. Not both at once."""
+    write_store(tmp_path, many(HNL, enough()))
+
+    status, report = run(tmp_path, "--topic", "sterile neutrino", "--all-papers",
+                         "--cited-by", MINE, capsys=capsys)
+
+    assert status == 2
+    assert report["terms"] == []
 
 
 def test_an_unknown_slug_exits_rather_than_reporting_nothing(
@@ -398,3 +425,267 @@ def test_a_broken_store_is_reported_and_not_scanned(
 
     assert status == 1
     assert "error" in report
+
+
+# --------------------------------------------------------------------------
+# the text of the papers
+# --------------------------------------------------------------------------
+
+
+def write_paper(
+    root: Path, slug: str, title: str, abstract: str, chapters: dict[str, str]
+) -> None:
+    """One paper on disk, with the parts that `--in-text` reads."""
+    paper = root / slug
+    (paper / "chapters").mkdir(parents=True, exist_ok=True)
+    (paper / "INDEX.md").write_text(
+        "# %s\n\n## Abstract\n\n[Abstract] %s\n" % (title, abstract), encoding="utf-8"
+    )
+    for name, text in chapters.items():
+        (paper / "chapters" / name).write_text(text, encoding="utf-8")
+
+
+def in_text(root: Path, slug: str, topic: str, **options) -> dict:
+    """The scan over the text of one paper, and no bibliography."""
+    return terminology_scan.scan(
+        root, topic, [], [slug], [slug], "in_text",
+        units=terminology_scan.units_of(root, slug), **options
+    )
+
+
+def test_a_heading_weighs_more_than_a_paragraph(tmp_path: Path) -> None:
+    """A heading is the author naming what a section is about."""
+    heading = terminology_scan.STRUCTURE_WEIGHTS["heading"]
+    body = terminology_scan.STRUCTURE_WEIGHTS["body"]
+    assert heading > body
+
+    write_paper(
+        tmp_path, MINE, "A paper", "An abstract.",
+        {
+            "01.md": "## The Heavy Neutral Lepton\n\n"
+                     "<a id=\"p1\"></a>\n\nOne mention of dark radiation here.\n",
+        },
+    )
+
+    report = in_text(tmp_path, MINE, "sterile neutrinos", min_weight=1)
+    named = next(
+        item for item in report["terms"] if item["term"] == "heavy neutral lepton"
+    )
+    passing = [item for item in report["terms"] if "dark" in item["term"]]
+
+    assert named["weight"] == heading
+    assert all(named["weight"] > item["weight"] for item in passing)
+    assert reported(report)[0] == "heavy neutral lepton"
+
+
+def test_the_two_plural_forms_of_one_name_count_together(tmp_path: Path) -> None:
+    """Counting them apart halves the evidence for both."""
+    write_paper(
+        tmp_path, MINE, "A paper", "An abstract.",
+        {
+            "01.md": "<a id=\"p1\"></a>\n\nThe heavy neutral lepton is one state.\n\n"
+                     "<a id=\"p2\"></a>\n\nThe heavy neutral leptons are three.\n",
+        },
+    )
+
+    report = in_text(tmp_path, MINE, "sterile neutrinos", min_weight=1)
+    names = reported(report)
+
+    assert names.count("heavy neutral lepton") + names.count("heavy neutral leptons") == 1
+    merged = next(item for item in report["terms"] if "heavy neutral" in item["term"])
+    assert merged["weight"] == 2 * terminology_scan.STRUCTURE_WEIGHTS["body"]
+
+
+def test_a_plural_ending_stays_when_the_corpus_attests_no_stem() -> None:
+    """Evidence decides, and no rule of English does. Nothing writes "mas"."""
+    vocabulary = {"mass", "lepton", "leptons", "masses"}
+
+    assert terminology_scan.singular("leptons", vocabulary) == "lepton"
+    assert terminology_scan.singular("masses", vocabulary) == "mass"
+    assert terminology_scan.singular("mass", vocabulary) == "mass"
+
+
+def test_an_alias_reaches_the_report_with_the_passage_that_states_it(
+    tmp_path: Path,
+) -> None:
+    """The claim and its evidence travel together, or the claim is worth nothing."""
+    write_paper(
+        tmp_path, MINE, "A paper", "An abstract.",
+        {
+            "06.md": "<a id=\"p10\"></a>\n\nThis comes with a prediction, namely the "
+                     "existence of right-handed (sterile) neutrinos or heavy neutral "
+                     "leptons $N_a$.\n",
+        },
+    )
+
+    report = in_text(tmp_path, MINE, "sterile neutrinos", min_weight=1)
+    stated = {item["term"]: item for item in report["stated_aliases"]}
+
+    assert "heavy neutral leptons" in stated
+    claim = stated["heavy neutral leptons"]
+    assert claim["chapter"] == "06.md"
+    assert claim["anchor"] == "p10"
+    assert claim["cue"] == "or"
+    assert "heavy neutral leptons" in claim["quote"]
+
+
+def test_the_alias_search_anchors_on_the_rarest_word_of_the_topic(
+    tmp_path: Path,
+) -> None:
+    """"Neutrinos" fires on every sentence of a neutrino paper. "Sterile" does not."""
+    write_paper(
+        tmp_path, MINE, "A paper", "An abstract.",
+        {
+            "01.md": "<a id=\"p1\"></a>\n\nNeutrinos oscillate between flavours.\n\n"
+                     "<a id=\"p2\"></a>\n\nNeutrinos carry a tiny mass.\n\n"
+                     "<a id=\"p3\"></a>\n\nRight-handed neutrinos, also called "
+                     "sterile neutrinos, are singlets.\n",
+        },
+    )
+
+    report = in_text(tmp_path, MINE, "sterile neutrinos", min_weight=1)
+
+    assert report["alias_pivot"] == "sterile"
+    assert [item["anchor"] for item in report["stated_aliases"]] == ["p3"]
+
+
+def test_an_alias_names_no_phrase_of_running_prose(tmp_path: Path) -> None:
+    """This block reports names. A function word inside means it is not one."""
+    write_paper(
+        tmp_path, MINE, "A paper", "An abstract.",
+        {
+            "01.md": "<a id=\"p1\"></a>\n\nIt is possible that sterile neutrino "
+                     "masses extend below the GeV scale.\n",
+        },
+    )
+
+    report = in_text(tmp_path, MINE, "sterile neutrinos", min_weight=1)
+    terms = [item["term"] for item in report["stated_aliases"]]
+
+    assert not any(" the " in " %s " % term for term in terms)
+    assert "below the gev" not in terms
+
+
+def test_the_text_source_reads_the_papers_and_the_store_does_not(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The case the text source exists for, end to end and from disk.
+
+    The bibliography of this paper never says "heavy neutral lepton": a title
+    names one thing once, and two names for one thing meet in a sentence.
+    """
+    write_store(tmp_path, many("Right-handed neutrino production", enough()))
+    write_paper(
+        tmp_path, MINE, "Right-handed neutrinos", "A pedagogical introduction.",
+        {
+            "05.md": "## The Heavy Neutral Lepton\n\n<a id=\"p2\"></a>\n\n"
+                     "Right-handed neutrinos, sometimes called sterile neutrinos, "
+                     "predict heavy neutral leptons.\n",
+        },
+    )
+
+    _, titles = run(tmp_path, "--topic", "sterile neutrinos",
+                    "--cited-by", MINE, capsys=capsys)
+    assert "heavy neutral leptons" not in reported(titles)
+
+    status, text = run(tmp_path, "--topic", "sterile neutrinos",
+                       "--in-text", MINE, capsys=capsys)
+
+    assert status == 0
+    assert text["scope"]["mode"] == "in_text"
+    assert text["scope"]["units_read"] > 0
+    # The heading carries the singular and outweighs the sentence, so that is
+    # the form a reader sees. The two forms are one name and one entry.
+    assert "heavy neutral lepton" in reported(text)
+
+
+def test_in_text_needs_the_paper_on_disk(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A slug the store knows only as a citer has no text to read.
+
+    That is a different mistake from a typo, and an empty report would read as
+    "this paper offers no other name for the subject".
+    """
+    write_store(tmp_path, many(HNL, enough()))
+
+    status, report = run(tmp_path, "--topic", "sterile neutrinos",
+                         "--in-text", MINE, capsys=capsys)
+
+    assert status == 2
+    assert report["papers_without_text"] == [MINE]
+    assert report["terms"] == []
+
+
+def test_the_two_sources_combine(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One working set, read from two sides, in one report."""
+    write_store(tmp_path, many(LEPTONS, enough()))
+    write_paper(
+        tmp_path, MINE, "A paper", "An abstract.",
+        {"01.md": "<a id=\"p1\"></a>\n\nWe discuss the inverse seesaw mechanism.\n"},
+    )
+
+    status, report = run(tmp_path, "--topic", "sterile neutrinos",
+                         "--in-text", MINE, "--cited-by", MINE,
+                         "--min-count", "1", capsys=capsys)
+
+    assert status == 0
+    assert report["scope"]["mode"] == "in_text+cited_by"
+    assert report["scope"]["titles_read"] == enough()
+    assert report["scope"]["units_read"] > 0
+    # One term from the bibliography, one from the paper's own sentence.
+    assert "neutral leptons" in reported(report)
+    assert "inverse seesaw mechanism" in reported(report)
+
+
+def test_a_citation_bracket_is_no_alias_cue(tmp_path: Path) -> None:
+    """A paper puts a citation beside almost every claim it makes.
+
+    Without this rule the block reports the words near every such bracket, and
+    a list of everything a paper says about its subject is not a list of names
+    for it.
+    """
+    write_paper(
+        tmp_path, MINE, "A paper", "An abstract.",
+        {
+            # "Sterile" has to be the rarer word of the topic, as it is in a
+            # real paper, or the alias search anchors on "neutrinos" instead.
+            "01.md": "<a id=\"p0\"></a>\n\nNeutrinos oscillate.\n\n"
+                     "Neutrinos carry mass.\n\n"
+                     "<a id=\"p1\"></a>\n\nA keV sterile neutrino provides warm "
+                     "dark matter (Boyarsky et al., 2009).\n\n"
+                     "<a id=\"p2\"></a>\n\nThe seesaw predicts right-handed "
+                     "(sterile) neutrinos.\n",
+        },
+    )
+
+    report = in_text(tmp_path, MINE, "sterile neutrinos", min_weight=1)
+    assert report["alias_pivot"] == "sterile"
+    anchors = {item["anchor"] for item in report["stated_aliases"]}
+
+    # The bracket that holds the subject is a cue. The one that holds a
+    # citation is not.
+    assert anchors == {"p2"}
+    # The brackets sit between "handed" and "neutrinos", so the name the window
+    # offers is the phrase that stands beside the subject there.
+    assert "right handed sterile" in [
+        item["term"] for item in report["stated_aliases"]
+    ]
+
+
+def test_the_markup_of_a_chapter_is_not_a_name(tmp_path: Path) -> None:
+    """`<p align="center">` would otherwise report "p align" as a term."""
+    write_paper(
+        tmp_path, MINE, "A paper", "An abstract.",
+        {
+            "01.md": "<a id=\"p1\"></a>\n\n<p align=\"center\"> The heavy neutral "
+                     "lepton is a state. </p>\n",
+        },
+    )
+
+    report = in_text(tmp_path, MINE, "sterile neutrinos", min_weight=1)
+
+    assert "p align" not in reported(report)
+    assert "heavy neutral lepton" in reported(report)

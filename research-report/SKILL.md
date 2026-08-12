@@ -58,6 +58,7 @@ the full text of a paper is large. Three agents keep that text out of it:
 | `paper-ingestor` | handles an exception of the ingest script for one paper. It reports the slug and the warnings, and no paper text. |
 | `paper-scout` | reads one paper that is on disk against your sub-questions. It reports the locations that answer them. It uses no API, thus several can run at the same time. |
 | `terminology-scout` | says how one term of the literature relates to your subject. It uses no API, thus several can run at the same time. |
+| `terminology-prospector` | reads one paper in full for the names it uses for your subject. It uses no API, thus several can run at the same time. A gate decides when it runs, because it reads a whole paper. |
 
 If the environment cannot start an agent, do the same work yourself: ingest with
 `add-paper`, read with `use-literature`. The workflow does not change. It only
@@ -105,7 +106,7 @@ set is that scope:
 | Tool | How you pass the set |
 |---|---|
 | `$SEARCH` | `--paper <slug>` for each paper of the set, when you verify a claim of this task |
-| `$SCAN` | `--cited-by <slug>` for each paper of the set, when you look for the other names of your subject |
+| `$SCAN` | `--in-text <slug>` and `--cited-by <slug>` for each paper of the set, when you look for the other names of your subject |
 | `$OVERLAP` | `--scope <slug>` for each paper of the set, when you weigh a candidate against what you hold |
 
 A tool that you run over the whole collection answers a question about the
@@ -124,6 +125,9 @@ These limits hold for the whole task:
 | `MAX_PARALLEL_SCOUTS` | 4 |
 | `CURRENCY_GRACE_MONTHS` | 12 |
 | `MAX_TERMINOLOGY_SCOUTS` | 3 |
+| `FIRST_PROSPECT_ITERATION` | 2 |
+| `MAX_PROSPECTORS` | 2 |
+| `MAX_PROPOSED_TERMS` | 6 |
 
 ### Step 1. Plan the iteration
 
@@ -196,7 +200,7 @@ reading opens files on disk. Neither one sends a request.
 
 | Beside a running ingest | Permitted |
 |---|---|
-| a `paper-scout` on a paper that is on disk | yes |
+| a `paper-scout`, or a `terminology-prospector`, on a paper that is on disk | yes |
 | your own read of a chapter | yes |
 | `$PY $LOOKUP <tag>`, which reads the local store | yes |
 | `$PY $SEARCH "<phrase>"`, which reads the chapters on disk | yes |
@@ -319,16 +323,17 @@ often different words for one area. `missing_terms` cannot tell you this. It
 names the terms of your query that a paper lacks. It never names the terms of
 the papers that your query lacks.
 
-**Scope it to the working set.** Give one `--cited-by` for each paper in your
-working set, and no more:
+**Scope it to the working set.** Give one `--in-text` and one `--cited-by` for
+each paper in your working set, and no more:
 
 ```bash
 $PY $SCAN --topic "<your topic phrase>" \
-          --cited-by <slug> --cited-by <slug>
+          --in-text <slug> --cited-by <slug> \
+          --in-text <slug> --cited-by <slug>
 ```
 
 The collection is persistent. It holds the papers of tasks that came before
-yours, and their titles carry the vocabulary of other subjects. A scan of the
+yours, and their words carry the vocabulary of other subjects. A scan of the
 whole store thus offers you the other names of somebody else's question. The
 script refuses to run without a scope for that reason. Never use `--all-papers`
 here: it answers a question about the collection, and not about your task.
@@ -336,11 +341,26 @@ here: it answers a question about the collection, and not about your task.
 Check the `scope` block of the report. Its `papers` list must equal your working
 set. When it does not, you passed the wrong slugs.
 
-The scan reads the titles of the works those papers cite. It calls no API. It
-reports the frequent multiword terms that your topic does not hold. Each term
-carries the number of titles that use it, and examples of those titles.
+The scan reads two things, and it calls no API. `--in-text` reads the papers
+themselves: their titles, abstracts, headings, captions and paragraphs.
+`--cited-by` reads the titles of the works they cite. It reports the terms that
+your topic does not hold, and a word your topic holds already lowers a term
+rather than lifting it — the names worth finding are the ones your query could
+not have reached.
 
-Read the terms. Each one is in one of three states:
+**Read `stated_aliases` first.** Those entries are the places where an author
+writes your subject beside another name, with the cue that joins them and the
+sentence that says it:
+
+```
+"…the existence of right-handed (sterile) neutrinos or heavy neutral leptons"
+```
+
+Each one arrives with its chapter and anchor, so a term from that block is a
+claim you can open. Take your scouts from there before you take them from the
+ranked `terms` list.
+
+Then read `terms`. Each one is in one of three states:
 
 | The term | What you do |
 |---|---|
@@ -359,6 +379,46 @@ narrower term finds papers about a part of your subject, and the report must say
 which part. Write the table in the log, under `### Terminology`.
 
 A later iteration can run the scan again. Iteration 1 must run it.
+
+#### When the scan finds nothing, and a question is still open
+
+The scan matches strings. A name can carry none that it can match: an acronym a
+paper defines once, a symbol that stands for the object, or a name a paper uses
+throughout one section and never joins to your subject in one sentence. A
+`terminology-prospector` reads a whole paper and reports the names it uses. That
+costs about 25k tokens per paper, which is what a `paper-scout` costs, so a gate
+decides when you spend it.
+
+| The iteration | What runs |
+|---|---|
+| 1 | the scan alone. No prospector, whatever the scan found. |
+| `FIRST_PROSPECT_ITERATION` and later | the scan again, and a prospector **only** when both conditions below hold. |
+
+Both must hold:
+
+1. **The scan gave you nothing usable.** No term of the last scan entered your
+   topic phrase — either it reported none, or every `terminology-scout` you fed
+   answered `related` or `unclear`.
+2. **A sub-question is still open**, and no paper of your working set answers it.
+
+When either fails, run the scan and stop there.
+
+When both hold, start at most `MAX_PROSPECTORS` `terminology-prospector` agents.
+Choose the papers for their vocabulary and not for the sub-question: prefer the
+longest paper of the working set, and a review or a pedagogical introduction
+over a letter. Never prospect one paper twice in a task. Give each agent the
+subject, one slug, `MAX_PROPOSED_TERMS`, and the terms the scan already
+reported, so that it does not hand you those back.
+
+A prospector calls no API, thus several run at the same time.
+
+**A term it proposes is a lead, and not a citation.** Open the line it gave you
+with `$SEARCH` before any part of your report rests on it, exactly as you do for
+a `paper-scout`. Discard a row whose line does not hold the words.
+
+Write the table in the log under `### Terminology`, **and the reason the gate
+opened**: which sub-question is still open, and what the last scan failed to
+give you. A reader has to see why the tokens were spent.
 
 ### Step 5. Decide
 
@@ -425,7 +485,8 @@ Write one entry for each iteration, in this shape:
 - SQ4: <slug> — skipped, preprint <date>, younger than CURRENCY_GRACE_MONTHS
 
 ### Terminology
-<the terms the scan reported, and what you did with each; the scout tables>
+<the terms the scan reported, and what you did with each; the scout tables.
+ When a prospector ran: the reason the gate opened, and its table>
 
 ### Assessment
 SQ1 answered (currency: <slug>) · SQ2 partial · SQ3 open · SQ4 closed-negative (searched: "…", "…")
@@ -561,7 +622,8 @@ Then tell the user:
   how, and the log says that you did it.
 - **Keep the full text out of your context.** Read `INDEX.md` files, the reports
   of the agents, the JSON of the scripts, and the chapters that you cite.
-  Never read a paper from beginning to end yourself. That is what a scout does.
+  Never read a paper from beginning to end yourself. That is what a `paper-scout`
+  does for your sub-questions, and a `terminology-prospector` for its words.
 - **Cite only what you read.** Not an abstract. Not a summary. Not a quotation
   from a scout that you did not check at the line that the scout gave. Discard a
   quotation that carries no line number. Never check such a quotation by hand.
