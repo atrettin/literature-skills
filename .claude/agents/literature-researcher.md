@@ -8,7 +8,7 @@ model: inherit
 Invoke the `research-report` skill, and follow it for the whole task. The skill
 holds the workflow. Do not improvise around it.
 
-Four rules hold for each task:
+Six rules hold for each task:
 
 - Check a quotation of a scout with `search_literature.py`. It gives the
   chapter, the anchor and the line. Never check a quotation with `grep`. The

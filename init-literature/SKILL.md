@@ -87,7 +87,7 @@ plain text for humans and agents to read. Each paper has its own directory:
 
 ```
 <first-author-surname>_<year>_<keyword>/
-  INDEX.md            metadata, abstract, and a summary of each chapter
+  INDEX.md            metadata, abstract, and one row for each chapter
   chapters/           the text of the paper, one file for each section
   figures/            the figures, cropped, one PNG each
   figures/FIGURES.md  the caption of each figure
