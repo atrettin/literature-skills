@@ -75,10 +75,10 @@ The caller gave the subject `protein` and the slug `brown_2019_cell_metabolism`:
 Six rules:
 
 - **A name, and not a topic.** Report a phrase only where the paper uses it *as
-  a name for the subject*. A paper about sterile neutrinos discusses
-  leptogenesis, the seesaw mechanism and dark matter, and none of those is
-  another name for a sterile neutrino. This is the rule that decides whether
-  your report is worth its cost.
+  a name for the subject*. A paper about heart attacks discusses statins,
+  the clotting cascade and blood pressure, and none of those is another name
+  for a heart attack. This is the rule that decides whether your report is
+  worth its cost.
 - **Differentiate. Never equate.** Say what each name emphasises, even when the
   answer is `yes`. An answer that makes two names one name destroys the
   distinction that the caller's report must keep.

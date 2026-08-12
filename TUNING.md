@@ -94,14 +94,14 @@ in scope and of the titles they cite.
 | `MIN_WEIGHT` | 4 | How much weight a term must carry before it is reported. A cited title weighs 1, so a title-only scan needs this many titles. A lower value finds a name that few papers use, and it reports more phrases that name nothing. |
 | `MAX_TERMS` | 20 | How many terms the report holds. Each one costs the agent a judgement, and some of them cost a scout. |
 | `EXAMPLES_PER_TERM` | 3 | How many places a term names as evidence. This is what an agent reads to see what the term is about, before it starts a scout. |
-| `SUBSUME_RATIO` | 0.8 | A shorter term goes when a longer term that holds it reaches this share of its weight. A lower value keeps both "neutral lepton" and "heavy neutral lepton". A higher value reports the shorter term more often. |
-| `SHARED_WORD_PENALTY` | 1.0 | How much a word shared with the topic lowers the score of a term. The scan exists to find the names the query could not reach, and a term built from the query's own words is no discovery: it sends the next search where the last one went. At 1.0 a term counts only the share of its words that are new. At 0 the order is the weight alone, and the report then leads with restatements of the query — "sterile neutrino dark", "neutrino dark matter" — because those are the phrases a corpus about the subject repeats most. |
+| `SUBSUME_RATIO` | 0.8 | A shorter term goes when a longer term that holds it reaches this share of its weight. A lower value keeps both "myocardial infarction" and "acute myocardial infarction". A higher value reports the shorter term more often. |
+| `SHARED_WORD_PENALTY` | 1.0 | How much a word shared with the topic lowers the score of a term. The scan exists to find the names the query could not reach, and a term built from the query's own words is no discovery: it sends the next search where the last one went. At 1.0 a term counts only the share of its words that are new. At 0 the order is the weight alone, and the report then leads with restatements of the query — "acute heart attack", "heart attack risk" — because those are the phrases a corpus about the subject repeats most. |
 | `TITLE_FURNITURE` | 27 words | The words that describe a kind of paper and not a subject. A term never begins or ends with one, so "search for heavy" does not reach the report. A word inside a term stays. Add a word here when it leads many titles of your field, and when it separates no subject from another. |
 | `PROSE_FURNITURE` | 16 words | The apparatus of running prose: the words that point at a citation, an equation or a figure. A term never begins or ends with one, so "et al" does not lead the report of every paper. A title holds none of them, and this list is why the text source is readable at all. Add a word only when it names nothing in any field the collection covers — "section" belongs to "cross section", and "right" to "right-handed", so neither is here. |
 | `ALIAS_CUES`, `ALIAS_CUE_PHRASES` | `or`, `also called`, `sometimes referred to as`, a bracket, and 8 more | The constructions with which an author joins two names for one thing. Adding a cue finds an alias written another way, and a cue that is also ordinary prose ("and", "with") turns the block into a list of everything near the subject. |
 | `ALIAS_WINDOW` | 6 | How far from the topic word a cue and a name may stand, in words. Wider finds a name that a long clause separates from the subject, and it reports the words of a neighbouring clause as a name. |
 | `MAX_BRACKET_WORDS` | 3 | How long a bracketed span can be and still count as a name. Above this the brackets hold a clause, and the sentence is doing something other than naming twice. |
-| `MAX_PIVOT_BRACKET_WORDS` | 2 | How long a bracketed span can be and still count as the subject written beside its other name — "right-handed (sterile) neutrinos". A citation carries an author and a year, so it does not fit, and that is what keeps the block from reporting the words beside every citation a paper makes. Raise it and the block fills with the neighbours of citations. |
+| `MAX_PIVOT_BRACKET_WORDS` | 2 | How long a bracketed span can be and still count as the subject written beside its other name — "an acute coronary (heart attack) event". A citation carries an author and a year, so it does not fit, and that is what keeps the block from reporting the words beside every citation a paper makes. Raise it and the block fills with the neighbours of citations. |
 | `MAX_ALIASES` | 10 | How many alias claims the report holds. The block exists to be read in full, and each entry costs the reader a sentence. |
 
 `MIN_PREFIX` needs no row of its own. `terminology_scan.py` imports it from
@@ -110,14 +110,14 @@ in scope and of the titles they cite.
 Two things here are not tunable, and both are decided by the text.
 
 The word that anchors the alias search is the topic word that the fewest units
-hold. "Sterile" separates the subject; "neutrinos" fires on every sentence of a
-neutrino paper and would report its whole vocabulary. A parameter would only let
-somebody choose the wrong one.
+hold. "Attack" separates the subject; "heart" fires on every sentence of a
+cardiology paper and would report its whole vocabulary. A parameter would only
+let somebody choose the wrong one.
 
 Whether two spellings are one name is settled by what the corpus attests.
-"Leptons" gives "lepton" because the papers write "lepton" too; "mass" keeps its
-`s` because nothing writes "mas". No rule of English is applied, and no
-threshold decides it.
+"Infarctions" gives "infarction" because the papers write "infarction" too;
+"stress" keeps its `s` because nothing writes "stres". No rule of English is
+applied, and no threshold decides it.
 
 Every value here is a judgement. Nobody measured any of them.
 

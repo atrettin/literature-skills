@@ -353,7 +353,7 @@ writes your subject beside another name, with the cue that joins them and the
 sentence that says it:
 
 ```
-"…the existence of right-handed (sterile) neutrinos or heavy neutral leptons"
+"…an acute coronary event, or myocardial infarction, in the first year"
 ```
 
 Each one arrives with its chapter and anchor, so a term from that block is a

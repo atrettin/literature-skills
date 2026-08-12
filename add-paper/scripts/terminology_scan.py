@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Report the multiword terms of the literature that a topic phrase does not hold.
 
-A subject can have a second name that shares no word with the first. "Sterile
-neutrino" and "heavy neutral lepton" name closely related objects, and the two
+A subject can have a second name that shares no word with the first. "Heart
+attack" and "myocardial infarction" name closely related objects, and the two
 phrases have no word in common. A query that holds one name never finds the
 papers that use the other name.
 
@@ -10,8 +10,8 @@ Two sources answer that, and a scan can read either or both.
 
 `--in-text` reads the papers themselves. Two names for one object almost never
 share a title, because a title names one thing once. They share a sentence,
-where an author writes the equation between them: "right-handed (sterile)
-neutrinos or heavy neutral leptons". A heading counts for more than a paragraph,
+where an author writes the equation between them: "an acute coronary event, or
+myocardial infarction". A heading counts for more than a paragraph,
 because a heading is the author naming what the section is about.
 
 `--cited-by` reads the titles of the works those papers cite. Those titles are
@@ -42,9 +42,9 @@ The exit status is 0 whenever the scan ran, 1 when the store does not parse, and
 empty `terms` list is an answer, and not a failure.
 
 Usage:
-    terminology_scan.py --topic "sterile neutrinos" --in-text king_2025_right_handed
-    terminology_scan.py --topic "the seesaw mechanism" --cited-by king_2025_seesaw
-    terminology_scan.py --topic "neutrino cross sections" --all-papers
+    terminology_scan.py --topic "heart attacks" --in-text vogt_2019_infarction
+    terminology_scan.py --topic "the clotting cascade" --cited-by vogt_2019_infarction
+    terminology_scan.py --topic "coronary risk factors" --all-papers
 """
 
 from __future__ import annotations
@@ -98,8 +98,8 @@ MAX_TERMS = 20
 EXAMPLES_PER_TERM = 3
 
 # A shorter term goes when a longer term that holds it reaches this share of its
-# weight. "Neutral lepton" adds nothing beside "heavy neutral lepton" when both
-# weigh 11. The longer term is the name.
+# weight. "Myocardial infarction" adds nothing beside "acute myocardial
+# infarction" when both weigh 11. The longer term is the name.
 SUBSUME_RATIO = 0.8
 
 # How much a word shared with the topic lowers the score of a term. A shared
@@ -109,8 +109,8 @@ SUBSUME_RATIO = 0.8
 SHARED_WORD_PENALTY = 1.0
 
 # Words that describe a kind of paper, and not a subject. A term never begins or
-# ends with one, thus "search for heavy" stays out and "heavy neutral lepton"
-# comes through. A word of this list inside a term stays.
+# ends with one, thus "search for acute" stays out and "acute myocardial
+# infarction" comes through. A word of this list inside a term stays.
 TITLE_FURNITURE = frozenset(
     """search searches measurement measurements observation observations
     constraint constraints limit limits evidence study studies review overview
@@ -121,11 +121,9 @@ TITLE_FURNITURE = frozenset(
 # The apparatus of running prose: the words that point at a citation, an
 # equation or a figure. A title holds none of them, and a paragraph holds them
 # more often than it holds any subject. "Et al" leads the raw count of every
-# paper that this scan reads.
-# Only the apparatus, and no word that a subject uses. "Left" and "right" are
-# half of "left-handed" and "right-handed"; "section" is half of "cross
-# section". A word that names something in any field of the collection stays
-# out of this list, whatever it points at in a sentence.
+# paper that this scan reads. A word that names something in any field of the
+# collection stays out of this list, whatever it points at in a sentence:
+# "section" is half of "cross section", and "left" of "left ventricle".
 PROSE_FURNITURE = frozenset(
     """et al cf ibid eq eqs eqn fig figs figure figures ref refs appendix
     appendices chapter panel""".split()
@@ -136,7 +134,8 @@ FURNITURE = TITLE_FURNITURE | PROSE_FURNITURE
 # The words that join two names for one thing. A sentence that holds the topic
 # within `ALIAS_WINDOW` words of one of these is a sentence where an author may
 # be naming the subject twice. A bracket counts as a cue of its own:
-# "right-handed (sterile) neutrinos" is the same construction without a word.
+# "an acute coronary (heart attack) event" is the same construction with no cue
+# word in it.
 ALIAS_CUES = frozenset(
     """or also called known termed sometimes often referred namely aka ie
     that is as""".split()
@@ -159,8 +158,8 @@ ALIAS_WINDOW = 6
 MAX_BRACKET_WORDS = 3
 
 # How long a bracketed span can be and still be the topic, written in brackets
-# beside its other name: "right-handed (sterile) neutrinos". A citation carries
-# an author and a year, so it never fits here.
+# beside its other name: "an acute coronary (heart attack) event". A citation
+# carries an author and a year, so it never fits here.
 MAX_PIVOT_BRACKET_WORDS = 2
 
 # How many alias claims the report holds. Each one costs the reader a sentence
@@ -168,14 +167,14 @@ MAX_PIVOT_BRACKET_WORDS = 2
 MAX_ALIASES = 10
 
 # The name of a LaTeX command in a title. It goes before the title is divided,
-# thus `\emph{sterile neutrinos}` gives no term that begins with `emph`.
+# thus `\emph{heart attacks}` gives no term that begins with `emph`.
 LATEX_COMMAND = re.compile(r"\\[a-zA-Z]+")
 
 # A hyphen between two alphanumerics belongs to the word. It becomes a space,
-# thus "right-handed neutrinos" gives the term "right handed neutrino". Every
-# other mark divides the title: without that rule, "Neutrino cross sections:
-# interface of shallow inelastic scattering" gives the term "sections
-# interface", which no author wrote.
+# thus "ST-elevation infarction" gives the term "st elevation infarction". Every
+# other mark divides the title: without that rule, "Cardiac risk factors:
+# interface of diet and exercise" gives the term "factors interface", which no
+# author wrote.
 IN_WORD_HYPHEN = re.compile(r"(?<=[0-9A-Za-z])[-‐‑](?=[0-9A-Za-z])")
 SEPARATOR = re.compile(r"[^0-9A-Za-z ]+")
 
@@ -203,7 +202,7 @@ def segments(title: str) -> list[list[str]]:
 def is_a_term(words: list[str]) -> bool:
     """Can this n-gram name a subject?
 
-    "Of the sterile" and "neutrino in" are not names, "search for heavy"
+    "Of the acute" and "infarction in" are not names, "search for acute"
     describes a kind of paper, and "et al" is a citation. A function word inside
     a term stays: "decay of the pion" has "decay" and "pion" as its ends.
     """
@@ -383,9 +382,10 @@ def count_text(
 def singular(word: str, vocabulary: set[str]) -> str:
     """The word without its plural ending, when the corpus attests that word.
 
-    Evidence decides, and no rule of English does. "Leptons" gives "lepton"
-    because the papers write "lepton" too; "mass" keeps its `s` because nothing
-    writes "mas"; "neutrinoless" keeps its `s` for the same reason.
+    Evidence decides, and no rule of English does. "Infarctions" gives
+    "infarction" because the papers write "infarction" too; "stress" keeps its
+    `s` because nothing writes "stres", and "bypass" keeps its `s` for the same
+    reason.
     """
     for ending in ("es", "s"):
         if word.endswith(ending):
@@ -400,8 +400,8 @@ def merge_variants(
 ) -> tuple[dict[str, int], dict[str, str], dict[str, list[dict]]]:
     """Add the weight of a plural to the weight of its singular, and pick a name.
 
-    "Heavy neutral lepton" and "heavy neutral leptons" are one name written two
-    ways, and counting them apart halves the evidence for both. Returns the
+    "Myocardial infarction" and "myocardial infarctions" are one name written
+    two ways, and counting them apart halves the evidence for both. Returns the
     weight of each merged term by its key, the surface form to report for that
     key, and the evidence of every form together.
     """
@@ -454,9 +454,9 @@ def holds_inside(shorter: str, longer: str) -> bool:
 def subsumed(weights: dict[str, int], kept: list[str]) -> set[str]:
     """The shorter terms that a longer kept term makes redundant.
 
-    "Neutral lepton" goes when "heavy neutral lepton" reaches `SUBSUME_RATIO` of
-    its weight. A shorter term far heavier than every longer term that holds it
-    stays: it then names something of its own.
+    "Myocardial infarction" goes when "acute myocardial infarction" reaches
+    `SUBSUME_RATIO` of its weight. A shorter term far heavier than every longer
+    term that holds it stays: it then names something of its own.
     """
     gone = set()
     for shorter in kept:
@@ -479,9 +479,9 @@ def subsumed(weights: dict[str, int], kept: list[str]) -> set[str]:
 def pivot_word(units: list[dict], topic_terms: list[str]) -> str:
     """The topic word that the fewest units hold.
 
-    A search anchored on "neutrinos" fires on nearly every sentence of a
-    neutrino paper and reports its whole vocabulary. One anchored on "sterile"
-    fires on the sentences that are about the subject. The rarest word of the
+    A search anchored on "heart" fires on nearly every sentence of a cardiology
+    paper and reports its whole vocabulary. One anchored on "attack" fires on
+    the sentences that are about the subject. The rarest word of the
     topic is the one that separates it, so the text decides this and no
     parameter does.
     """
@@ -502,9 +502,9 @@ def pivot_word(units: list[dict], topic_terms: list[str]) -> str:
 def alias_tokens(text: str) -> list[str]:
     """The words of a sentence, with a bracket kept as a word of its own.
 
-    "Right-handed (sterile) neutrinos or heavy neutral leptons" is an alias
-    written with brackets and no cue word, so the brackets have to survive
-    normalization to be seen at all.
+    "An acute coronary (heart attack) event" is an alias written with brackets
+    and no cue word, so the brackets have to survive normalization to be seen at
+    all.
     """
     text = IN_WORD_HYPHEN.sub(" ", LATEX_COMMAND.sub(" ", text))
     text = re.sub(r"([()])", r" \1 ", text)
@@ -534,9 +534,9 @@ def word_cue(window: list[str]) -> str:
 def bracketed(window: list[str]) -> list[list[str]]:
     """The short spans that a pair of brackets encloses, as lists of words.
 
-    Only the short ones. "Right-handed (sterile) neutrinos" writes an alias with
-    brackets and no cue word, and a bracket that holds a whole clause is doing
-    something else.
+    Only the short ones. "An acute coronary (heart attack) event" writes an
+    alias with brackets and no cue word, and a bracket that holds a whole clause
+    is doing something else.
     """
     spans = []
     open_at = None
@@ -554,8 +554,8 @@ def bracketed(window: list[str]) -> list[list[str]]:
 def bracket_joins(spans: list[list[str]], pivot: str, gram: list[str]) -> bool:
     """Do these brackets hold one of the two names, and not a citation?
 
-    A bracket is a cue only where it encloses a name: "right-handed (sterile)
-    neutrinos", or "sterile neutrinos (heavy neutral leptons)". A bracket that
+    A bracket is a cue only where it encloses a name: "an acute coronary (heart
+    attack) event", or "heart attacks (myocardial infarctions)". A bracket that
     encloses neither is the apparatus of the sentence — nearly always a
     citation — and a paper puts one beside almost every claim it makes.
     """
@@ -628,8 +628,9 @@ def stated_aliases(
                         "quote": unit["text"][:240],
                     }
 
-    # "Neutral leptons" and "heavy neutral" add nothing beside "heavy neutral
-    # leptons" when one passage offered all three. The longest is the name.
+    # "Myocardial infarction" and "acute myocardial" add nothing beside "acute
+    # myocardial infarction" when one passage offered all three. The longest is
+    # the name.
     kept = [
         item for item in found.values()
         if not any(
@@ -647,9 +648,9 @@ def stated_aliases(
         kept, key=lambda item: (-weights.get(item["term"], 0), item["term"])
     )
 
-    # One name, written two ways, is one claim. A reader who is offered "right
-    # handed neutrino" and "right handed neutrinos" spends two of its scouts on
-    # one question.
+    # One name, written two ways, is one claim. A reader who is offered
+    # "myocardial infarction" and "myocardial infarctions" spends two of its
+    # scouts on one question.
     vocabulary = {word for term in weights for word in term.split()}
     said: set[str] = set()
     once = []

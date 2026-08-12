@@ -233,7 +233,7 @@ The chapter table has six columns:
 ```markdown
 | # | File | Words | Named anchors | Subsections | What it covers |
 |---|---|---|---|---|---|
-| 7 | [07_seesaw.md](chapters/07_seesaw.md) | 1435 | 15 | 7.1 Generic Type-I Seesaw | — |
+| 7 | [07_form_factors.md](chapters/07_form_factors.md) | 1435 | 15 | 7.1 Generic Dipole Form | — |
 ```
 
 `Words` says where the substance of the paper is. `Named anchors` counts the

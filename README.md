@@ -67,7 +67,7 @@ speed:
 | `literature-researcher` | `INDEX.md` files, the reports of the other two, and the chapters it cites | it runs the loop and writes the report. |
 | `paper-ingestor` | one report, and no chapter | it handles an exception of the ingest script — an ambiguous title, a name two works want. The script does the rest, and it reads no paper into any context. |
 | `paper-scout` | the whole paper, against the open sub-questions | most papers carry no chapter summary, because that pass is opt-in, and one that exists was written before anybody had these questions. Either way the index cannot say which chapter answers one. |
-| `terminology-scout` | the chapters that use one term | a term the query lacks is a question about the words of the field. The answer must differentiate the two names, and it must never equate them: "heavy neutral lepton" names the heavy mass eigenstates, and "sterile neutrino" also covers a light state. |
+| `terminology-scout` | the chapters that use one term | a term the query lacks is a question about the words of the field. The answer must differentiate the two names, and it must never equate them: "myocardial infarction" names the tissue death, and "heart attack" is also said of the event that causes it. |
 | `terminology-prospector` | the whole paper, for the names it gives the subject | a name can carry no string that a scan can match — an acronym a paper defines once, a symbol, or a name that no sentence joins to the subject. Only a reader of the whole paper finds those. It reads the paper for its vocabulary, which is a different question from the one a `paper-scout` reads it for, and a gate in the research loop decides when that second read is worth its tokens. |
 
 `rate_gate.py` holds every script to one request at a time, at the pace each API
@@ -223,9 +223,9 @@ working set from two sides.
 
 The papers' own text is where the second name is. Two names for one object
 almost never share a title, because a title names one thing once. They share a
-sentence, where an author writes the equation between them — "the existence of
-right-handed (sterile) neutrinos **or** heavy neutral leptons". A scan of cited
-titles alone cannot reach that sentence, and so it cannot reach the name.
+sentence, where an author writes the equation between them — "an acute coronary
+event, **or** myocardial infarction". A scan of cited titles alone cannot reach
+that sentence, and so it cannot reach the name.
 
 An occurrence is weighed by the kind of text that holds it: a heading is the
 author naming what a section is about, and a paragraph is the author using the
@@ -240,8 +240,8 @@ a paper writes the subject beside another name, with the cue that joins them —
 anchor and the sentence. A term that reaches that block already carries the
 location that justifies it, so an agent reads it before it reads the ranking.
 The search is anchored on the rarest word of the topic, which the text decides
-and no parameter does: `sterile` separates the subject, and `neutrinos` fires on
-every sentence of a neutrino paper.
+and no parameter does: `attack` separates the subject, and `heart` fires on
+every sentence of a cardiology paper.
 
 The scope has no default. A collection serves more than one task, and it keeps
 the papers of each. A scan with no scope would mix their subjects, and it would

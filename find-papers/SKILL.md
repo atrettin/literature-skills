@@ -70,8 +70,8 @@ abstract. These two forms find different papers:
 
 | Form | What it finds |
 |---|---|
-| `review of sterile neutrinos: why they are theoretically motivated` | narrow papers. It reads as a request, and no abstract is written as a request. |
-| `we review the present status of sterile neutrino dark matter, summarising the theoretical framework, laboratory and astrophysical searches` | reviews. It reads as the first sentence of one. |
+| `review of type II superconductors: why they are theoretically motivated` | narrow papers. It reads as a request, and no abstract is written as a request. |
+| `we review the present status of high-temperature superconductivity, summarising the theoretical framework, materials and transport measurements` | reviews. It reads as the first sentence of one. |
 
 The reason is the cross-encoder. It compares the topic against an abstract. A
 topic that reads like a review abstract therefore scores a review highest.

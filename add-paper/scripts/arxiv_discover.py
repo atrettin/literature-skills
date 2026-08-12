@@ -18,7 +18,7 @@ enters the score. `--kind` and `--sort` let the caller act on them.
 Usage:
     arxiv_discover.py --topic "how meson exchange currents change the cross section"
     arxiv_discover.py --topic "neutrino oscillation" --category hep-ph --since 2020
-    arxiv_discover.py --topic "we review the status of sterile neutrinos" --kind review
+    arxiv_discover.py --topic "we review the status of type II superconductors" --kind review
 """
 
 from __future__ import annotations

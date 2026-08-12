@@ -27,7 +27,7 @@ Usage:
     search_literature.py "the phrase to find"
     search_literature.py "axial mass" --paper jeong_2023_shallow_deep_inelastic
     search_literature.py "M_A\\s*=\\s*1.03" --regex
-    search_literature.py "sterile neutrino" --case-sensitive --max-results 50
+    search_literature.py "myocardial infarction" --case-sensitive --max-results 50
 """
 
 from __future__ import annotations

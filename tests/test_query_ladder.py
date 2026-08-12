@@ -66,9 +66,9 @@ def test_meta_words_leave_the_arxiv_query() -> None:
     No abstract carries them, so the strict rung fails on them and
     `missing_terms` then names the wrong thing.
     """
-    terms = arxiv_discover.topic_terms("review of the present status of sterile neutrinos")
+    terms = arxiv_discover.topic_terms("review of the present status of high temperature superconductivity")
 
-    assert "sterile" in terms and "neutrinos" in terms
+    assert "temperature" in terms and "superconductivity" in terms
     assert "review" not in terms and "status" not in terms and "present" not in terms
 
 
@@ -76,7 +76,7 @@ def test_meta_words_stay_in_the_topic_the_ranker_reads(
     feed_quasielastic: str, no_sleep: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The cross-encoder ranks a review first when the topic reads like one."""
-    topic = "review of the present status of sterile neutrinos"
+    topic = "review of the present status of high temperature superconductivity"
     seen: list[str] = []
     original = arxiv_discover.rerank.rank
 
@@ -94,7 +94,7 @@ def test_the_report_names_the_meta_words_it_dropped(
     feed_quasielastic: str, no_sleep: None
 ) -> None:
     report = arxiv_discover.search(
-        options(topic="review of the present status of sterile neutrinos"),
+        options(topic="review of the present status of high temperature superconductivity"),
         fetch=FakeFetch([feed_quasielastic]),
     )
 

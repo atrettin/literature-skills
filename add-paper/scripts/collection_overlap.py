@@ -62,7 +62,7 @@ The exit status is 0 for a report, 1 for a paper INSPIRE does not hold or a stor
 that does not parse, and 2 for a bad argument.
 
 Usage:
-    collection_overlap.py 1706.03621 --scope king_2025_right_handed_neutrinos
+    collection_overlap.py 1706.03621 --scope vogt_2019_infarction
     collection_overlap.py --doi 10.1016/j.ppnp.2018.01.006 --scope <slug> --resolve
     collection_overlap.py --recid 1599542 --all-papers --max-papers 5
 """
