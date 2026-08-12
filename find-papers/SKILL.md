@@ -19,12 +19,14 @@ new and what is on disk already.
 ## Before you start
 
 This skill is installed once and used from any project, so nothing below can
-assume a fixed path. Two shorthands are used throughout:
+assume a fixed path. Three shorthands are used throughout:
 
 - **`$DISCOVER`** — `<the add-paper skill's directory>/scripts/arxiv_discover.py`.
   The `add-paper` skill prints its own base directory when it loads. If it is
   not installed beside this one, `find ~/.claude/skills -name arxiv_discover.py`
   finds it.
+- **`$OVERLAP`** — `<the add-paper skill's directory>/scripts/collection_overlap.py`,
+  beside `$DISCOVER`. Step 4 uses it.
 - **`$PY`** — the project's Python. Use `.venv/bin/python` when the project has
   a virtual environment, otherwise `python3`.
 
@@ -168,6 +170,72 @@ paper from it.
 | `known_as` holds a tag, `held_as` is `null` | A paper in the collection cites this work. Run `reference_lookup.py <tag>` for the full record. Ingest it with `add-paper` when the question needs the work itself. |
 | both are `null` | The collection does not know this paper. Report it, and offer the `add-paper` skill with the arXiv identifier. |
 
+## Step 4. Weigh a candidate against the papers of your question
+
+A rank says how well a candidate's abstract answers your question. It does not
+say whether the candidate builds on the same works as the papers you hold for
+that question. `$OVERLAP` answers that from the reference store, which already
+holds every work that every held paper cites.
+
+```bash
+$PY $OVERLAP <arxiv-id> --scope <slug> --scope <slug>
+```
+
+That command is an example. Replace each `<slug>` with a paper of your own
+working set, and `<arxiv-id>` with the candidate.
+
+**Run the check on one candidate at a time, and only on a candidate you want to
+ingest.** Do not run it over 15 results. INSPIRE limits its rate, and the check
+sends its requests one at a time.
+
+**Name the scope.** Give `--scope <slug>` for each paper you hold *for this
+question*. The collection is persistent and serves other questions, and their
+papers must not decide your band: a candidate that shares nothing with your
+subject still shares references with whatever an earlier task ingested, and
+measured against all of it that candidate reads `high`. You would then decline
+an ingest your question needs. A caller with no such list yet gives no `--scope`,
+and the script says so instead of guessing.
+
+**State the cost.** A candidate the collection does not hold costs two requests
+to INSPIRE: one resolves the identifier to a record, one reads the reference
+list. A paper the collection holds costs no request, because the store answers.
+`--resolve` costs one further request for each 40 references that matched
+nothing, and it is off by default.
+
+**Read `outside_scope` before you ingest.** A paper there is on disk already, and
+it shares references with the candidate. Reading it costs no ingest. Add it to
+your working set when its text bears on a sub-question.
+
+A candidate the collection already holds is never compared with itself.
+`paper.held_as` names the directory that holds it, and the two lists then say how
+it relates to the *other* papers on disk.
+
+**Read `candidate_references.unidentified` before you read any ratio.** It counts
+the references that carry no identifier at all. Those leave every set, so a ratio
+over a small `identified` base says little.
+
+Then read the `band` and give the user its `reading`:
+
+| `band` | `reading` |
+|---|---|
+| `high` | "This paper draws on the works you read for this question already. It probably covers ground you hold now. Spend an ingest on it only when the question needs this paper's own words." |
+| `partial` | "This paper shares part of its ground with the papers of this question. The number decides nothing on its own. Read the abstract again." |
+| `low` | "This paper draws on works the papers of this question do not cite. It brings new ground, and it may also be off the subject. Read the abstract again before you spend an ingest." |
+| none | "Too few references carry an identifier. The counts hold. The ratio does not." |
+
+Four rules hold beside that table:
+
+- **Overlap is not relevance.** A candidate with a high overlap can be the paper
+  that answers your question best, because it works on the same material.
+  Never reject a candidate on this number alone.
+- **Overlap is not quality.** It counts shared references. It reads no argument
+  and no result.
+- **Use the number to put candidates in order** when the budget is tight. Give
+  the number in the report when it decided which paper you read.
+- **The band answers for your working set alone.** A paper of another task never
+  lifts or lowers it. Such a paper appears under `outside_scope`, as something to
+  read.
+
 ## When the search finds nothing
 
 Try these, in order, one search at a time:
@@ -184,6 +252,9 @@ answer. A weak result is worse than no result. Never give one as an answer.
 - **Run one search at a time.** arXiv limits its rate. Never start a sub-agent
   for each query, and never run several searches at once. A rate limit costs
   more time than the parallel work saves.
+- **Run one overlap check at a time.** It asks INSPIRE, and INSPIRE limits its
+  rate the same way arXiv does. Never start a sub-agent for each candidate, and
+  never run an overlap check beside a search or an ingest.
 - **An abstract is not a paper.** Never cite a paper that you found here. You
   read 400 characters of its abstract. That is enough to choose the paper. It is
   not enough to know what the paper says. Ingest it with `add-paper` and read

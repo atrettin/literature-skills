@@ -102,6 +102,28 @@ titles of the reference store.
 
 Every value here is a judgement. Nobody measured any of them.
 
+## Weighing a candidate against the collection
+
+`add-paper/scripts/collection_overlap.py` says how much of what a candidate paper
+cites the papers in scope know already. It reports a coefficient, and it turns
+that coefficient into a band and a fixed sentence.
+
+| Parameter | Now | What it does |
+|---|---|---|
+| `MIN_COMPARABLE_REFS` | 10 | How many identified references a candidate needs before the script gives a band. One reference moves the coefficient by `1/N`, so a short list gives a ratio that swings. A higher value gives a band to fewer candidates, and each band it does give holds better. The counts hold at every size and are always reported. |
+| `HIGH_OVERLAP` | 0.60 | At this coefficient and above, the reading says the candidate covers ground the papers of the question hold already. A lower value warns about more candidates, and it thus holds back a paper that brings something new. A higher value lets more duplicates through. |
+| `LOW_OVERLAP` | 0.20 | Below this coefficient the reading says the candidate brings new ground. A higher value calls more candidates new, and new also means off the subject. |
+| `RESOLVE_CAP` | 120 | How many unmatched references `--resolve` looks up. This is three batches of `references.BATCH_SIZE`, and thus three requests. A higher value matches more of the long bibliography of a review, at one further request per further batch. |
+| `MAX_PAPERS` | 10 | How many held papers the `closest` and `outside_scope` lists report. The `overlap` comes from the first row of `closest`; the rows under it show whether one held paper is close or many are. |
+
+Every value here is a judgement. Nobody measured any of them.
+
+The scope is not tunable, and it has no default. `--scope <slug>` and
+`--all-papers` are a required pair, the way `--cited-by` and `--all-papers` are
+for `terminology_scan.py`. A collection is persistent and serves every task that
+came before yours, so a band measured over all of it answers for those tasks and
+not for your question.
+
 ## Researching a task
 
 `research-report/SKILL.md` runs the loop that answers a task from the

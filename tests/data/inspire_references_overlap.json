@@ -1,0 +1,49 @@
+{
+  "hits": {
+    "total": 1,
+    "hits": [
+      {
+        "metadata": {
+          "references": [
+            {
+              "record": {"$ref": "https://inspirehep.net/api/literature/590543"},
+              "reference": {
+                "label": "1",
+                "dois": ["10.1016/S0920-5632(02)01783-8"],
+                "title": {"title": "Neutrino oscillation studies and the neutrino cross-section"}
+              }
+            },
+            {
+              "record": {"$ref": "https://inspirehep.net/api/literature/2678901"},
+              "reference": {
+                "label": "2",
+                "arxiv_eprint": "2307.09241v2",
+                "title": {"title": "Neutrino Cross Sections: Interface of shallow- and deep-inelastic scattering for collider neutrinos"}
+              }
+            },
+            {
+              "record": {"$ref": "https://inspirehep.net/api/literature/765432"},
+              "reference": {
+                "label": "3",
+                "dois": ["10.1140/EPJC/S10052-008-0763-7"]
+              }
+            },
+            {
+              "record": {"$ref": "https://inspirehep.net/api/literature/111222"},
+              "reference": {
+                "label": "4",
+                "title": {"title": "A work the collection does not know"}
+              }
+            },
+            {
+              "reference": {
+                "label": "5",
+                "misc": ["a line the citing paper never keyed to a record"]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

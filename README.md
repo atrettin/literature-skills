@@ -13,7 +13,7 @@ it.
 | [init-literature](init-literature/SKILL.md) | Starts an empty collection: creates the directory with its index, and makes git ignore it. |
 | [add-paper](add-paper/SKILL.md) | Runs the ingest script, which finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, asks INSPIRE-HEP where it was published, resolves its bibliography and indexes the result. The skill handles the script's exceptions, and writes the chapter summaries when somebody asks for them. |
 | [use-literature](use-literature/SKILL.md) | How to find and read a paper already in the collection. |
-| [find-papers](find-papers/SKILL.md) | Searches arXiv by the subject of a paper's abstract, ranks the hits against the question with a local cross-encoder, describes each hit with its length and its citation count, and marks the ones the collection already holds. |
+| [find-papers](find-papers/SKILL.md) | Searches arXiv by the subject of a paper's abstract, ranks the hits against the question with a local cross-encoder, describes each hit with its length and its citation count, and marks the ones the collection already holds. It then weighs a candidate you mean to ingest against the papers you hold for the question, from the works the two have in common. |
 | [follow-citations](follow-citations/SKILL.md) | Finds the papers that cite a given paper, with INSPIRE-HEP, and the works it draws on, from the reference store. |
 | [research-report](research-report/SKILL.md) | Answers a task that needs a literature review, in a bounded loop of search, read and assess, and writes a report whose every claim links to the chapter it came from. |
 
@@ -202,6 +202,7 @@ from the root of the project that holds `literature/` — or with
 | `update_references.py` | renders `REFERENCES.md` from the store |
 | `inspire_lookup.py <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
 | `inspire_citations.py <arxiv-id>` | finds the papers that cite one paper, and the works it draws on |
+| `collection_overlap.py <arxiv-id> --scope <slug>` | says how much of what a candidate paper cites the collection already knows |
 | `check_report.py <report.md>` | asserts that every citation of a report opens the text it names |
 
 `arxiv_discover.py` sends one INSPIRE request for its shortlist, after its arXiv
@@ -222,6 +223,33 @@ that use each one. The research loop passes its working set and never
 `--all-papers`. A `terminology-scout` agent then says how one such term relates
 to the subject: the same object, a narrower one, a wider one, or a different
 one.
+
+### Weighing a candidate against what you hold
+
+`collection_overlap.py` compares the works a candidate paper cites with the works
+the papers in scope cite. Both sides are sets of *works*, resolved by the store's
+own rule of identity — a DOI, an arXiv identifier, an INSPIRE record number, or a
+journal with a volume and a page — and never sets of tags or titles. The signal
+is the Szymkiewicz-Simpson coefficient, `|C ∩ R| / min(|C|, |R|)`, whose `min`
+denominator keeps a 30-reference letter comparable with a 500-reference review.
+
+The scope is required, and it takes the same shape as the scope of
+`terminology_scan.py`: `--scope <slug>` for each paper of one task, or
+`--all-papers`. A held paper outside the scope is reported under `outside_scope`,
+with its coefficient and no band. It is on disk already, so reading it costs no
+ingest — and because an earlier task chose it for another subject, it must not
+decide the band of yours.
+
+A candidate the collection does not hold costs two requests to INSPIRE: one
+resolves the identifier, one reads the reference list. A candidate the collection
+holds costs no request, because the ingest wrote its whole bibliography to the
+store. `--resolve` spends one further request per batch of references that
+matched nothing, and it is off by default.
+
+The number orders candidates when the ingest budget is tighter than the list of
+papers worth reading. It never rejects a candidate on its own: it counts shared
+references, so it reads no argument and no result, and the paper that answers a
+question best is often the one that works on the same material.
 
 Two options of `arxiv_fetch.py` matter while the conversion is worked on:
 `--dry-run` prints the manifest and writes nothing, and `--keep-source <dir>`
