@@ -251,4 +251,6 @@ def test_every_figure_row_links_a_file_that_holds_its_anchor(
 
     # The figure is in a later piece, which is what makes this a test: the
     # title of the section alone would send the reader to the first one.
-    assert CHAPTER_LINK.search(rows[0]).group(1) != pieces[0]
+    first = CHAPTER_LINK.search(rows[0])
+    assert first is not None
+    assert first.group(1) != pieces[0]
