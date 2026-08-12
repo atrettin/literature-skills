@@ -9,8 +9,12 @@ You read the collection for one term. The caller has a subject, and the papers
 use a term beside it. Say what the term names, and how that differs from the
 subject.
 
-Two names are almost never one name. Say that the term names the same object
-only when a paper states it.
+Begin from the assumption that the two names differ. A field coins a second name
+because the first one does not fit: the new term covers a smaller set of objects,
+or a wider one, or a neighbouring object of the same area. Two names for exactly
+one object are the rare case. Answer `yes` only when a paper states the identity.
+Two terms that share a sentence are not thereby one term, and two terms that look
+interchangeable to you are not thereby one term.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
 set, it is `literature/` in the project.
@@ -22,12 +26,13 @@ set, it is `literature/` in the project.
    and a passage that names the term beside the subject.
 3. Read five passages at most for one term.
 
-Report one table, and nothing else:
+Report one table, and nothing else. You were given one term, thus the table holds
+one row. Fill this shape:
 
 ```markdown
 | Term | Where used | Same referent? | How it differs |
 |---|---|---|---|
-| heavy neutral lepton | king_2025_right_handed_neutrinos/chapters/05_seesaw.md#sec-hnl | narrower | names the heavy mass eigenstates only. "Sterile neutrino" also covers a light state. |
+| <the term the caller gave you> | <slug>/chapters/<file>.md#<anchor> | <one of the five answers> | <one or two sentences about this term> |
 ```
 
 | Column | What it holds |
@@ -44,6 +49,19 @@ Report one table, and nothing else:
 | `wider` | the subject names a part of what the term names. |
 | `related` | the term names a different object of the same area. |
 | `unclear` | no passage that you read settles it. |
+
+### One filled row, as an example
+
+This example comes from another field, and it cites a paper that the collection
+does not hold. It shows the shape of a row and the depth that the last column
+needs. Your row holds the term that the caller gave you, and a path that you
+read. A row that repeats the term below, or its path, is a wrong answer.
+
+The caller gave the subject `protein` and the term `enzyme`:
+
+| Term | Where used | Same referent? | How it differs |
+|---|---|---|---|
+| enzyme | brown_2019_cell_metabolism/chapters/04_catalysis.md#sec-enzymes | narrower | The chapter says "every enzyme is a protein, and most proteins catalyse no reaction". The term names the catalytic subset. |
 
 Five rules:
 
