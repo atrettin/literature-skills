@@ -89,12 +89,12 @@ MIN_COMPARABLE_REFS = 10
 
 # At this coefficient and above, the reading says the candidate covers ground the
 # papers of the question hold already.
-HIGH_OVERLAP = 0.60
+HIGH_OVERLAP = 0.15
 
 # Below this coefficient, the reading says the candidate brings new ground. New
 # also means possibly off the subject, which is why that reading sends the agent
 # back to the abstract rather than to an ingest.
-LOW_OVERLAP = 0.20
+LOW_OVERLAP = 0.05
 
 # How many unmatched references `--resolve` looks up. This is three batches of
 # `references.BATCH_SIZE`, and thus three further requests.
