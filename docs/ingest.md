@@ -1,7 +1,8 @@
 # Ingesting without an agent
 
-`lit add-paper --auto` does an ingest end to end. This step is purely mechanical and 
-does not invoke an agent. The ingested paper is added to the common library in 
+`lit add-paper --auto` does an ingest end to end. By default, this step is purely mechanical.
+An agent may be called to resolve ambiguities in the paper's metadata if they arise.
+The ingested paper is added to the common library in 
 markdown format, broken down by chapters. Work cited by the ingested papers
 is catalogued in the common reference store.
 
