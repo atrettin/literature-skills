@@ -31,6 +31,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from lit import paths
+
 RASTER_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff"}
 GHOSTSCRIPT_SUFFIXES = {".eps", ".ps", ".pdf"}
 SVG_SUFFIXES = {".svg"}
@@ -266,7 +268,7 @@ def rewrite_references(paper_dir: Path, renames: dict[str, str]) -> None:
     if not changed:
         return
     targets = [paper_dir / FIGURES_DIR_NAME / "FIGURES.md"]
-    chapters_dir = paper_dir / "chapters"
+    chapters_dir = paper_dir / paths.CHAPTERS_DIR
     if chapters_dir.is_dir():
         targets.extend(sorted(chapters_dir.glob("*.md")))
     targets.append(paper_dir / "INDEX.md")

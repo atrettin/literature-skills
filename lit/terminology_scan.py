@@ -285,7 +285,7 @@ def units_of(root: Path, slug: str) -> list[dict]:
                         "text": sentence,
                     })
 
-    for path in sorted((paper / "chapters").glob("*.md")):
+    for path in paths.chapters_of(root, slug):
         anchor = ""
         for block in re.split(r"\n\s*\n", path.read_text(encoding="utf-8")):
             found = MARKDOWN_ANCHOR.findall(block)

@@ -29,7 +29,6 @@ from lit.text import collapse_whitespace, normalize_title, query_words, truncate
 
 API_URL = "http://export.arxiv.org/api/query"
 API_HOST = "export.arxiv.org"
-USER_AGENT = http.USER_AGENT
 ATOM = "{http://www.w3.org/2005/Atom}"
 ARXIV_NS = "{http://arxiv.org/schemas/atom}"
 

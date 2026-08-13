@@ -23,15 +23,6 @@ CHAPTERS_DIR = "chapters"
 RECORDS_DIR = "references"
 
 
-class PaperNotFound(LookupError):
-    """No paper of the collection goes by this slug."""
-
-    def __init__(self, slug: str, root: Path) -> None:
-        super().__init__("no such paper in the collection")
-        self.slug = slug
-        self.root = str(root)
-
-
 def default_root() -> Path:
     """Where the collection is: `$LITERATURE_ROOT`, or `literature` beside you.
 

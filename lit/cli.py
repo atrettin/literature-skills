@@ -22,7 +22,6 @@ from typing import Any
 
 from lit import paths, rate_gate
 
-OK = 0
 ABSENT = 1
 JUDGEMENT = 2
 
