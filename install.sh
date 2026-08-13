@@ -21,7 +21,7 @@ echo "installing literature-skills from $repo"
 
 # --- the command ----------------------------------------------------------
 echo "  the lit command, with $($python --version)"
-"$python" -m pip install --quiet --editable "$repo[rerank]"
+"$python" -m pip install --quiet --disable-pip-version-check --editable "$repo[rerank]"
 
 # --- the skills and the agents --------------------------------------------
 mkdir -p ~/.claude/skills ~/.claude/agents
