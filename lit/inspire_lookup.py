@@ -220,11 +220,11 @@ def lookup_by_doi(doi: str) -> dict:
 # --------------------------------------------------------------------------
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = cli.parser(__doc__)
     parser.add_argument("arxiv_id", nargs="?", help="arXiv identifier, for example 2307.09241")
     parser.add_argument("--doi", help="look the paper up by DOI instead")
-    args = cli.parse(parser)
+    args = cli.parse(parser, argv)
 
     if not args.arxiv_id and not args.doi:
         parser.error("give an arXiv identifier or --doi")

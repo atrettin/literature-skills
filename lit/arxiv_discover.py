@@ -455,8 +455,8 @@ def fail(message: str, code: int) -> int:
     return cli.fail(message, code, results=[])
 
 
-def main() -> int:
-    args = cli.parse(build_parser())
+def main(argv: list[str] | None = None) -> int:
+    args = cli.parse(build_parser(), argv)
     if not args.topic:
         return fail("give --topic", 2)
     rate_gate.use_root(args.literature_root)

@@ -99,8 +99,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
-    args = cli.parse(build_parser())
+def main(argv: list[str] | None = None) -> int:
+    args = cli.parse(build_parser(), argv)
     if not (args.tags or args.search or args.doi or args.arxiv or args.cited_by):
         build_parser().error("give a tag, --search, --doi, --arxiv or --cited-by")
 

@@ -27,9 +27,15 @@ ABSENT = 1
 JUDGEMENT = 2
 
 
+# What the usage line calls this program. `lit/__main__.py` sets it to the
+# subcommand it is about to run, so `lit search --help` says `lit search` and
+# not the path of a module.
+PROGRAM: str | None = None
+
+
 def parser(doc: str | None) -> argparse.ArgumentParser:
     """A parser described by the first line of the module's own docstring."""
-    return argparse.ArgumentParser(description=(doc or "").splitlines()[0])
+    return argparse.ArgumentParser(prog=PROGRAM, description=(doc or "").splitlines()[0])
 
 
 def add_root_argument(target: argparse.ArgumentParser) -> None:
