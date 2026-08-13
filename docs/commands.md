@@ -20,6 +20,19 @@ unreadable, `2` a bad argument or a judgement for the caller to make.
 | `lit references --render-only` | renders `REFERENCES.md` and the pages under `references/` from the store |
 
 
+`lit find` climbs three rungs, and stops at the first that answers: every term
+scoped to the abstract, then the topic quoted as the title of a paper, then any
+term anywhere in the record. The title rung is what answers a caller who names
+a paper rather than a subject; it runs only for a topic short enough to be a
+title. Each result says in `found_by` which rung found it.
+
+The order weighs each term of the topic by how rare it is among the candidates.
+A term that nearly every candidate carries separated none of them, and counts
+for almost nothing; a term that one candidate carries counts for nearly
+everything. `query.term_weights` reports what each term was worth, so a reader
+can account for the order. `missing_terms` stays the plain list of terms a
+paper lacks.
+
 `lit find` sends one INSPIRE request for its shortlist, after its arXiv
 requests. That request gives the citation count, the document type and the page
 count of each candidate. A candidate INSPIRE does not hold keeps `null` in those

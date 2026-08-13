@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import math
 import sys
 import types
 
@@ -77,6 +78,79 @@ def test_the_prefix_match_begins_at_four_letters() -> None:
 
 def test_coverage_of_no_terms_is_zero_rather_than_an_error() -> None:
     assert rerank.coverage([], "a title", "an abstract") == (0.0, [])
+
+
+# --------------------------------------------------------------------------
+# what a term is worth
+# --------------------------------------------------------------------------
+
+
+def white_papers() -> list[dict]:
+    """The candidate set `NuSTEC White Paper` returns: one paper, and a crowd.
+
+    `white` and `paper` are common enough that arXiv's relevance order fills
+    the window with papers that share nothing else with the question.
+    """
+    crowd = [
+        entry("White Paper on subject %d" % number, "A white paper.")
+        for number in range(99)
+    ]
+    return [entry("NuSTEC White Paper: neutrino-nucleus scattering", "A white paper.")] + crowd
+
+
+def test_a_term_the_whole_set_carries_is_worth_little() -> None:
+    """That term chose none of the candidates: the query put it there."""
+    weights = rerank.term_weights(["nustec", "white", "paper"], white_papers())
+
+    assert weights["nustec"] > 3 * weights["white"]
+    assert weights["white"] == pytest.approx(weights["paper"])
+
+
+def test_a_weight_is_never_zero() -> None:
+    """A term every candidate carries still says more than one nobody asked for."""
+    weights = rerank.term_weights(["white"], white_papers())
+
+    assert weights["white"] > 0
+
+
+def test_terms_of_equal_rarity_weigh_the_same_as_no_weights_at_all() -> None:
+    """Weighting only bites where rarity is uneven, which is the broken case."""
+    terms = ["meson", "exchange"]
+    entries = [entry("Meson-exchange currents"), entry("Meson exchange in nuclei")]
+    weights = rerank.term_weights(terms, entries)
+
+    plain, _ = rerank.coverage(terms, "Meson production", "")
+    weighted, _ = rerank.coverage(terms, "Meson production", "", weights)
+
+    assert weighted == pytest.approx(plain)
+
+
+def test_the_paper_carrying_the_rare_term_outranks_the_crowd() -> None:
+    """The fault this weighting answers, as the whole ordering sees it."""
+    terms = ["nustec", "white", "paper"]
+    entries = white_papers()
+    weights = rerank.term_weights(terms, entries)
+    shares = [
+        rerank.coverage(terms, item["title"], item["summary"], weights)[0] for item in entries
+    ]
+
+    assert shares[0] == 1.0
+    assert all(share < rerank.MIN_COVERAGE for share in shares[1:])
+
+
+def test_weighting_never_changes_which_terms_are_missing() -> None:
+    """`missing_terms` is the fact a reader checks against the abstract."""
+    terms = ["nustec", "white", "paper"]
+    weights = rerank.term_weights(terms, white_papers())
+
+    _, plain = rerank.coverage(terms, "White Paper on exoplanets", "")
+    _, weighted = rerank.coverage(terms, "White Paper on exoplanets", "", weights)
+
+    assert plain == weighted == ["nustec"]
+
+
+def test_weights_of_no_candidates_are_not_a_division_by_zero() -> None:
+    assert rerank.term_weights(["meson"], []) == {"meson": pytest.approx(math.log(2))}
 
 
 # --------------------------------------------------------------------------

@@ -18,6 +18,7 @@ model only reorders what coverage has already described.
 
 from __future__ import annotations
 
+import math
 import re
 import subprocess
 import sys
@@ -97,13 +98,68 @@ def term_matches(term: str, words: set[str]) -> bool:
     return False
 
 
-def coverage(terms: list[str], title: str, abstract: str) -> tuple[float, list[str]]:
-    """Return the share of terms the paper carries, and the ones it does not."""
+def term_weights(terms: list[str], entries: list[dict]) -> dict[str, float]:
+    """How much each term tells one candidate apart from another.
+
+    A term that nearly every candidate carries chose none of them: the query
+    put it there. Searching for `NuSTEC White Paper` returns a hundred
+    candidates, of which 96 carry `paper` and 98 carry `white`, and one carries
+    `nustec`. Counting those three the same makes a paper that carries `white`
+    and `paper` and not `nustec` look like two thirds of an answer, when it has
+    answered nothing.
+
+    The candidate set is the corpus, and that is the right corpus: a term is
+    worth what it separates *among the papers the query returned*, which is the
+    only set the ordering has to choose from. The count uses `term_matches`, so
+    the prefix rule means the same thing in a weight as it does in a match.
+
+    A word of the question's grammar rather than its subject — the `change` of
+    `how meson exchange currents change the cross section` — is rare among the
+    candidates and so weighs heavily. It costs nothing: no candidate carries it,
+    so every one of them loses the same share, and the order does not move.
+    # ponytail: the candidate set is the corpus. A corpus of the whole of arXiv
+    # would price such a word correctly, and would cost a stored index.
+    """
+    documents = [
+        document_words(entry.get("title", ""), entry.get("summary", ""))
+        for entry in entries
+    ]
+    total = len(documents) or 1
+    return {
+        term: math.log(
+            # Smoothed, so a term every candidate carries keeps a small weight
+            # rather than none: it still says a little more than a term absent
+            # from the question.
+            1 + total / max(1, sum(term_matches(term, words) for words in documents))
+        )
+        for term in terms
+    }
+
+
+def coverage(
+    terms: list[str],
+    title: str,
+    abstract: str,
+    weights: dict[str, float] | None = None,
+) -> tuple[float, list[str]]:
+    """Return the share of terms the paper carries, and the ones it does not.
+
+    Without weights every term counts the same. With them, the share is of what
+    the terms are worth rather than of how many there are, and missing the one
+    word that picks the paper out costs nearly everything.
+
+    `missing_terms` is the same list either way. It is the auditable fact — a
+    reader checks it against the abstract — and weighting must not touch it.
+    """
     if not terms:
         return 0.0, []
     words = document_words(title, abstract)
     missing = [term for term in terms if not term_matches(term, words)]
-    return (len(terms) - len(missing)) / len(terms), missing
+    if weights is None:
+        return (len(terms) - len(missing)) / len(terms), missing
+    worth = sum(weights[term] for term in terms)
+    lost = sum(weights[term] for term in missing)
+    return ((worth - lost) / worth if worth else 0.0), missing
 
 
 # --------------------------------------------------------------------------
@@ -222,7 +278,12 @@ def relevance_scores(ranker, topic: str, entries: list[dict]) -> list[float] | N
 # --------------------------------------------------------------------------
 
 
-def rank(topic: str, terms: list[str], entries: list[dict]) -> tuple[list[dict], str, str | None]:
+def rank(
+    topic: str,
+    terms: list[str],
+    entries: list[dict],
+    weights: dict[str, float] | None = None,
+) -> tuple[list[dict], str, str | None]:
     """Score and order the candidates. Returns (entries, backend, note).
 
     Every entry comes back carrying `coverage` and `missing_terms`, whichever
@@ -230,9 +291,17 @@ def rank(topic: str, terms: list[str], entries: list[dict]) -> tuple[list[dict],
     caller reports the backend, because a reader has to know whether a rank
     means "this paper answers the question" or only "this paper repeats its
     words".
+
+    `weights` is what `term_weights` returns. A caller that reports them passes
+    them in rather than letting this compute its own, so one measurement serves
+    both the order and the report.
     """
+    if weights is None:
+        weights = term_weights(terms, entries)
     for entry in entries:
-        share, missing = coverage(terms, entry.get("title", ""), entry.get("summary", ""))
+        share, missing = coverage(
+            terms, entry.get("title", ""), entry.get("summary", ""), weights
+        )
         entry["coverage"] = round(share, 4)
         entry["missing_terms"] = missing
         entry["ranked"] = share >= MIN_COVERAGE

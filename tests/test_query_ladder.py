@@ -80,9 +80,9 @@ def test_meta_words_stay_in_the_topic_the_ranker_reads(
     seen: list[str] = []
     original = arxiv_discover.rerank.rank
 
-    def watch(read_topic: str, terms: list[str], entries: list[dict]):  # noqa: ANN202
+    def watch(read_topic: str, *rest):  # noqa: ANN002, ANN202
         seen.append(read_topic)
-        return original(read_topic, terms, entries)
+        return original(read_topic, *rest)
 
     monkeypatch.setattr(arxiv_discover.rerank, "rank", watch)
     arxiv_discover.search(options(topic=topic), fetch=FakeFetch([feed_quasielastic]))
@@ -151,6 +151,88 @@ def test_several_categories_are_an_or_group() -> None:
     assert query == "abs:meson AND (cat:hep-ph OR cat:nucl-th)"
 
 
+# --------------------------------------------------------------------------
+# the title rung
+# --------------------------------------------------------------------------
+
+
+def test_the_title_rung_quotes_the_topic_as_it_stands() -> None:
+    """A title is a fixed string, and a caller who names one names it exactly."""
+    query = arxiv_discover.build_phrase_query("NuSTEC White Paper", options())
+
+    assert query == 'ti:"NuSTEC White Paper"'
+
+
+def test_the_title_rung_keeps_the_words_the_terms_drop() -> None:
+    """`of` and `the` are stopwords for a subject and part of a title."""
+    query = arxiv_discover.build_phrase_query("the status of nuclear effects", options())
+
+    assert query == 'ti:"the status of nuclear effects"'
+
+
+def test_the_title_rung_carries_the_filters() -> None:
+    query = arxiv_discover.build_phrase_query("NuSTEC White Paper", options(categories=["hep-ex"]))
+
+    assert query == 'ti:"NuSTEC White Paper" AND cat:hep-ex'
+
+
+def test_a_topic_that_names_a_paper_climbs_to_the_title_rung(
+    feed_empty: str, feed_quasielastic: str, no_sleep: None
+) -> None:
+    """The strict rung fails a title: an abstract rarely carries all its words."""
+    fetch = FakeFetch([feed_empty, feed_quasielastic])
+
+    report = arxiv_discover.search(options(topic="NuSTEC White Paper"), fetch=fetch)
+
+    assert fetch.queries[1] == 'ti:"NuSTEC White Paper"'
+    assert all(result["found_by"] == "title" for result in report["results"])
+
+
+def test_the_title_rung_stops_the_climb_when_it_answers(
+    feed_empty: str, feed_quasielastic: str, no_sleep: None
+) -> None:
+    """Having found the named paper, there is nothing to widen the search for."""
+    fetch = FakeFetch([feed_empty, feed_quasielastic])
+
+    arxiv_discover.search(options(topic="NuSTEC White Paper"), fetch=fetch)
+
+    assert len(fetch.queries) == 2
+    assert not any(query.startswith("(all:") for query in fetch.queries)
+
+
+def test_a_question_is_too_long_to_be_a_title(
+    feed_empty: str, feed_quasielastic: str, no_sleep: None
+) -> None:
+    """No title reads like a research question, so the request would buy nothing."""
+    topic = "how the axial mass of the nucleon changes between nuclear targets"
+    fetch = FakeFetch([feed_empty, feed_quasielastic])
+
+    arxiv_discover.search(options(topic=topic), fetch=fetch)
+
+    assert not any(query.startswith("ti:") for query in fetch.queries)
+
+
+def test_one_word_is_not_a_phrase(feed_empty: str, feed_quasielastic: str, no_sleep: None) -> None:
+    """`ti:"nustec"` says nothing that `all:nustec` does not say wider."""
+    fetch = FakeFetch([feed_empty, feed_quasielastic])
+
+    arxiv_discover.search(options(topic="NuSTEC"), fetch=fetch)
+
+    assert not any(query.startswith("ti:") for query in fetch.queries)
+
+
+def test_a_failed_rung_costs_the_search_nothing(
+    feed_empty: str, feed_quasielastic: str, no_sleep: None
+) -> None:
+    """A widening lost is worth less than the hits already in hand."""
+    fetch = FakeFetch([feed_empty, "not xml at all", feed_quasielastic])
+
+    report = arxiv_discover.search(options(topic="NuSTEC White Paper"), fetch=fetch)
+
+    assert [item["rung"] for item in report["query"]["queries"]] == ["strict", "broad"]
+    assert report["results"]
+
+
 def test_parentheses_go_in_as_characters() -> None:
     """urlencode escapes them on the way out.
 
@@ -196,12 +278,12 @@ def test_a_good_topic_stops_at_the_strict_rung(
 def test_a_narrow_topic_climbs_to_the_broad_rung(
     feed_empty: str, feed_quasielastic: str, no_sleep: None
 ) -> None:
-    fetch = FakeFetch([feed_empty, feed_quasielastic])
+    fetch = FakeFetch([feed_empty, feed_empty, feed_quasielastic])
 
     report = arxiv_discover.search(options(), fetch=fetch)
 
-    assert len(fetch.queries) == 2
-    assert fetch.queries[1].startswith("(all:")
+    assert len(fetch.queries) == 3
+    assert fetch.queries[2].startswith("(all:")
     assert report["results"]
     assert all(result["found_by"] == "broad" for result in report["results"])
 
@@ -308,13 +390,17 @@ def test_the_report_names_every_query_that_ran(
     assert report["query"]["terms"]
 
 
-def test_both_rungs_are_reported_when_both_ran(
+def test_every_rung_that_ran_is_reported(
     feed_empty: str, feed_quasielastic: str, no_sleep: None
 ) -> None:
-    """A result says which rung found it, so both rungs must be on the record."""
-    fetch = FakeFetch([feed_empty, feed_quasielastic])
+    """A result says which rung found it, so every rung must be on the record."""
+    fetch = FakeFetch([feed_empty, feed_empty, feed_quasielastic])
 
     report = arxiv_discover.search(options(), fetch=fetch)
 
-    assert [item["rung"] for item in report["query"]["queries"]] == ["strict", "broad"]
+    assert [item["rung"] for item in report["query"]["queries"]] == [
+        "strict",
+        "title",
+        "broad",
+    ]
     assert [item["search_query"] for item in report["query"]["queries"]] == fetch.queries
