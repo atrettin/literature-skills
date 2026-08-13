@@ -1,10 +1,9 @@
 # Ingesting without an agent
 
-`lit add-paper --auto` does an ingest end to end. Each step of one was already a
-script: the search, the conversion, the reference merge, the citation check. An
-agent that drives those scripts pays about 42,000 tokens of fixed context for
-one paper, and the paper passes through that context about two and a half times.
-Almost none of that cost buys judgement.
+`lit add-paper --auto` does an ingest end to end. This step is purely mechanical and 
+does not invoke an agent. The ingested paper is added to the common library in 
+markdown format, broken down by chapters. Work cited by the ingested papers
+is catalogued in the common reference store.
 
 ```bash
 lit add-paper --auto 2307.09241 1706.03621
