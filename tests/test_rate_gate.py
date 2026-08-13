@@ -9,6 +9,7 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
+import filelock
 import pytest
 
 from lit import rate_gate
@@ -88,22 +89,29 @@ def test_the_file_holds_the_time_of_each_host(tmp_path: Path) -> None:
     assert state["noted.example"] > 0
 
 
-def test_a_lock_another_process_holds_makes_this_one_wait(tmp_path: Path) -> None:
-    """A second process holding the file is what the cross-process lock is for."""
-    fcntl = pytest.importorskip("fcntl")
-    rate_gate.set_interval("locked.example", 0.0)
-    path = tmp_path / rate_gate.GATE_NAME
-    path.write_text("{}", encoding="utf-8")
+def other_process(root: Path) -> filelock.FileLock:
+    """The gate's lock, as a second process would take it.
 
-    holder = open(path, "a+", encoding="utf-8")
-    fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+    A separate `FileLock` object on the same path is what another process has:
+    the library gives one lock per object, so two of them contend exactly as
+    two processes do. `thread_local=False` because a test releases it from the
+    thread that stands in for the other process letting go.
+    """
+    return filelock.FileLock(str(root / rate_gate.GATE_NAME) + ".lock",
+                             thread_local=False)
+
+
+def test_a_lock_another_process_holds_makes_this_one_wait(tmp_path: Path) -> None:
+    """A second process holding the lock is what the cross-process gate is for."""
+    rate_gate.set_interval("locked.example", 0.0)
+    holder = other_process(tmp_path)
+    holder.acquire()
 
     released = threading.Event()
 
     def let_go() -> None:
         time.sleep(0.25)
-        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
-        holder.close()
+        holder.release()
         released.set()
 
     threading.Thread(target=let_go).start()
@@ -117,21 +125,18 @@ def test_a_lock_another_process_holds_makes_this_one_wait(tmp_path: Path) -> Non
 
 
 def test_a_timeout_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    fcntl = pytest.importorskip("fcntl")
+    """A holder that never lets go is reported as a failure to reach the API."""
     rate_gate.set_interval("stuck.example", 0.0)
-    path = tmp_path / rate_gate.GATE_NAME
-    path.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(rate_gate, "GATE_WAIT_TIMEOUT_S", 0.2)
 
-    holder = open(path, "a+", encoding="utf-8")
-    fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+    holder = other_process(tmp_path)
+    holder.acquire()
     try:
         with pytest.raises(rate_gate.GateTimeout):
             with rate_gate.request("stuck.example", root=tmp_path):
                 pass
     finally:
-        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
-        holder.close()
+        holder.release()
 
 
 def test_a_root_nothing_can_write_falls_back_and_says_so(tmp_path: Path) -> None:
@@ -177,6 +182,15 @@ def test_use_root_points_the_gate_at_the_named_collection(tmp_path: Path) -> Non
         pass
 
     assert (named / rate_gate.GATE_NAME).is_file()
+
+
+def test_no_named_root_falls_back_to_the_default_collection(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A command that never called `use_root` still finds a gate to lock."""
+    monkeypatch.setenv("LITERATURE_ROOT", str(tmp_path))
+
+    assert rate_gate.gate_path() == tmp_path / rate_gate.GATE_NAME
 
 
 def test_the_gate_never_creates_the_collection(tmp_path: Path) -> None:

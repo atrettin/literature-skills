@@ -16,9 +16,9 @@ holds each host to its own minimum interval.
             ...
 
 The gate works across processes. Two shells, or an agent beside a running
-ingest, must not double the request rate, so the gate takes an exclusive lock on
-`<literature-root>/.api-gate.json` and that same file holds the time of the last
-request to each host.
+ingest, must not double the request rate, so the gate holds an exclusive lock
+on `<literature-root>/.api-gate.json.lock` while `.api-gate.json` beside it
+holds the time of the last request to each host.
 
 A collection root that nothing can write gives a lock inside this process alone.
 `local_only()` then answers true, and the caller reports it: two processes are
@@ -28,25 +28,16 @@ then paced independently, which is a weaker guarantee than the one above.
 from __future__ import annotations
 
 import contextlib
-import errno
 import json
 import os
 import threading
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+
+import filelock
 
 from lit import paths
-
-try:
-    import fcntl as _fcntl
-except ImportError:  # a platform with no flock; the local lock still works
-    _fcntl = None
-
-# Loosely typed on purpose: the module is absent on some platforms. Every use of
-# it sits behind `_open_gate_file`, which answers None when it is not there.
-fcntl: Any = _fcntl
 
 GATE_NAME = ".api-gate.json"
 
@@ -65,11 +56,6 @@ DEFAULT_INTERVAL_S = 1.0
 # it makes nothing faster. A timeout means another process holds the gate and is
 # not letting go, which the caller reports as a network failure.
 GATE_WAIT_TIMEOUT_S = 120.0
-
-# How often a waiting caller retries the lock. Short enough that a caller takes
-# the gate promptly after the holder releases it.
-LOCK_POLL_S = 0.05
-
 
 class GateTimeout(RuntimeError):
     """Nobody released the gate within `GATE_WAIT_TIMEOUT_S`."""
@@ -144,18 +130,16 @@ def gate_path(root: Path | None = None) -> Path:
 def _open_gate_file(root: Path | None):
     """The gate file, opened for reading and writing, or None.
 
-    None means this machine cannot hold the shared state: no `fcntl`, a
-    collection that is not there, or a root nothing may write. Each of those is
-    a reason to pace inside this process instead of failing — the request itself
-    is still worth sending.
+    None means this machine cannot hold the shared state: a collection that is
+    not there, or a root nothing may write. Either is a reason to pace inside
+    this process instead of failing — the request itself is still worth
+    sending.
 
     It never creates the collection directory. A gate that made one would leave
     an empty `literature/` behind in whatever directory a script ran from, and
     would take its lock there rather than on the collection the caller named.
     `init-literature` makes a collection; this only locks one.
     """
-    if fcntl is None:
-        return None
     path = gate_path(root)
     if not path.parent.is_dir():
         return None
@@ -163,24 +147,6 @@ def _open_gate_file(root: Path | None):
         return open(path, "a+", encoding="utf-8")
     except OSError:
         return None
-
-
-def _take_lock(handle) -> None:
-    """Block until this process holds the file exclusively, or give up."""
-    deadline = time.monotonic() + GATE_WAIT_TIMEOUT_S
-    while True:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return
-        except OSError as error:
-            if error.errno not in (errno.EACCES, errno.EAGAIN):
-                raise
-        if time.monotonic() >= deadline:
-            raise GateTimeout(
-                "no API request slot within %.0f seconds; another process holds "
-                "%s" % (GATE_WAIT_TIMEOUT_S, handle.name)
-            )
-        time.sleep(LOCK_POLL_S)
 
 
 def _read_state(handle) -> dict:
@@ -245,18 +211,28 @@ def request(host: str, root: Path | None = None) -> Iterator[None]:
                 _local_times[host] = time.time()
         return
 
+    lock = filelock.FileLock(str(gate_path(root)) + ".lock",
+                             timeout=GATE_WAIT_TIMEOUT_S)
     # The threads of this process queue here, so only one of them competes for
     # the file lock and the others do not spin on it.
     with _process_lock:
         with handle:
-            _take_lock(handle)
-            state = _read_state(handle)
-            last = state.get(host)
-            _wait(float(last) if isinstance(last, (int, float)) else 0.0,
-                  interval, time.time())
             try:
-                yield
+                lock.acquire()
+            except filelock.Timeout as error:
+                raise GateTimeout(
+                    "no API request slot within %.0f seconds; another process "
+                    "holds %s" % (GATE_WAIT_TIMEOUT_S, lock.lock_file)
+                ) from error
+            try:
+                state = _read_state(handle)
+                last = state.get(host)
+                _wait(float(last) if isinstance(last, (int, float)) else 0.0,
+                      interval, time.time())
+                try:
+                    yield
+                finally:
+                    state[host] = time.time()
+                    _write_state(handle, state)
             finally:
-                state[host] = time.time()
-                _write_state(handle, state)
-                # Closing the handle releases the lock.
+                lock.release()
