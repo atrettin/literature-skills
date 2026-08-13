@@ -1,23 +1,17 @@
 """Fixtures shared by the tests.
 
-The scripts are not a package. They import each other by name, relying on the
-`sys.path.insert` that each one does at import time. The tests need the same
-directory on the path before they can import anything at all, so it happens here
-rather than in every test file.
+`pytest.ini` puts the repository root on the path, so `lit` imports here from
+the working tree rather than from wherever it happens to be installed.
 """
 
 from __future__ import annotations
 
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parent.parent / "add-paper" / "scripts"
 DATA = Path(__file__).resolve().parent / "data"
-
-sys.path.insert(0, str(SCRIPTS))
 
 
 @pytest.fixture
@@ -91,7 +85,7 @@ def gate_off(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     import contextlib
 
-    import rate_gate
+    from lit import rate_gate
 
     @contextlib.contextmanager
     def open_gate(host: str, root=None):
@@ -172,8 +166,8 @@ def small_paper(monkeypatch: pytest.MonkeyPatch, gate_off: None) -> dict:
     """
     import tarfile
 
-    import arxiv_fetch
-    import arxiv_search
+    from lit import arxiv_fetch
+    from lit import arxiv_search
 
     def metadata(arxiv_id: str) -> dict:
         return dict(SMALL_PAPER_METADATA, arxiv_id=arxiv_id)
@@ -230,9 +224,9 @@ def offline(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> 
     if "network" in request.keywords:
         return
 
-    import arxiv_fetch
-    import arxiv_search
-    import inspire_lookup
+    from lit import arxiv_fetch
+    from lit import arxiv_search
+    from lit import inspire_lookup
 
     def refuse(path: str) -> dict | None:
         raise RuntimeError(

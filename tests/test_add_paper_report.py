@@ -13,13 +13,13 @@ from pathlib import Path
 
 import pytest
 
-import add_paper
+from lit import add_paper
 
 SCHEMA_FIELDS = {
     "schema", "status", "arxiv_id", "slug", "paper_dir", "index", "title",
     "authors", "authors_total", "submitted_year", "publication", "abs_url",
     "parser", "ingested", "chapters", "figures", "figures_missing",
-    "references", "checks", "collection_row", "summary_state", "manifest",
+    "references", "checks", "collection_row", "manifest",
     "warnings", "exception", "next_action",
 }
 

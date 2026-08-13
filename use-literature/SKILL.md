@@ -13,26 +13,14 @@ and gives you no more answers.
 project with no `literature/` at all has no database yet — the `init-literature`
 skill starts one.
 
-## Three shorthands
-
-Resolving a citation and searching the text each run one script, and both ship
-with the `add-paper` skill. No path is fixed, so:
-
-- **`$LOOKUP`** — `<the add-paper skill's directory>/scripts/reference_lookup.py`.
-  The `add-paper` skill prints its own base directory when it loads; if it is
-  not installed alongside this one, `find ~/.claude/skills -name reference_lookup.py`
-  finds it.
-- **`$SEARCH`** — `<the add-paper skill's directory>/scripts/search_literature.py`,
-  beside `$LOOKUP`.
-- **`$PY`** — the project's Python: `.venv/bin/python` when the project has a
-  virtual environment, otherwise `python3`.
+## Before you start
 
 Run every command from the root of the project, so that `literature/` resolves.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project. The scripts read the variable
-themselves, thus you do not give `--literature-root`. Read and write the
-collection's files at that path.
+set, it is `literature/` in the project. `lit` reads the variable itself, thus
+you do not give `--literature-root`. Read and write the collection's files at
+that path.
 
 ## The structure
 
@@ -61,7 +49,7 @@ the paper had not been published when it was last looked up; `add-paper` can
 refresh that.
 
 Chapter files hold the words of the paper. A citation becomes a link that reads
-`(Lipari, 2002)` and names a file whose stem is the tag; `$LOOKUP` turns that
+`(Lipari, 2002)` and names a file whose stem is the tag; `lit lookup` turns that
 tag into the publication it names — see below.
 
 A reference the paper makes to itself becomes a link to the thing it names:
@@ -84,7 +72,7 @@ A paragraph is one line, whatever its length. A search for a phrase inside one
 paragraph therefore finds that phrase. No single search finds a phrase that
 spans two paragraphs.
 
-You do not have to find an anchor yourself: `$SEARCH` gives the anchor
+You do not have to find an anchor yourself: `lit search` gives the anchor
 above each match it reports.
 
 Inline maths stays as `$…$` and display maths as `$$…$$`, so a Markdown preview
@@ -102,12 +90,11 @@ be redone; never read it, and never delete it.
 1. Read `literature/README.md`.
 2. Select the papers that cover the subject.
 3. Read `INDEX.md` of each selected paper.
-4. Choose the chapters that the question needs. The `What it covers` column
-   holds `—` until somebody runs the summary pass, so read the chapter title,
-   the subsection titles beside it and the word count. A title names the
-   subject, and the word count says which chapter carries the argument rather
-   than a page of definitions.
-5. Run `$SEARCH` for a phrase of the question when the titles leave the choice
+4. Choose the chapters that the question needs. Read the chapter title, the
+   subsection titles beside it and the word count. A title names the subject,
+   and the word count says which chapter carries the argument rather than a
+   page of definitions.
+5. Run `lit search` for a phrase of the question when the titles leave the choice
    open. It answers with the chapter, the anchor and the line, so it selects the
    chapter and finds the passage in one step.
 6. Read the chapters that steps 4 and 5 name, and one more when a chapter points
@@ -124,13 +111,13 @@ A paper states plenty it did not establish itself. Where it says so, it cites:
 
 The tag is the name of the file the link opens, without `.md` — here
 `bodek_2008_axial_mass_quasielastic`. **Do not follow the link.** `references/`
-and `REFERENCES.md` are both rendered for a person to read; `$LOOKUP` is the one
+and `REFERENCES.md` are both rendered for a person to read; `lit lookup` is the one
 way you resolve a citation, and it answers with more, from the store the two are
 rendered from. Look the tag up before you repeat the claim as though the paper
 you are reading had shown it:
 
 ```bash
-$PY $LOOKUP bodek_2008_axial_mass_quasielastic
+lit lookup bodek_2008_axial_mass_quasielastic
 ```
 
 It answers in JSON with the title, authors, year, journal, DOI and arXiv
@@ -157,10 +144,10 @@ What the answer can tell you:
 The same tool searches, when you have no tag in hand:
 
 ```bash
-$PY $LOOKUP --search "quasielastic neutrino"   # title, author, journal
-$PY $LOOKUP --doi 10.1103/physrevc.48.1246
-$PY $LOOKUP --arxiv 1611.07770
-$PY $LOOKUP --cited-by <slug>                  # everything a paper draws on
+lit lookup --search "quasielastic neutrino"   # title, author, journal
+lit lookup --doi 10.1103/physrevc.48.1246
+lit lookup --arxiv 1611.07770
+lit lookup --cited-by <slug>                  # everything a paper draws on
 ```
 
 `literature/REFERENCES.md` is a view of the same data, sorted most-cited first,
@@ -176,7 +163,7 @@ Before you write a quotation into a report, find it in the paper it is said to
 come from:
 
 ```bash
-$PY $SEARCH "<the words>" --paper <slug>
+lit search "<the words>" --paper <slug>
 ```
 
 **Do not use `grep` for this.** Chapter text wraps at about 70 characters. A
@@ -199,9 +186,9 @@ serves more than one question, and it keeps the papers of each. Such a hit is
 evidence about that paper. It is not evidence about yours. Read it, and decide.
 
 ```bash
-$PY $SEARCH "axial mass" --paper <slug> --paper <slug>   # your working set
-$PY $SEARCH "axial mass"                                 # the whole collection
-$PY $SEARCH "M_A\s*=\s*1.03" --regex
+lit search "axial mass" --paper <slug> --paper <slug>   # your working set
+lit search "axial mass"                                 # the whole collection
+lit search "M_A\s*=\s*1.03" --regex
 ```
 
 ## To find a figure
@@ -218,13 +205,13 @@ is the row numbered 3, or 3a and 3b when the paper drew it as panels.
 
 ## To find a paper that is not there
 
-1. Search the references first: `$PY $LOOKUP --search "<author or title word>"`.
+1. Search the references first: `lit lookup --search "<author or title word>"`.
    A paper the collection does not hold may still be cited by one that it does,
    and the answer gives you the arXiv identifier to fetch it by.
 2. Search arXiv with the `find-papers` skill. It searches abstracts rather than
    titles, so it finds a paper on the subject of the question, and it marks the
    results the collection already holds. Use it when the question names a
-   subject; `$LOOKUP` above answers when you have a name or a title.
+   subject; `lit lookup` above answers when you have a name or a title.
 3. Otherwise tell the user that the database has no paper on the subject.
 4. Offer the `add-paper` skill.
 
@@ -251,7 +238,7 @@ the slug. Say that you did it and why.
   year in a citation is the `Published` year of a published paper and the
   `Submitted` year of a preprint.
 - Attribute a claim to the work that made it. When a paper you read cites
-  someone else for a fact, resolve the tag with `$LOOKUP` and cite that work.
+  someone else for a fact, resolve the tag with `lit lookup` and cite that work.
   Citing the paper you happened to read for a result it borrowed puts a wrong
   attribution into the project's documentation.
 - Never edit `literature/REFERENCES.md`, `literature/references/` or
@@ -259,13 +246,13 @@ the slug. Say that you did it and why.
   in full whenever a paper is added; all three belong to `add-paper`.
 - A claim that a paper does not hold something needs a search method that you
   can state. A `grep` that found nothing is not such a method: it fails silently
-  on wrapped text and on a file with a NUL byte. Search with `$SEARCH`, and say
+  on wrapped text and on a file with a NUL byte. Search with `lit search`, and say
   which phrases you searched for.
-- Give `$SEARCH` a scope. The collection serves more than one task and keeps the
+- Give `lit search` a scope. The collection serves more than one task and keeps the
   papers of each, so name the papers with `--paper` when the question is about
   your task. Leave `--paper` out when the question is about the collection
   itself. Read the `scope` block of the answer, and check that it holds the
   papers that you meant.
 - Never answer from a citation alone. Its text and its tag both carry an author
   and a year, which is enough to look convincing and not enough to be right —
-  they are identifiers, not citations. Resolve the tag with `$LOOKUP`.
+  they are identifiers, not citations. Resolve the tag with `lit lookup`.

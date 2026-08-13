@@ -1,0 +1,10 @@
+TexSoup>=0.3.3
+Pillow>=10.0
+filelock>=3.12
+
+[dev]
+pytest>=8.0
+pyright>=1.1.390
+
+[rerank]
+flashrank>=0.2.9

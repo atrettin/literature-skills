@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-import arxiv_search
-import identity
-import reference_store
+from lit import arxiv_search
+from lit import identity
+from lit import reference_store
 
 
 def metadata(**overrides) -> dict:

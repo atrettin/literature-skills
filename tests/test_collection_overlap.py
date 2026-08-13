@@ -17,10 +17,10 @@ from pathlib import Path
 
 import pytest
 
-import collection_overlap
-import inspire_lookup
-import reference_store
-import references
+from lit import collection_overlap
+from lit import inspire_lookup
+from lit import reference_store
+from lit import references
 from conftest import DATA, FakeInspire
 
 

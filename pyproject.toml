@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "literature-skills"
+version = "0.1.0"
+description = "Search published scientific papers, read them, and cite what they say"
+requires-python = ">=3.10"
+
+dependencies = [
+    # Parses the TeX source of a paper into sections.
+    "TexSoup>=0.3.3",
+    # Crops the converted figures and converts the raster ones. Without it the
+    # figures are still produced, but keep their original whitespace.
+    "Pillow>=10.0",
+    # The cross-process lock the request gate holds, so two shells reading one
+    # collection do not double the rate an API is asked at.
+    "filelock>=3.12",
+]
+
+[project.optional-dependencies]
+# Orders search results by a cross-encoder that reads the question and the
+# abstract together. Without it they are ordered by how many of the question's
+# words each abstract carries, which ranks a paper that repeats the question
+# above one that answers it. It runs on ONNX Runtime rather than torch: about
+# 60 MB installed, and a 21 MB model downloaded on first use.
+rerank = ["flashrank>=0.2.9"]
+dev = ["pytest>=8.0", "pyright>=1.1.390"]
+
+[project.scripts]
+lit = "lit.__main__:main"
+
+[tool.setuptools]
+packages = ["lit"]

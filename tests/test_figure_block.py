@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-import arxiv_fetch
-import reference_store
+from lit import arxiv_fetch
+from lit import reference_store
 
 
 def alt_of(block: str) -> str:

@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-import arxiv_discover
-import inspire_lookup
-import references
-from arxiv_discover import Options
+from lit import arxiv_discover
+from lit import inspire_lookup
+from lit import references
+from lit.arxiv_discover import Options
 from conftest import DATA, FakeFetch, FakeInspire
 
 

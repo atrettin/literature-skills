@@ -25,6 +25,7 @@ WITHOUT_LINE = "chapters/03_results.md | #sec-axialff"
 # Every place that states the contract, or could restate it.
 CONTRACT_FILES = (
     [ROOT / "README.md"]
+    + sorted((ROOT / "docs").glob("*.md"))
     + sorted((ROOT / ".claude" / "agents").glob("*.md"))
     + sorted((ROOT / "research-report").rglob("*.md"))
     + sorted((ROOT / "use-literature").rglob("*.md"))
@@ -68,8 +69,8 @@ def test_literature_researcher_states_the_rule() -> None:
     assert "no line number" in read(".claude/agents/literature-researcher.md")
 
 
-def test_readme_shows_the_address_form() -> None:
-    assert EXAMPLE in read("README.md")
+def test_the_research_document_shows_the_address_form() -> None:
+    assert EXAMPLE in read("docs/research.md")
 
 
 @pytest.mark.parametrize("path", CONTRACT_FILES, ids=lambda path: str(path.relative_to(ROOT)))

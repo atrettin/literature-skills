@@ -8,52 +8,37 @@ description: Adds a paper from arXiv to the local literature database in literat
 The literature database holds papers as plain text, split into chapters. Agents
 read it with the `use-literature` skill. This skill puts a new paper into it.
 
-`add_paper.py` does the ingest. You handle its exceptions. Read a chapter only
-when you write the summaries, and never otherwise: the script measures every
-number that `INDEX.md` shows.
+`lit add-paper` does the ingest. You handle its exceptions. Never read a
+chapter: the command measures every number that `INDEX.md` shows.
 
 The paper comes from arXiv, because arXiv is the only source that carries the
 TeX. arXiv does not say where the paper was published — its `journal_ref` field
 is written by the authors and is empty for most records. INSPIRE-HEP does say,
-and the script asks it.
+and `lit add-paper` asks it.
 
 ## Before you start
 
-This skill is installed once and used from any project, so nothing below can
-assume a fixed path. Two shorthands are used throughout:
-
-- **`$SKILL`** — this skill's own directory. The line *"Base directory for this
-  skill"*, printed when the skill loads, gives it. The scripts live in
-  `$SKILL/scripts/`.
-- **`$PY`** — the project's Python. Use `.venv/bin/python` when the project has
-  a virtual environment, otherwise `python3`.
-
-Then:
-
-1. Run `$PY -c "import TexSoup, PIL"`.
-2. If that fails, run `$PY -m pip install -r $SKILL/requirements.txt`.
-3. Run every command from the root of the project, so that `literature/`
-   resolves.
+Run every command from the root of the project, so that `literature/` resolves.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project. The scripts read the variable
-themselves, thus you do not give `--literature-root`.
+set, it is `literature/` in the project. `lit` reads the variable itself, thus
+you do not give `--literature-root`.
 
 ## Step 1. Run the ingest
 
 ```bash
-$PY $SKILL/scripts/add_paper.py --auto <arxiv-id> [<arxiv-id> …]
+lit add-paper --auto <arxiv-id> [<arxiv-id> …]
 ```
 
 Give the identifiers of every paper the user asked for, in one command. Give a
 title instead when the user has no identifier:
 
 ```bash
-$PY $SKILL/scripts/add_paper.py --auto \
+lit add-paper --auto \
     --title "<title>" --author "<author>" --year <year>
 ```
 
-The script prints one JSON object per paper, one object per line. **The exit
+It prints one JSON object per paper, one object per line. **The exit
 code says who acts:**
 
 | Exit | What it means | What you do |
@@ -103,8 +88,8 @@ paper. When the DOI disagrees, no title similarity makes it the right paper.
 Cross-check against INSPIRE-HEP when the arXiv record alone does not settle it:
 
 ```bash
-$PY $SKILL/scripts/inspire_lookup.py <arxiv_id>
-$PY $SKILL/scripts/inspire_lookup.py --doi <doi>
+lit inspire <arxiv_id>
+lit inspire --doi <doi>
 ```
 
 `"found": false` for a candidate you found on arXiv usually means a paper
@@ -115,7 +100,7 @@ that kind. **That is a real answer. Report it, and substitute no other paper.**
 [Crossref](https://api.crossref.org/works/) takes a DOI directly, and it reaches
 outside high-energy physics.
 
-When you have settled the identity, run the script again with the identifier.
+When you have settled the identity, run the ingest again with the identifier.
 Ask the user with `AskUserQuestion` only when the checks above leave the answer
 still in doubt.
 
@@ -133,7 +118,7 @@ The name this paper wants belongs to a different work. `slug` is the name,
 
 Nothing reassigns a tag once a work has it. The tag sits in the chapter files of
 every paper that cites that work. Decide which work owns the name. Then run the
-script again with `--slug <name>` for the other work.
+ingest again with `--slug <name>` for the other work.
 
 ### `PARSER_FAILURE`
 
@@ -149,7 +134,7 @@ The paper directory is already there, and the caller gave no `--force`.
 it. Re-run with `--force` when the answer is yes.
 
 `--force` empties the paper directory first, which deletes `INDEX.md` with
-everything else. The summaries in it go too, so write them again.
+everything else. Every value in it is derived, so the ingest writes it again.
 
 ### `REFERENCE_CHECK_FAILED`
 
@@ -161,7 +146,7 @@ collection.
 - `unresolved` — a chapter cites a tag no record answers. Say so. The claim that
   citation supports cannot be traced until it resolves.
 - `missing_pages` — the record is there and the page its citation opens is not.
-  Run `$PY $SKILL/scripts/update_references.py --render-only`, which writes them.
+  Run `lit references --render-only`, which writes them.
 - `duplicates` — one work holds two records, so its citations are split.
 - `residue` — a chapter holds a `PH<number>` where the paper wrote something
   else, or a control character. Nothing repairs the text in place. Re-run the
@@ -178,38 +163,7 @@ by hand, then re-run with `--index-only <slug>`.
 An API did not answer after its retries. `host` and `reason` say which. Report
 it and try again later. This is not a fault of the paper.
 
-## Step 3. Write the chapter summaries
-
-This pass is opt-in, and it is the one part of an ingest that needs an agent.
-The ingest leaves every `What it covers` cell as `—`. A summary earns its cost
-when somebody returns to the collection, and it earns nothing at ingest for a
-paper that nobody cites.
-
-Run it when the user asks for it, or when a research task is about to read the
-paper:
-
-```bash
-$PY $SKILL/scripts/add_paper.py --summarize <slug>
-```
-
-The report names every chapter whose summary is still empty. Then:
-
-1. Read that chapter file.
-2. Write 1 to 3 sentences saying what it contains. A later agent uses your
-   sentence to decide whether to open the file.
-3. Put the sentences in a JSON file, keyed by the chapter file name.
-4. Apply them:
-
-```bash
-$PY $SKILL/scripts/write_index.py literature/<slug> \
-    --summaries summaries.json --apply
-```
-
-**Never write a summary of a chapter that you did not read.** The apply step
-keeps every summary already in the file and recomputes every count, so it is
-safe to run again.
-
-## What the script writes
+## What the ingest writes
 
 ### `literature/<slug>/`
 
@@ -228,12 +182,12 @@ paper has one. `Submitted` is the arXiv year and always has a value. A paper
 INSPIRE reports no publication for says `preprint` in `Published` and `—` in the
 other two. The slug keeps the submission year, whatever `Published` says.
 
-The chapter table has six columns:
+The chapter table has five columns:
 
 ```markdown
-| # | File | Words | Named anchors | Subsections | What it covers |
-|---|---|---|---|---|---|
-| 7 | [07_form_factors.md](chapters/07_form_factors.md) | 1435 | 15 | 7.1 Generic Dipole Form | — |
+| # | File | Words | Named anchors | Subsections |
+|---|---|---|---|---|
+| 7 | [07_form_factors.md](chapters/07_form_factors.md) | 1435 | 15 | 7.1 Generic Dipole Form |
 ```
 
 `Words` says where the substance of the paper is. `Named anchors` counts the
@@ -251,15 +205,13 @@ One row per paper, in order of the arXiv submission year, newest last:
 | [<Title>](<slug>/INDEX.md) | <first author> et al. | <year> | <journal> | <one sentence> |
 ```
 
-The last cell holds the first sentence of the abstract until a summary pass
-replaces it. A table that has four columns gains the Journal column, and every
-row already there gets `—` in it. A second run on one slug writes the Journal
-cell and changes nothing else. That is what brings a published preprint up to
-date.
+The last cell holds the first sentence of the abstract. A second run on one
+slug writes the Journal cell and changes nothing else. That is what brings a
+published preprint up to date.
 
 ### The reference store
 
-The script folds every work the paper cites into `.references.jsonl`, rewrites
+The ingest folds every work the paper cites into `.references.jsonl`, rewrites
 `REFERENCES.md` and `references/` from it, and turns each `[cite: …]` marker in
 the chapters into the link a reader follows:
 `([Lipari, 2002](../../references/lipari_2002_neutrino_oscillation_neutrino_cross.md))`.
@@ -280,10 +232,10 @@ The `references` block of the report counts what happened:
 Tell the user the count of unverified references. Those rows are marked ⚠: their
 fields come from a citing paper's own bibliography, and may be wrong.
 
-Resolve a tag with `reference_lookup.py`, and never by reading `REFERENCES.md`:
+Resolve a tag with `lit lookup`, and never by reading `REFERENCES.md`:
 
 ```bash
-$PY $SKILL/scripts/reference_lookup.py <tag>
+lit lookup <tag>
 ```
 
 ## Refresh a paper that is already there
@@ -291,11 +243,11 @@ $PY $SKILL/scripts/reference_lookup.py <tag>
 A preprint gets published later. Look it up again:
 
 ```bash
-$PY $SKILL/scripts/inspire_lookup.py <arxiv_id>
+lit inspire <arxiv_id>
 ```
 
 Then edit the `Published`, `Journal` and `DOI` rows of the paper's `INDEX.md`,
-and re-run `add_paper.py --index-only <slug>` to write the Journal cell of its
+and re-run `lit add-paper --index-only <slug>` to write the Journal cell of its
 row in `literature/README.md`. Nothing else changes: do not re-fetch, do not
 pass `--force`, and do not touch the chapters or the figures. The text of the
 paper did not change. Only what is known about it did.
@@ -305,11 +257,11 @@ paper did not change. Only what is known about it did.
 - The papers are copyrighted. Never commit a file under `literature/`.
 - Never copy a long passage from a chapter into `docs/` or another tracked file.
 - Report each warning of the report to the user.
-- **The script sends one request at a time.** `rate_gate.py` holds every script
+- **`lit` sends one request at a time.** Its request gate holds every command
   to the pace each API asks for, and it does so across processes. One command
   therefore ingests a whole queue of papers. Pass every identifier to that one
   command. Do not call these APIs from two agents at once.
-- Read a chapter only to summarise it. The script measures every number that
+- Never read a chapter during an ingest. The ingest measures every number that
   `INDEX.md` shows. A paper that you read to restate those numbers costs the
   context that the task itself needs.
 - Work through `AMBIGUOUS_TITLE` before you report a paper as missing. Most such

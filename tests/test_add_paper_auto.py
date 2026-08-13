@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-import add_paper
-import check_references
-import inspire_lookup
+from lit import add_paper
+from lit import check_references
+from lit import inspire_lookup
 from conftest import DATA, FakeInspire
 
 ARXIV_ID = "2501.00001"
@@ -61,16 +61,13 @@ def test_one_run_ingests_the_paper(collection: Path, small_paper: dict,
     assert sorted(path.name for path in (paper_dir / "chapters").glob("*.md"))
 
 
-def test_the_index_holds_the_counts_and_no_summary(
+def test_the_index_holds_the_counts(
     collection: Path, small_paper: dict, inspire_silent: FakeInspire
 ) -> None:
     run(collection, "--auto", ARXIV_ID)
     text = (collection / SLUG / "INDEX.md").read_text(encoding="utf-8")
 
-    assert "| # | File | Words | Named anchors | Subsections | What it covers |" in text
-    # Every summary cell is empty, because the ingest writes none.
-    rows = [line for line in text.splitlines() if line.startswith("| 1 |")]
-    assert rows and rows[0].rstrip().endswith("| — |")
+    assert "| # | File | Words | Named anchors | Subsections |" in text
     # A preprint: INSPIRE answered nothing, so nothing invented a journal.
     assert "| Published | preprint |" in text
 
@@ -121,7 +118,7 @@ def test_a_source_with_no_section_fails_the_parse(
     collection: Path, small_paper: dict, inspire_silent: FakeInspire,
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     def bare(arxiv_id: str, work_dir: Path) -> Path:
         source_dir = work_dir / "source"
@@ -144,7 +141,7 @@ def test_no_source_is_its_own_exception(
     collection: Path, small_paper: dict, inspire_silent: FakeInspire,
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     def pdf_only(arxiv_id: str, work_dir: Path) -> Path:
         raise arxiv_fetch.NoSource("arXiv served a PDF for %s" % arxiv_id, http_status=403)
@@ -167,7 +164,7 @@ def test_a_metadata_failure_is_reported_and_writes_nothing(
     collection row. A lookup that answered `{}` gave a paper with none of them,
     a meaningless directory name, and an exit code of 0.
     """
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     def refuse(arxiv_id: str) -> dict:
         raise arxiv_fetch.MetadataUnavailable("arXiv did not answer for %s" % arxiv_id)
@@ -186,7 +183,7 @@ def test_an_identifier_arxiv_does_not_know_is_not_ingestable(
     gate_off: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An empty feed means arXiv holds no such paper. It never means `{}`."""
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     monkeypatch.setattr(
         arxiv_fetch, "read_feed",
@@ -200,7 +197,7 @@ def test_an_identifier_arxiv_does_not_know_is_not_ingestable(
 def test_an_arxiv_that_does_not_answer_raises(
     gate_off: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     def refuse(params: dict) -> str:
         raise RuntimeError("arXiv API request failed: timed out")
@@ -212,7 +209,7 @@ def test_an_arxiv_that_does_not_answer_raises(
 
 
 def test_metadata_comes_back_whole(gate_off: None, monkeypatch: pytest.MonkeyPatch) -> None:
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     monkeypatch.setattr(
         arxiv_fetch, "read_feed",
@@ -269,7 +266,7 @@ def test_residue_comes_from_the_check_and_not_from_a_scan(
     collection: Path, small_paper: dict, inspire_silent: FakeInspire,
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     original = arxiv_fetch.sanitise
 
@@ -285,18 +282,6 @@ def test_residue_comes_from_the_check_and_not_from_a_scan(
                  if item["code"] == "PLACEHOLDER_RESIDUE")
     assert entry["count"] == len(reports[0]["checks"]["residue"])
     assert reports[0]["checks"]["residue"][0]["in"].startswith(SLUG + "/")
-
-
-def test_summarize_names_the_chapters_with_no_summary(
-    collection: Path, small_paper: dict, inspire_silent: FakeInspire
-) -> None:
-    run(collection, "--auto", ARXIV_ID)
-    status, reports = run(collection, "--summarize", SLUG)
-
-    assert status == 0
-    assert reports[0]["summary_state"] == "pending"
-    assert reports[0]["next_action"] == "summarize"
-    assert all(chapter["pending"] for chapter in reports[0]["chapters"])
 
 
 def test_index_only_rebuilds_the_counts(collection: Path, small_paper: dict,

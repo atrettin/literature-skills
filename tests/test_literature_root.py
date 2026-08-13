@@ -11,29 +11,29 @@ from pathlib import Path
 
 import pytest
 
-import arxiv_discover
-import check_references
-import collection_overlap
-import inspire_citations
-import reference_lookup
-import reference_store
-import search_literature
+from lit import arxiv_discover
+from lit import check_references
+from lit import collection_overlap
+from lit import inspire_citations
+from lit import reference_lookup
+from lit import paths
+from lit import search_literature
 
 
 def test_default_root_is_the_project_collection(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LITERATURE_ROOT", raising=False)
-    assert reference_store.default_root() == Path("literature")
+    assert paths.default_root() == Path("literature")
 
 
 def test_the_variable_names_the_collection(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LITERATURE_ROOT", "/shared/papers")
-    assert reference_store.default_root() == Path("/shared/papers")
+    assert paths.default_root() == Path("/shared/papers")
 
 
 def test_an_empty_variable_is_no_variable(monkeypatch: pytest.MonkeyPatch) -> None:
     """A variable set to nothing must not send every script to the root of the disk."""
     monkeypatch.setenv("LITERATURE_ROOT", "")
-    assert reference_store.default_root() == Path("literature")
+    assert paths.default_root() == Path("literature")
 
 
 @pytest.mark.parametrize(

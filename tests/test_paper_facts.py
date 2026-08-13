@@ -6,7 +6,7 @@ them with the text a source would have given.
 
 from __future__ import annotations
 
-import paper_facts
+from lit import paper_facts
 
 
 # --------------------------------------------------------------------------

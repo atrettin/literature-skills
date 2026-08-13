@@ -8,7 +8,7 @@ import types
 
 import pytest
 
-import rerank
+from lit import rerank
 
 
 def entry(title: str, summary: str = "") -> dict:

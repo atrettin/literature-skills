@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-import arxiv_discover
-import arxiv_search
-from arxiv_discover import Options
+from lit import arxiv_discover
+from lit import arxiv_search
+from lit.arxiv_discover import Options
 from conftest import FakeFetch, first_entry_only
 
 

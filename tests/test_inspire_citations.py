@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-import inspire_citations
-import inspire_lookup
-import references
+from lit import inspire_citations
+from lit import inspire_lookup
+from lit import references
 from conftest import FakeInspire
 
 

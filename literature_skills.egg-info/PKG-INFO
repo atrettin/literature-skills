@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: literature-skills
+Version: 0.1.0
+Summary: Search published scientific papers, read them, and cite what they say
+Requires-Python: >=3.10
+Requires-Dist: TexSoup>=0.3.3
+Requires-Dist: Pillow>=10.0
+Requires-Dist: filelock>=3.12
+Provides-Extra: rerank
+Requires-Dist: flashrank>=0.2.9; extra == "rerank"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pyright>=1.1.390; extra == "dev"

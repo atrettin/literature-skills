@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import datetime
 
-import references
-import reference_store
+from lit import references
+from lit import reference_store
 
 
 # --------------------------------------------------------------------------

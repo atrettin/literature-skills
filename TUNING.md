@@ -33,7 +33,7 @@ section before you change a delay.
 
 ## Finding papers
 
-`add-paper/scripts/arxiv_discover.py` searches arXiv for a subject.
+`lit/arxiv_discover.py` searches arXiv for a subject.
 
 | Parameter | Now | What it does |
 |---|---|---|
@@ -49,7 +49,7 @@ section before you change a delay.
 | `--kind` | `any` | Which kinds of paper the report holds. `review` answers a broad question. It drops a review that is a preprint, because a preprint has no venue. |
 | `--max-results` | 15 | How many results the report holds, out of the `CANDIDATES` that the ranking ordered. |
 
-`add-paper/scripts/paper_facts.py` describes a candidate: its length, its kind
+`lit/paper_facts.py` describes a candidate: its length, its kind
 and its citation count. None of these enters the score. A citation count and an
 author count both point the wrong way for a research question, so they travel
 beside the score as fields and the caller decides.
@@ -60,7 +60,7 @@ beside the score as fields and the caller decides.
 | `REVIEW_DOCUMENT_TYPES` | `review` | The INSPIRE document types that `--kind review` reads as a review. INSPIRE gives the type of some records only. |
 | `PAGE_COUNT_MAX` | 1000 | The largest page count that the parse of an arXiv comment accepts. A comment is free text, and a number in it can be a volume or a year. A lower value rejects a real long report. A higher value reports a wrong number as a length. |
 
-`add-paper/scripts/rerank.py` orders what the search found.
+`lit/rerank.py` orders what the search found.
 
 | Parameter | Now | What it does |
 |---|---|---|
@@ -73,7 +73,7 @@ beside the score as fields and the caller decides.
 
 ## Following the citations of a paper
 
-`add-paper/scripts/inspire_citations.py` finds the papers that cite one paper,
+`lit/inspire_citations.py` finds the papers that cite one paper,
 and the works that it draws on.
 
 | Parameter | Now | What it does |
@@ -84,7 +84,7 @@ and the works that it draws on.
 
 ## Discovering the other names of a subject
 
-`add-paper/scripts/terminology_scan.py` weighs the multiword terms of the papers
+`lit/terminology_scan.py` weighs the multiword terms of the papers
 in scope and of the titles they cite.
 
 | Parameter | Now | What it does |
@@ -104,8 +104,8 @@ in scope and of the titles they cite.
 | `MAX_PIVOT_BRACKET_WORDS` | 2 | How long a bracketed span can be and still count as the subject written beside its other name — "an acute coronary (heart attack) event". A citation carries an author and a year, so it does not fit, and that is what keeps the block from reporting the words beside every citation a paper makes. Raise it and the block fills with the neighbours of citations. |
 | `MAX_ALIASES` | 10 | How many alias claims the report holds. The block exists to be read in full, and each entry costs the reader a sentence. |
 
-`MIN_PREFIX` needs no row of its own. `terminology_scan.py` imports it from
-`rerank.py`, through `term_matches`, and the row there covers it.
+`MIN_PREFIX` needs no row of its own. `lit/terminology_scan.py` imports it from
+`lit/rerank.py`, through `term_matches`, and the row there covers it.
 
 Two things here are not tunable, and both are decided by the text.
 
@@ -123,7 +123,7 @@ Every value here is a judgement. Nobody measured any of them.
 
 ## Weighing a candidate against the collection
 
-`add-paper/scripts/collection_overlap.py` says how much of what a candidate paper
+`lit/collection_overlap.py` says how much of what a candidate paper
 cites the papers in scope know already. It reports a coefficient, and it turns
 that coefficient into a band and a fixed sentence.
 
@@ -139,7 +139,7 @@ Every value here is a judgement. Nobody measured any of them.
 
 The scope is not tunable, and it has no default. `--scope <slug>` and
 `--all-papers` are a required pair, the way `--in-text`, `--cited-by` and
-`--all-papers` are for `terminology_scan.py`. A collection is persistent and serves every task that
+`--all-papers` are for `lit/terminology_scan.py`. A collection is persistent and serves every task that
 came before yours, so a band measured over all of it answers for those tasks and
 not for your question.
 
@@ -164,7 +164,7 @@ skill states them, and the agent obeys them.
 
 ## Searching the text
 
-`add-paper/scripts/search_literature.py` finds a phrase in the text of the
+`lit/search_literature.py` finds a phrase in the text of the
 papers. Nobody measured these values. Each one is a judgement.
 
 | Parameter | Now | What it does |
@@ -188,13 +188,13 @@ model costs less and reads less well.
 
 ## Matching a paper you can name
 
-`add-paper/scripts/arxiv_search.py` finds one paper that you can name.
+`lit/arxiv_search.py` finds one paper that you can name.
 
 | Parameter | Now | What it does |
 |---|---|---|
 | `EXACT_TITLE_RATIO` | 0.95 | The similarity above which two titles are the same title. The caller then stops and asks nothing. A lower value ingests a wrong paper without a question. A higher value asks the user about papers that agree plainly. |
 | `APPROX_TITLE_RATIO` | 0.60 | The similarity below which the report drops a result. |
-| `SUMMARY_CHARS` | 400 | How much of an abstract a result carries. `arxiv_discover.py` uses this value too. It is enough to choose a paper. It is never enough to cite one. |
+| `SUMMARY_CHARS` | 400 | How much of an abstract a result carries. `lit/arxiv_discover.py` uses this value too. It is enough to choose a paper. It is never enough to cite one. |
 | word length `> 2` and `> 3` | in `build_fallback_query` and `build_loose_query` | Which title words go into a looser query. A title renders its short words differently, so the query drops those first. |
 | author and year bonus | 0.02 each, in `score_entry` | How much an author or a year that agrees lifts the score of a title. |
 
@@ -202,33 +202,35 @@ model costs less and reads less well.
 
 | Parameter | Where | Now | What it does |
 |---|---|---|---|
-| `TAG_STOPWORDS` | `reference_store.py` | 38 words | The words that a citation tag leaves out. A tag must stay short enough to read inside a sentence. |
-| `TAG_TITLE_WORDS` | `reference_store.py` | 4 | How many title words a tag carries. A higher value makes a tag more exact and harder to read. |
-| `DEFAULT_AUTHORS` | `reference_lookup.py` | 3 | How many authors a resolved citation names. |
-| `MAX_AUTHORS` | `update_references.py` | 3 | The same, for the rendered `REFERENCES.md` table. |
-| `MAX_CITED_BY` | `update_references.py` | 8 | How many citing papers one row of that table lists. |
-| `COLLECTION_TAIL_PARTS` | `check_report.py` | 2 | How many parts of a broken link must name a place in the collection before the root is searched for it. A lower value finds the collection's copy of a bare file name. It can also answer `../README.md` with the README of the collection, which is a different file. A higher value leaves a link with a short path undiagnosed. The value is a judgement: a directory and a name is the shortest path that the layout writes. Nobody measured it. |
+| `TAG_STOPWORDS` | `lit/reference_store.py` | 38 words | The words that a citation tag leaves out. A tag must stay short enough to read inside a sentence. |
+| `TAG_TITLE_WORDS` | `lit/reference_store.py` | 4 | How many title words a tag carries. A higher value makes a tag more exact and harder to read. |
+| `DEFAULT_AUTHORS` | `lit/reference_lookup.py` | 3 | How many authors a resolved citation names. |
+| `MAX_AUTHORS` | `lit/update_references.py` | 3 | The same, for the rendered `REFERENCES.md` table. |
+| `MAX_CITED_BY` | `lit/update_references.py` | 8 | How many citing papers one row of that table lists. |
+| `COLLECTION_TAIL_PARTS` | `lit/check_report.py` | 2 | How many parts of a broken link must name a place in the collection before the root is searched for it. A lower value finds the collection's copy of a bare file name. It can also answer `../README.md` with the README of the collection, which is a different file. A higher value leaves a link with a short path undiagnosed. The value is a judgement: a directory and a name is the shortest path that the layout writes. Nobody measured it. |
 
 ## Ingesting a paper
 
 | Parameter | Where | Now | What it does |
 |---|---|---|---|
-| `DEFAULT_MAX_CHAPTER_BYTES` | `arxiv_fetch.py` | 40000 | The script divides a section larger than this across more than one file. The value sets how much context one chapter costs an agent that reads it. |
-| `FIGURE_WIDTH_PX` | `arxiv_fetch.py` | 500 | The display width of a figure in a chapter. |
-| `ID_BATCH` | `arxiv_search.py` | 100 | How many identifiers one `id_list` request asks arXiv about. A bibliography holds fewer references than this, so one request answers a whole paper. A lower value sends more requests, and each one waits `COURTESY_DELAY_S`. The API accepts up to 2000. |
-| `RENDER_DPI` | `convert_figures.py` | 300 | The resolution that the script renders a vector figure at. A higher value is easier to read and larger on disk. |
-| `MAX_PIXELS` | `convert_figures.py` | 2000 | The longest edge of a converted figure. |
-| `CROP_MARGIN` | `convert_figures.py` | 8 | How many pixels of whitespace stay around a cropped figure. |
-| `PARAGRAPH_ANCHOR_MIN_CHARS` | `arxiv_fetch.py` | 80 | The length under which a block of text gets no paragraph anchor. A lower value addresses more of the chapter, and writes an anchor line above shorter blocks. A higher value leaves a short paragraph addressable only through the paragraph above it. The value is a judgement: one sentence of prose is longer than 80 characters. |
-| `RESTORE_PASSES` | `arxiv_fetch.py` | 4 | How often the placeholder restore walks its items. Each pass answers one further level of nesting, such as the maths of a table inside that table. A lower value can leave a `PH<number>` in the text, which the manifest then reports as a warning. A higher value costs one more walk over a text that already holds no key. |
-| `SLUG_MIN_CHARS` | `arxiv_search.py` | 24 | The length under which a chapter file name keeps a cut word rather than lose more of the title. A higher value returns more names that end in half a word. A lower value returns shorter and less exact names. |
-| `MAX_CONCURRENT_FETCHES` | `add_paper.py` | 2 | How many papers run the fetch stage together. The gate still sends one request at a time. A higher value fills the wait of one request with the work of another paper. It never sends more requests, and each paper in the stage costs memory. |
-| `INDEX_SUBSECTIONS_SHOWN` | `write_index.py` | 6 | How many subsection titles one chapter row lists. A higher value says more about a long chapter, and makes the table harder to read. |
-| `SLUG_TITLE_WORDS` | `identity.py` | 2 | How many title words the derived slug carries. A higher value separates two papers of one author in one year more often, and gives a longer directory name. |
-| `ROW_DESCRIPTION_CHARS` | `collection_index.py` | 160 | How much of the abstract the collection row carries before a summary pass replaces it. |
-| `REPORT_WARNINGS_SHOWN` | `add_paper.py` | 10 | How many warnings the compact report prints. The full manifest holds them all. |
-| `CANDIDATES_SHOWN` | `identity.py` | 5 | How many candidates an `AMBIGUOUS_TITLE` exception carries for an agent to choose between. A higher value describes more papers, and each one costs the agent context at the moment it has to decide. |
-| `AUTHORS_SHOWN` | `write_index.py` and `add_paper.py` | 3 | How many authors the identity table and the report name before `et al.`. `authors_total` gives the count of the rest. |
+| `DEFAULT_MAX_CHAPTER_BYTES` | `lit/arxiv_fetch.py` | 40000 | The script divides a section larger than this across more than one file. The value sets how much context one chapter costs an agent that reads it. |
+| `FIGURE_WIDTH_PX` | `lit/arxiv_fetch.py` | 500 | The display width of a figure in a chapter. |
+| `ID_BATCH` | `lit/arxiv_search.py` | 100 | How many identifiers one `id_list` request asks arXiv about. A bibliography holds fewer references than this, so one request answers a whole paper. A lower value sends more requests, and each one waits `COURTESY_DELAY_S`. The API accepts up to 2000. |
+| `RENDER_DPI` | `lit/convert_figures.py` | 300 | The resolution that the script renders a vector figure at. A higher value is easier to read and larger on disk. |
+| `MAX_PIXELS` | `lit/convert_figures.py` | 2000 | The longest edge of a converted figure. |
+| `CROP_MARGIN` | `lit/convert_figures.py` | 8 | How many pixels of whitespace stay around a cropped figure. |
+| `PARAGRAPH_ANCHOR_MIN_CHARS` | `lit/arxiv_fetch.py` | 80 | The length under which a block of text gets no paragraph anchor. A lower value addresses more of the chapter, and writes an anchor line above shorter blocks. A higher value leaves a short paragraph addressable only through the paragraph above it. The value is a judgement: one sentence of prose is longer than 80 characters. |
+| `RESTORE_PASSES` | `lit/arxiv_fetch.py` | 4 | How often the placeholder restore walks its items. Each pass answers one further level of nesting, such as the maths of a table inside that table. A lower value can leave a `PH<number>` in the text, which the manifest then reports as a warning. A higher value costs one more walk over a text that already holds no key. |
+| `SLUG_MIN_CHARS` | `lit/text.py` | 24 | The length under which a chapter file name keeps a cut word rather than lose more of the title. A higher value returns more names that end in half a word. A lower value returns shorter and less exact names. |
+| `MAX_CONCURRENT_FETCHES` | `lit/add_paper.py` | 2 | How many papers run the fetch stage together. The gate still sends one request at a time. A higher value fills the wait of one request with the work of another paper. It never sends more requests, and each paper in the stage costs memory. |
+| `INDEX_SUBSECTIONS_SHOWN` | `lit/write_index.py` | 6 | How many subsection titles one chapter row lists. A higher value says more about a long chapter, and makes the table harder to read. |
+| `SLUG_TITLE_WORDS` | `lit/identity.py` | 2 | How many title words the derived slug carries. A higher value separates two papers of one author in one year more often, and gives a longer directory name. |
+| `ROW_DESCRIPTION_CHARS` | `lit/collection_index.py` | 160 | How much of the abstract the collection row carries. |
+| `ROW_AUTHORS_SHOWN` | `lit/collection_index.py` | 1 | How many authors a collection row names before `et al.`. The column is narrow, and the row is a pointer to `INDEX.md` rather than a citation. A higher value makes the table wider and says little a reader could not get by opening the paper. |
+| `ABBREVIATIONS` | `lit/text.py` | 40 words | The words that end in a full stop without ending a sentence, so that `Phys. Rev. D 108` is one reference and not three sentences. A word missing from this set splits a sentence that no author ended, which cuts a quotation short and divides a clause a terminology scan reads. A word wrongly in it joins two sentences into one long quotation. Nobody measured the set; it is the journal names and the citation shorthands that these papers write. |
+| `REPORT_WARNINGS_SHOWN` | `lit/add_paper.py` | 10 | How many warnings the compact report prints. The full manifest holds them all. |
+| `CANDIDATES_SHOWN` | `lit/identity.py` | 5 | How many candidates an `AMBIGUOUS_TITLE` exception carries for an agent to choose between. A higher value describes more papers, and each one costs the agent context at the moment it has to decide. |
+| `AUTHORS_SHOWN` | `lit/write_index.py` and `lit/add_paper.py` | 3 | How many authors the identity table and the report name before `et al.`. `authors_total` gives the count of the rest. |
 
 ## Not tunable
 
@@ -237,15 +239,15 @@ repository sets each one. A lower value makes nothing faster.
 
 | Parameter | Where | Why it is fixed |
 |---|---|---|
-| `COURTESY_DELAY_S` | `arxiv_search.py`, 3.0 | arXiv asks for three seconds between calls. A lower value causes a rate limit, and that costs more time than the change saves. |
-| `RATE_LIMIT_WINDOW_S` | `inspire_lookup.py`, 5.0 | The rate-limit window of INSPIRE-HEP. The script answers a 429 and then waits out the whole window. |
-| `MAX_RETRY_DELAY_S` | `inspire_lookup.py`, 60.0 | A ceiling on the delay that a `Retry-After` header can ask for. A wrong header cannot then stop a run. |
-| `INSPIRE_PACE_S` | `inspire_lookup.py`, 0.5 | The pace the INSPIRE API accepts. It sits beside `fetch_record`, which is the one function every INSPIRE request in these scripts passes through. `references.py` reads the name from there. |
-| `BATCH_SIZE` | `references.py`, 40 | The batch size the INSPIRE API accepts. `inspire_citations.py` sends its requests through the same functions. |
-| `CROSSREF_PACE_S` | `references.py`, 0.5 | The pace Crossref asks of a client with no polite-pool token. |
-| `HOST_INTERVALS` | `rate_gate.py` | The pace each API asks for, one entry per host. Each value is registered by the module that owns the constant, so a pace has one definition. |
-| `DEFAULT_INTERVAL_S` | `rate_gate.py`, 1.0 | What a host nobody registered gets. It is slower than every pace registered, so an unknown host is paced conservatively rather than not at all. |
-| `GATE_WAIT_TIMEOUT_S` | `rate_gate.py`, 120.0 | How long a caller waits for the lock. It bounds a wait, and it makes nothing faster. |
-| `LOCK_POLL_S` | `rate_gate.py`, 0.05 | How often a waiting caller retries the lock. Short enough that a caller takes the gate promptly after the holder releases it. |
-| `REQUEST_TIMEOUT_S` and `CROSSREF_TIMEOUT_S` | four scripts, 20 to 120 | How long a script waits for a server. `arxiv_fetch.py` waits the longest, at 120, because it downloads an archive of the source. |
+| `COURTESY_DELAY_S` | `lit/arxiv_search.py`, 3.0 | arXiv asks for three seconds between calls. A lower value causes a rate limit, and that costs more time than the change saves. |
+| `RATE_LIMIT_WINDOW_S` | `lit/inspire_lookup.py`, 5.0 | The rate-limit window of INSPIRE-HEP. The script answers a 429 and then waits out the whole window. |
+| `MAX_RETRY_DELAY_S` | `lit/inspire_lookup.py`, 60.0 | A ceiling on the delay that a `Retry-After` header can ask for. A wrong header cannot then stop a run. |
+| `INSPIRE_PACE_S` | `lit/inspire_lookup.py`, 0.5 | The pace the INSPIRE API accepts. It sits beside `fetch_record`, which is the one function every INSPIRE request in these scripts passes through. `lit/references.py` reads the name from there. |
+| `BATCH_SIZE` | `lit/references.py`, 40 | The batch size the INSPIRE API accepts. `lit/inspire_citations.py` sends its requests through the same functions. |
+| `CROSSREF_PACE_S` | `lit/references.py`, 0.5 | The pace Crossref asks of a client with no polite-pool token. |
+| `HOST_INTERVALS` | `lit/rate_gate.py` | The pace each API asks for, one entry per host. Each value is registered by the module that owns the constant, so a pace has one definition. |
+| `DEFAULT_INTERVAL_S` | `lit/rate_gate.py`, 1.0 | What a host nobody registered gets. It is slower than every pace registered, so an unknown host is paced conservatively rather than not at all. |
+| `GATE_WAIT_TIMEOUT_S` | `lit/rate_gate.py`, 120.0 | How long a caller waits for the lock. It bounds a wait, and it makes nothing faster. |
+| `LOCK_POLL_S` | `lit/rate_gate.py`, 0.05 | How often a waiting caller retries the lock. Short enough that a caller takes the gate promptly after the holder releases it. |
+| `REQUEST_TIMEOUT_S` and `CROSSREF_TIMEOUT_S` | four scripts, 20 to 120 | How long a script waits for a server. `lit/arxiv_fetch.py` waits the longest, at 120, because it downloads an archive of the source. |
 | `MAX_RETRIES` | two scripts, 3 | How many times a script repeats a failed request. |

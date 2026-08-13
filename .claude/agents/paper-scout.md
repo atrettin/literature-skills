@@ -13,11 +13,9 @@ set, it is `literature/` in the project. The paper is the directory named by the
 slug that you were given.
 
 1. Read its `INDEX.md`.
-2. Read each chapter in `chapters/`. Read all of them. The `What it covers`
-   column of `INDEX.md` usually holds `—`, because the summary pass is opt-in
-   and most papers never get it. A summary that somebody did write was written
-   before anybody had these questions, thus it can miss the paragraph that
-   answers one. Neither case lets you choose chapters and skip the rest.
+2. Read each chapter in `chapters/`. Read all of them. `INDEX.md` says how
+   long each chapter is and what it is called, and neither answers these
+   questions, so nothing there lets you choose chapters and skip the rest.
 3. For each sub-question, find each location that bears on it.
 
 Report one line for each location:
@@ -47,7 +45,7 @@ Seven rules:
   beside it.
 - **Grep a few words at most.** Chapter text wraps at about 70 characters. A
   grep for a whole sentence thus finds nothing while the sentence is there. You
-  have no `Bash` tool, thus you cannot run `search_literature.py`. The caller
+  have no `Bash` tool, thus you cannot run `lit search`. The caller
   runs it. When a grep finds nothing, read the chapter. Never say the paper does
   not hold a text because a grep missed it.
 - **Quote exactly.** Copy the words of the paper inside the quotation marks.

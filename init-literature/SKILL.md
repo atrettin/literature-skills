@@ -22,7 +22,7 @@ wherever it is.
 
 If the directory is present, stop. Tell the user that the collection exists and
 how many papers are in it. Do not overwrite its `README.md` — it is the index of
-papers already collected, and rewriting it destroys their summaries.
+papers already collected, and rewriting it loses every row.
 
 ## Step 2. Ask what the collection covers
 
@@ -98,8 +98,8 @@ Start at `INDEX.md` of a paper. Read only the chapters that you need.
 
 A citation in a chapter reads `(Lipari, 2002)` and opens that work's page under
 `references/`, which is named after the work's tag. Agents resolve that tag with
-the `add-paper` skill's `reference_lookup.py`, which reads `.references.jsonl`
-and answers with the title, authors, journal, DOI and arXiv identifier. That is
+`lit lookup`, which reads `.references.jsonl` and answers with the title,
+authors, journal, DOI and arXiv identifier. That is
 how a claim a paper borrowed gets traced back to whoever established it.
 
 [REFERENCES.md](REFERENCES.md) is the same data as one table, most-cited first:
@@ -127,14 +127,14 @@ same one the directory name uses. Journal is where the paper was published, and
 Then write the empty reference index, so the collection has one from the start:
 
 ```bash
-$PY <add-paper skill>/scripts/update_references.py --render-only
+lit references --render-only
 ```
 
 That creates `REFERENCES.md` and an empty `references/` in the collection from
 an empty store. Give `--literature-root` when `$LITERATURE_ROOT` is not set and
-the collection is not `literature/` in the project. The command needs the
-`add-paper` skill's scripts. If that skill is not installed here, skip it:
-`add-paper` writes both itself the first time it files a paper's references.
+the collection is not `literature/` in the project. Skip this step when `lit` is not
+installed: `lit add-paper` writes both itself the first time it files a
+paper's references.
 
 ## Step 5. Say what comes next
 

@@ -10,10 +10,10 @@ holds the workflow. Do not improvise around it.
 
 Six rules hold for each task:
 
-- Check a quotation of a scout with `search_literature.py`. It gives the
+- Check a quotation of a scout with `lit search`. It gives the
   chapter, the anchor and the line. Never check a quotation with `grep`. The
   text wraps, thus `grep` misses a phrase that a line break splits.
-- Ingest a queue of papers with one `add_paper.py --auto` command. Give each
+- Ingest a queue of papers with one `lit add-paper --auto` command. Give each
   deep read of a paper to `paper-scout` agents. Read the papers of the last
   command while the next command runs. arXiv and INSPIRE limit their rate: one
   request at a time, and a scout sends no request.

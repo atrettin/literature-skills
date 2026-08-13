@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-import check_references
-import reference_store
-import update_references
+from lit import check_references
+from lit import reference_store
+from lit import update_references
 
 CHAPTER = "jeong_2023_shallow_deep_inelastic/chapters/02_introduction.md"
 LIPARI = "lipari_2002_neutrino_oscillation_neutrino_cross"
@@ -105,21 +105,6 @@ def test_the_link_is_relative_to_the_file_it_is_in(collection: Path) -> None:
 
     assert "(../../references/%s.md)" % LIPARI in chapter
     assert "(../references/%s.md)" % LIPARI in index.read_text(encoding="utf-8")
-
-
-def test_a_citation_written_against_the_old_anchors_is_repointed(collection: Path) -> None:
-    """Citations once named a row of the table, which never jumped in VS Code."""
-    chapter = collection / CHAPTER
-    chapter.write_text(
-        "Established elsewhere ([Lipari, 2002](../../REFERENCES.md#%s)).\n" % LIPARI,
-        encoding="utf-8",
-    )
-
-    relink(collection)
-
-    assert chapter.read_text(encoding="utf-8") == (
-        "Established elsewhere ([Lipari, 2002](../../references/%s.md)).\n" % LIPARI
-    )
 
 
 def test_the_pages_are_not_themselves_relinked(collection: Path) -> None:
