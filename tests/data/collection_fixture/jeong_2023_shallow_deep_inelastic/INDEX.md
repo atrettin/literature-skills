@@ -18,6 +18,8 @@ of a real paper is kept here.
 
 ## Chapters
 
-| # | File | What it covers |
-|---|---|---|
-| 1 | [01_introduction.md](chapters/01_introduction.md) | why the shallow-inelastic region matters |
+| # | File | Words | Named anchors | Subsections |
+|---|---|---|---|---|
+| 2 | [02_introduction.md](chapters/02_introduction.md) | 82 | 1 | — |
+
+1 chapters, 82 words.

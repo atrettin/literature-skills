@@ -223,11 +223,9 @@ paper.
 A paper that the collection held enters the working set here, and not at the
 search: it enters when you read text in it that bears on a sub-question.
 
-Expect `INDEX.md` to settle it rarely. Its `What it covers` column holds `—`
-until somebody runs the summary pass, so what usually names a chapter for you is
-its title, the subsection titles and the word count. A summary that somebody did
-write was written before anybody had your sub-questions, thus it too can miss
-the paragraph that answers one. That is what a scout is for: it reads the whole
+Expect `INDEX.md` to settle it rarely. What names a chapter for you is its
+title, the subsection titles and the word count, and none of those was written
+against your sub-questions. That is what a scout is for: it reads the whole
 paper against the questions that you have.
 
 **Verify before you cite.** A scout report tells you where to look. It is not a

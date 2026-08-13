@@ -8,9 +8,8 @@ description: Adds a paper from arXiv to the local literature database in literat
 The literature database holds papers as plain text, split into chapters. Agents
 read it with the `use-literature` skill. This skill puts a new paper into it.
 
-`add_paper.py` does the ingest. You handle its exceptions. Read a chapter only
-when you write the summaries, and never otherwise: the script measures every
-number that `INDEX.md` shows.
+`add_paper.py` does the ingest. You handle its exceptions. Never read a
+chapter: the script measures every number that `INDEX.md` shows.
 
 The paper comes from arXiv, because arXiv is the only source that carries the
 TeX. arXiv does not say where the paper was published — its `journal_ref` field
@@ -149,7 +148,7 @@ The paper directory is already there, and the caller gave no `--force`.
 it. Re-run with `--force` when the answer is yes.
 
 `--force` empties the paper directory first, which deletes `INDEX.md` with
-everything else. The summaries in it go too, so write them again.
+everything else. Every value in it is derived, so the ingest writes it again.
 
 ### `REFERENCE_CHECK_FAILED`
 
@@ -178,37 +177,6 @@ by hand, then re-run with `--index-only <slug>`.
 An API did not answer after its retries. `host` and `reason` say which. Report
 it and try again later. This is not a fault of the paper.
 
-## Step 3. Write the chapter summaries
-
-This pass is opt-in, and it is the one part of an ingest that needs an agent.
-The ingest leaves every `What it covers` cell as `—`. A summary earns its cost
-when somebody returns to the collection, and it earns nothing at ingest for a
-paper that nobody cites.
-
-Run it when the user asks for it, or when a research task is about to read the
-paper:
-
-```bash
-$PY $SKILL/scripts/add_paper.py --summarize <slug>
-```
-
-The report names every chapter whose summary is still empty. Then:
-
-1. Read that chapter file.
-2. Write 1 to 3 sentences saying what it contains. A later agent uses your
-   sentence to decide whether to open the file.
-3. Put the sentences in a JSON file, keyed by the chapter file name.
-4. Apply them:
-
-```bash
-$PY $SKILL/scripts/write_index.py literature/<slug> \
-    --summaries summaries.json --apply
-```
-
-**Never write a summary of a chapter that you did not read.** The apply step
-keeps every summary already in the file and recomputes every count, so it is
-safe to run again.
-
 ## What the script writes
 
 ### `literature/<slug>/`
@@ -228,12 +196,12 @@ paper has one. `Submitted` is the arXiv year and always has a value. A paper
 INSPIRE reports no publication for says `preprint` in `Published` and `—` in the
 other two. The slug keeps the submission year, whatever `Published` says.
 
-The chapter table has six columns:
+The chapter table has five columns:
 
 ```markdown
-| # | File | Words | Named anchors | Subsections | What it covers |
-|---|---|---|---|---|---|
-| 7 | [07_form_factors.md](chapters/07_form_factors.md) | 1435 | 15 | 7.1 Generic Dipole Form | — |
+| # | File | Words | Named anchors | Subsections |
+|---|---|---|---|---|
+| 7 | [07_form_factors.md](chapters/07_form_factors.md) | 1435 | 15 | 7.1 Generic Dipole Form |
 ```
 
 `Words` says where the substance of the paper is. `Named anchors` counts the
@@ -251,11 +219,9 @@ One row per paper, in order of the arXiv submission year, newest last:
 | [<Title>](<slug>/INDEX.md) | <first author> et al. | <year> | <journal> | <one sentence> |
 ```
 
-The last cell holds the first sentence of the abstract until a summary pass
-replaces it. A table that has four columns gains the Journal column, and every
-row already there gets `—` in it. A second run on one slug writes the Journal
-cell and changes nothing else. That is what brings a published preprint up to
-date.
+The last cell holds the first sentence of the abstract. A second run on one
+slug writes the Journal cell and changes nothing else. That is what brings a
+published preprint up to date.
 
 ### The reference store
 
@@ -309,7 +275,7 @@ paper did not change. Only what is known about it did.
   to the pace each API asks for, and it does so across processes. One command
   therefore ingests a whole queue of papers. Pass every identifier to that one
   command. Do not call these APIs from two agents at once.
-- Read a chapter only to summarise it. The script measures every number that
+- Never read a chapter during an ingest. The script measures every number that
   `INDEX.md` shows. A paper that you read to restate those numbers costs the
   context that the task itself needs.
 - Work through `AMBIGUOUS_TITLE` before you report a paper as missing. Most such

@@ -13,7 +13,6 @@ What it reports:
 
     unresolved   a chapter cites a tag no record answers to
     duplicate    one work holds two records, so its citations are split
-    orphan       a record nothing cites any more
     stale        a record points at a paper directory that is not there
     missing page a cited work has no page under references/ to open
     dangling ref a link to an equation, figure or section that is not there
@@ -21,10 +20,9 @@ What it reports:
 
 Exit status is 1 when anything unresolved, duplicated, stale or missing a page
 was found.
-Orphans, unverified rows, dangling cross-references and residue are reported but
-do not fail: an orphan is what a re-ingested paper leaves behind, an unverified
-row is honest about itself, and a cross-reference the paper's own source never
-defined cannot be made to resolve. `ok` answers whether the citations resolve,
+Unverified rows, dangling cross-references and residue are reported but do not
+fail: an unverified row is honest about itself, and a cross-reference the
+paper's own source never defined cannot be made to resolve. `ok` answers whether the citations resolve,
 and residue is a defect of the text: a fetch of that paper again, with --force,
 is what removes it.
 
@@ -215,7 +213,6 @@ def scope_report(report: dict, paper: str, store: list[dict],
         ("duplicates", lambda item: any(
             cites(tag) or held_as_paper(tag) for tag in item["tags"])),
         ("stale", lambda tag: held_as_paper(tag) or cites(tag)),
-        ("orphans", cited_by_paper),
     ):
         mine[field] = [item for item in report[field] if belongs(item)]
         elsewhere[field] = len(report[field]) - len(mine[field])
@@ -228,7 +225,7 @@ def scope_report(report: dict, paper: str, store: list[dict],
 
     scoped = {"scope": paper, "records": report["records"],
               "cited_tags": report["cited_tags"]}
-    for field in ("unresolved", "duplicates", "missing_pages", "stale", "orphans"):
+    for field in ("unresolved", "duplicates", "missing_pages", "stale"):
         scoped[field] = mine[field]
     scoped["unverified"] = unverified
     scoped["dangling_refs"] = mine["dangling_refs"]
@@ -237,7 +234,7 @@ def scope_report(report: dict, paper: str, store: list[dict],
     scoped["elsewhere"] = {
         field: elsewhere[field]
         for field in ("unresolved", "duplicates", "missing_pages", "stale",
-                      "orphans", "unverified", "dangling_refs", "residue")
+                      "unverified", "dangling_refs", "residue")
     }
     return scoped
 
@@ -281,7 +278,6 @@ def check(root: Path, paper: str | None = None) -> dict:
             for record in store
             if record.get("held_as") and not (root / record["held_as"]).is_dir()
         ),
-        "orphans": sorted(tag for tag in tags if tag and tag not in cited),
         "unverified": sum(1 for record in store if not record.get("verified")),
         "dangling_refs": read_cross_references(root, texts),
         # Reported, and it leaves `ok` true: `ok` answers for the citations.

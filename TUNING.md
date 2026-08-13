@@ -225,7 +225,7 @@ model costs less and reads less well.
 | `MAX_CONCURRENT_FETCHES` | `add_paper.py` | 2 | How many papers run the fetch stage together. The gate still sends one request at a time. A higher value fills the wait of one request with the work of another paper. It never sends more requests, and each paper in the stage costs memory. |
 | `INDEX_SUBSECTIONS_SHOWN` | `write_index.py` | 6 | How many subsection titles one chapter row lists. A higher value says more about a long chapter, and makes the table harder to read. |
 | `SLUG_TITLE_WORDS` | `identity.py` | 2 | How many title words the derived slug carries. A higher value separates two papers of one author in one year more often, and gives a longer directory name. |
-| `ROW_DESCRIPTION_CHARS` | `collection_index.py` | 160 | How much of the abstract the collection row carries before a summary pass replaces it. |
+| `ROW_DESCRIPTION_CHARS` | `collection_index.py` | 160 | How much of the abstract the collection row carries. |
 | `REPORT_WARNINGS_SHOWN` | `add_paper.py` | 10 | How many warnings the compact report prints. The full manifest holds them all. |
 | `CANDIDATES_SHOWN` | `identity.py` | 5 | How many candidates an `AMBIGUOUS_TITLE` exception carries for an agent to choose between. A higher value describes more papers, and each one costs the agent context at the moment it has to decide. |
 | `AUTHORS_SHOWN` | `write_index.py` and `add_paper.py` | 3 | How many authors the identity table and the report name before `et al.`. `authors_total` gives the count of the rest. |

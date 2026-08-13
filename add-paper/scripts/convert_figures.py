@@ -52,10 +52,6 @@ class ConversionError(RuntimeError):
     """A figure could not be turned into a PNG."""
 
 
-def have_tool(name: str) -> bool:
-    return shutil.which(name) is not None
-
-
 def run_tool(command: list[str]) -> None:
     # CPython only takes its posix_spawn path when the executable is given as a
     # path, not a bare name looked up on PATH. See the close_fds note below.
@@ -328,19 +324,9 @@ def convert_paper(paper_dir: Path, warnings: list[str] | None = None) -> dict[st
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="+", type=Path, help="paper directories")
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        help="treat each path as a directory of papers and convert every one",
-    )
     args = parser.parse_args()
 
-    paper_dirs: list[Path] = []
-    for path in args.paths:
-        if args.all:
-            paper_dirs.extend(sorted(p for p in path.iterdir() if p.is_dir()))
-        else:
-            paper_dirs.append(path)
+    paper_dirs: list[Path] = list(args.paths)
 
     failures = 0
     for paper_dir in paper_dirs:

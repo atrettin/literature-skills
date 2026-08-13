@@ -16,7 +16,6 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import difflib
 import json
 import re
@@ -359,25 +358,6 @@ def truncate(text: str, limit: int = SUMMARY_CHARS) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
-# --------------------------------------------------------------------------
-# main
-# --------------------------------------------------------------------------
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--title", help="paper title, exact or partial")
-    parser.add_argument("--author", help="one author name; the surname is what matters")
-    parser.add_argument(
-        "--year",
-        type=int,
-        help="year of the paper; the preprint year or the journal year, "
-        "since the search covers this year and the one before it",
-    )
-    parser.add_argument("--max-results", type=int, default=10)
-    return parser
-
-
 def run_search(
     title: str | None, author: str | None, year: int | None, max_results: int = 10
 ) -> dict:
@@ -436,32 +416,3 @@ def run_search(
         "match": overall,
         "results": results,
     }
-
-
-def main() -> int:
-    args = build_parser().parse_args()
-    if not (args.title or args.author or args.year):
-        print(
-            json.dumps(
-                {
-                    "match": "none",
-                    "error": "give at least one of --title, --author, --year",
-                    "results": [],
-                },
-                indent=2,
-            )
-        )
-        return 2
-
-    try:
-        report = run_search(args.title, args.author, args.year, args.max_results)
-    except (RuntimeError, ET.ParseError) as error:
-        print(json.dumps({"match": "none", "error": str(error), "results": []}, indent=2))
-        return 1
-
-    print(json.dumps(report, indent=2))
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

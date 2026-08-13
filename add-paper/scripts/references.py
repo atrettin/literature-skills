@@ -24,7 +24,6 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import datetime
 import difflib
 import json
@@ -1170,37 +1169,3 @@ def collect(
     for entry in sorted(entries, key=lambda item: item["part"]):
         key_tags.setdefault(entry["key"], []).append(entry["tag"])
     return [tidy(entry) for entry in entries], key_tags
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--source-dir", type=Path, required=True, help="extracted TeX source")
-    parser.add_argument("--arxiv-id", default="", help="the citing paper, for INSPIRE's reference list")
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
-    parser.add_argument("--no-lookup", action="store_true", help="read the bibliography, look nothing up")
-    args = parser.parse_args()
-
-    body = ""
-    for path in sorted(args.source_dir.rglob("*.tex")):
-        body += path.read_text(encoding="utf-8", errors="replace") + "\n"
-
-    warnings: list[str] = []
-    if args.no_lookup:
-        entries = build_entries(args.source_dir, body, collect_cite_keys(body))
-        reference_store.assign_tags(entries, [])
-        references, key_tags = [tidy(entry) for entry in entries], {}
-    else:
-        references, key_tags = collect(
-            args.source_dir, body, args.arxiv_id, args.literature_root, warnings
-        )
-
-    print(json.dumps(
-        {"references": references, "key_tags": key_tags, "warnings": warnings}, indent=2
-    ))
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -3,9 +3,9 @@
 
 `INDEX.md` is what an agent reads before it decides whether to open a chapter.
 Everything in it above the chapter table is a fact the manifest already holds,
-and every column of that table but the last is a count of the file itself. All
-of it is written here, so no agent spends context reading a paper to restate
-what a script can measure.
+and every column of that table is a count of the file itself. All of it is
+written here, so no agent spends context reading a paper to restate what a
+script can measure.
 
 Two numbers describe each chapter:
 
@@ -17,20 +17,10 @@ Two numbers describe each chapter:
     rise with the word count beside it. A count of the named anchors separates a
     chapter that labels its equations and figures from a chapter of plain prose,
     and that is the difference a reader deciding where to cite from needs.
-
-The last column, **What it covers**, holds `—` until somebody writes it. That
-pass is opt-in, and `add_paper.py --summarize <slug>` runs it. A summary earns
-its cost when somebody returns to the collection, and it earns nothing at ingest
-for a paper that nobody ever cites.
-
-Usage:
-    write_index.py literature/<slug>
-    write_index.py literature/<slug> --summaries summaries.json --apply
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import sys
@@ -52,10 +42,6 @@ AUTHORS_SHOWN = 3
 # The anchors that name something the paper labelled. `pN` is deliberately not
 # here: it addresses a paragraph, and every long paragraph has one.
 NAMED_ANCHOR = re.compile(r'<a id="((?:sec|eq|fig|tab)-[^"]*)"></a>')
-
-# A row of the chapter table, as this script writes it. Reading it back is how
-# a rebuild keeps a summary somebody already wrote.
-CHAPTER_ROW = re.compile(r"^\|[^|]*\|\s*\[([^\]]+)\]\([^)]*\)\s*\|(.*)\|\s*$")
 
 # What a cell holds when nothing has filled it in.
 EMPTY = "—"
@@ -188,13 +174,8 @@ def identity_rows(manifest: dict) -> list[tuple[str, str]]:
     return rows
 
 
-def render(manifest: dict, summaries: dict[str, str] | None = None) -> str:
-    """The whole of `INDEX.md`, as text.
-
-    `summaries` maps a chapter file name to what it covers. A chapter with no
-    entry gets `—`, which is what says the summary pass has not run for it.
-    """
-    summaries = summaries or {}
+def render(manifest: dict) -> str:
+    """The whole of `INDEX.md`, as text."""
     paper_dir = Path(manifest.get("paper_dir") or ".")
     rows = chapter_rows(manifest, paper_dir)
 
@@ -206,17 +187,16 @@ def render(manifest: dict, summaries: dict[str, str] | None = None) -> str:
               "The source carried no abstract.", ""]
 
     lines += ["## Chapters", ""]
-    lines += ["| # | File | Words | Named anchors | Subsections | What it covers |",
-              "|---|---|---|---|---|---|"]
+    lines += ["| # | File | Words | Named anchors | Subsections |",
+              "|---|---|---|---|---|"]
     for row in rows:
-        lines.append("| %s | [%s](chapters/%s) | %d | %d | %s | %s |" % (
+        lines.append("| %s | [%s](chapters/%s) | %d | %d | %s |" % (
             escape(row["number"]),
             escape(row["file"]),
             row["file"],
             row["words"],
             row["named_anchors"],
             show_subsections(row["subsections"]),
-            escape(summaries.get(row["file"], "")) or EMPTY,
         ))
     lines.append("")
     lines.append("%d chapters, %d words." % (
@@ -236,125 +216,23 @@ def render(manifest: dict, summaries: dict[str, str] | None = None) -> str:
 
 
 # --------------------------------------------------------------------------
-# reading back what somebody wrote
+# the manifest, and the file
 # --------------------------------------------------------------------------
-
-
-def read_summaries(index_path: Path) -> dict[str, str]:
-    """The `What it covers` cell of each chapter row already on disk.
-
-    A rebuild recomputes every count and keeps every summary. Nothing else in
-    the file survives, because everything else is derived.
-    """
-    if not index_path.is_file():
-        return {}
-    found: dict[str, str] = {}
-    for line in index_path.read_text(encoding="utf-8", errors="replace").splitlines():
-        match = CHAPTER_ROW.match(line)
-        if not match:
-            continue
-        # An escaped pipe is a character of the summary, not a column break.
-        # Splitting on it would cut the summary at the first one, and a rebuild
-        # would then write back less than the file already held.
-        cells = [cell.strip() for cell in re.split(r"(?<!\\)\|", match.group(2))]
-        summary = cells[-1] if cells else ""
-        if summary and summary != EMPTY:
-            # Unescaped, because `escape` puts the backslash back when the row
-            # is written again. Without this a rebuild doubles it each time.
-            found[match.group(1).strip()] = summary.replace("\\|", "|")
-    return found
-
-
-def pending(index_path: Path, manifest: dict) -> list[dict]:
-    """The chapters whose summary is still `—`, for the summary pass to write."""
-    written = read_summaries(index_path)
-    return [
-        {"file": chapter.get("file", ""), "title": chapter.get("title", "")}
-        for chapter in manifest.get("chapters") or []
-        if chapter.get("file") not in written
-    ]
 
 
 def load_manifest(paper_dir: Path) -> dict:
     path = paper_dir / MANIFEST_NAME
     if not path.is_file():
         raise RuntimeError(
-            "%s holds no %s; the paper was ingested before the manifest was kept, "
-            "or by hand. Fetch it again with --force." % (paper_dir, MANIFEST_NAME)
+            "%s holds no %s. Fetch the paper again with --force."
+            % (paper_dir, MANIFEST_NAME)
         )
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def write(paper_dir: Path, manifest: dict, summaries: dict[str, str] | None = None) -> Path:
-    """Write `INDEX.md`, keeping every summary the file already holds."""
+def write(paper_dir: Path, manifest: dict) -> Path:
+    """Write `INDEX.md`. Every value in it is derived, so a rebuild is safe."""
     index_path = paper_dir / INDEX_NAME
-    kept = read_summaries(index_path)
-    kept.update(summaries or {})
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(render(manifest, kept), encoding="utf-8")
+    index_path.write_text(render(manifest), encoding="utf-8")
     return index_path
-
-
-# --------------------------------------------------------------------------
-# main
-# --------------------------------------------------------------------------
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("paper_dir", type=Path, help="the directory of one paper")
-    parser.add_argument(
-        "--summaries",
-        type=Path,
-        help='JSON mapping a chapter file name to what it covers, for --apply',
-    )
-    parser.add_argument(
-        "--apply",
-        action="store_true",
-        help="write the summaries of --summaries into the file",
-    )
-    parser.add_argument(
-        "--pending",
-        action="store_true",
-        help="print the chapters whose summary is still empty, and write nothing",
-    )
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-
-    try:
-        manifest = load_manifest(args.paper_dir)
-    except (RuntimeError, ValueError) as error:
-        print(json.dumps({"error": str(error)}, indent=2))
-        return 1
-
-    if args.pending:
-        print(json.dumps({
-            "slug": manifest.get("slug", ""),
-            "index": str(args.paper_dir / INDEX_NAME),
-            "pending": pending(args.paper_dir / INDEX_NAME, manifest),
-        }, indent=2, ensure_ascii=False))
-        return 0
-
-    summaries: dict[str, str] = {}
-    if args.apply:
-        if not args.summaries:
-            print(json.dumps({"error": "--apply needs --summaries"}, indent=2))
-            return 1
-        summaries = json.loads(args.summaries.read_text(encoding="utf-8"))
-
-    index_path = write(args.paper_dir, manifest, summaries)
-    print(json.dumps({
-        "slug": manifest.get("slug", ""),
-        "index": str(index_path),
-        "chapters": len(manifest.get("chapters") or []),
-        "summaries_written": len(summaries),
-        "pending": len(pending(index_path, manifest)),
-    }, indent=2, ensure_ascii=False))
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

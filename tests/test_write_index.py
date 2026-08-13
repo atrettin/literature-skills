@@ -164,41 +164,8 @@ def test_more_than_three_authors_become_et_al(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# the summaries
+# the subsection titles
 # --------------------------------------------------------------------------
-
-
-def test_a_chapter_with_no_summary_gets_a_dash(tmp_path: Path) -> None:
-    paper_dir, manifest = build(tmp_path)
-
-    assert chapter_row(write_index.render(manifest))[5] == "—"
-
-
-def test_a_rebuild_keeps_a_summary_already_written(tmp_path: Path) -> None:
-    paper_dir, manifest = build(tmp_path)
-    write_index.write(paper_dir, manifest, {"02_introduction.md": "why the model matters"})
-
-    # The file changes under it, so the counts move and the summary must not.
-    (paper_dir / "chapters" / "02_introduction.md").write_text(
-        CHAPTER + "\nAnother paragraph of prose entirely.\n", encoding="utf-8"
-    )
-    write_index.write(paper_dir, manifest)
-
-    row = chapter_row((paper_dir / "INDEX.md").read_text(encoding="utf-8"))
-    assert row[5] == "why the model matters"
-    assert int(row[2]) > len(CHAPTER.split())
-
-
-def test_pending_names_the_chapters_with_no_summary(tmp_path: Path) -> None:
-    paper_dir, manifest = build(tmp_path)
-    index = write_index.write(paper_dir, manifest)
-
-    assert [entry["file"] for entry in write_index.pending(index, manifest)] == [
-        "02_introduction.md"
-    ]
-
-    write_index.write(paper_dir, manifest, {"02_introduction.md": "what it covers"})
-    assert write_index.pending(index, manifest) == []
 
 
 def test_a_subsection_title_carries_no_reference_marker(tmp_path: Path) -> None:
@@ -223,20 +190,3 @@ def test_a_title_that_is_only_a_marker_is_dropped(tmp_path: Path) -> None:
 
     assert chapter_row(write_index.render(manifest))[4] == "—"
 
-
-def test_a_pipe_in_a_summary_does_not_split_the_row(tmp_path: Path) -> None:
-    paper_dir, manifest = build(tmp_path)
-
-    text = write_index.render(manifest, {"02_introduction.md": "sigma | rho"})
-
-    assert chapter_row(text)[5] == "sigma \\| rho"
-
-
-def test_a_pipe_in_a_summary_survives_a_rebuild(tmp_path: Path) -> None:
-    """Read back and written again, it is still one pipe and one summary."""
-    paper_dir, manifest = build(tmp_path)
-    write_index.write(paper_dir, manifest, {"02_introduction.md": "sigma | rho"})
-    write_index.write(paper_dir, manifest)
-
-    row = chapter_row((paper_dir / "INDEX.md").read_text(encoding="utf-8"))
-    assert row[5] == "sigma \\| rho"

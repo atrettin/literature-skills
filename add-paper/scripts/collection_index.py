@@ -16,7 +16,6 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import sys
@@ -112,26 +111,6 @@ def find_table(lines: list[str], path: Path) -> tuple[int, int]:
     )
 
 
-def add_journal_column(lines: list[str], header: int, end: int) -> None:
-    """Give a four-column table its Journal column, in place.
-
-    A collection started before the journal was looked up has one. Every
-    existing row gets `—` there, because nothing here knows where those papers
-    were published, and a guess would put a wrong citation into every document
-    that later cites one.
-    """
-    if len(cells(lines[header])) >= len(COLUMNS):
-        return
-    for number in range(header, end):
-        if number == header + 1:
-            parts = cells(lines[number])
-            parts.insert(JOURNAL_COLUMN, "---")
-        else:
-            parts = cells(lines[number])
-            parts.insert(JOURNAL_COLUMN, "Journal" if number == header else EMPTY)
-        lines[number] = "| %s |" % " | ".join(parts)
-
-
 def row_slug(line: str) -> str:
     """The slug a row's title links to, or an empty string."""
     match = re.search(r"\]\(([^)/]+)/INDEX\.md\)", line)
@@ -215,7 +194,6 @@ def add_row(root: Path, report: dict, description: str = "") -> str:
 
     lines = path.read_text(encoding="utf-8").splitlines()
     header, end = find_table(lines, path)
-    add_journal_column(lines, header, end)
 
     slug = report.get("slug", "")
     publication = report.get("publication") or {}
@@ -236,34 +214,3 @@ def add_row(root: Path, report: dict, description: str = "") -> str:
     lines.insert(position, row)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return "added"
-
-
-# --------------------------------------------------------------------------
-# main
-# --------------------------------------------------------------------------
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
-    parser.add_argument("--report", type=Path, required=True,
-                        help="the compact report add_paper.py printed")
-    parser.add_argument("--description", default="",
-                        help="what the paper is about, in one sentence")
-    args = parser.parse_args(argv)
-
-    report = json.loads(args.report.read_text(encoding="utf-8"))
-    try:
-        state = add_row(args.literature_root, report, args.description)
-    except CollectionIndexUnreadable as error:
-        print(json.dumps({"error": str(error), "path": error.path}, indent=2))
-        return 1
-
-    print(json.dumps({"slug": report.get("slug", ""), "collection_row": state}, indent=2))
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

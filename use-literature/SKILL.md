@@ -102,11 +102,10 @@ be redone; never read it, and never delete it.
 1. Read `literature/README.md`.
 2. Select the papers that cover the subject.
 3. Read `INDEX.md` of each selected paper.
-4. Choose the chapters that the question needs. The `What it covers` column
-   holds `—` until somebody runs the summary pass, so read the chapter title,
-   the subsection titles beside it and the word count. A title names the
-   subject, and the word count says which chapter carries the argument rather
-   than a page of definitions.
+4. Choose the chapters that the question needs. Read the chapter title, the
+   subsection titles beside it and the word count. A title names the subject,
+   and the word count says which chapter carries the argument rather than a
+   page of definitions.
 5. Run `$SEARCH` for a phrase of the question when the titles leave the choice
    open. It answers with the chapter, the anchor and the line, so it selects the
    chapter and finds the passage in one step.

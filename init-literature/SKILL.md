@@ -22,7 +22,7 @@ wherever it is.
 
 If the directory is present, stop. Tell the user that the collection exists and
 how many papers are in it. Do not overwrite its `README.md` — it is the index of
-papers already collected, and rewriting it destroys their summaries.
+papers already collected, and rewriting it loses every row.
 
 ## Step 2. Ask what the collection covers
 

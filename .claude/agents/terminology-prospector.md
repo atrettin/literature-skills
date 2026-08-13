@@ -20,11 +20,9 @@ set, it is `literature/` in the project. The paper is the directory named by the
 slug that you were given.
 
 1. Read its `INDEX.md`.
-2. Read each chapter in `chapters/`. Read all of them. The `What it covers`
-   column of `INDEX.md` usually holds `—`, because the summary pass is opt-in
-   and most papers never get it. A summary that somebody did write was written
-   before anybody had this question, thus it can miss the paragraph that names
-   the subject a second way.
+2. Read each chapter in `chapters/`. Read all of them. `INDEX.md` says how
+   long each chapter is and what it is called, and neither says where the
+   subject is named a second way.
 3. Read `figures/FIGURES.md`. A caption names the thing it shows, and it often
    uses the short name where the text uses the long one.
 

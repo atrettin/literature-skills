@@ -354,9 +354,8 @@ def relink_citations(root: Path, slug: str, store: list[dict]) -> int:
     version the citing paper's bibliography happened to print. So this is where
     a citation becomes readable, on the run right after the paper is fetched.
 
-    It runs over the whole collection on --render-only, which is what converts
-    a collection built before citations were links, and one built while they
-    still pointed into REFERENCES.md by anchor.
+    It runs over the whole collection on --render-only, and over one paper
+    otherwise.
     """
     texts = {record["tag"]: citation_text(record) for record in store if record.get("tag")}
     directory = (root / RECORDS_DIR).resolve()
@@ -382,30 +381,10 @@ def relink_citations(root: Path, slug: str, store: list[dict]) -> int:
             )
 
         replaced = reference_store.CITE_TAG.sub(replace, text)
-        replaced = repoint_anchor_links(replaced, target)
         if replaced != text:
             path.write_text(replaced, encoding="utf-8")
             touched += 1
     return touched
-
-
-# `([Lipari, 2002](../../REFERENCES.md#lipari_2002_...))`, as citations were
-# written before each work had a page of its own.
-ANCHOR_CITE_LINK = re.compile(
-    r"\]\((?:[^)#]*/)?" + re.escape(reference_store.VIEW_NAME) + r"#([a-z0-9_]+)\)"
-)
-
-
-def repoint_anchor_links(text: str, target: str) -> str:
-    """Move a citation that named a row of the table onto that work's page.
-
-    The anchor form never worked in the VS Code preview: it resolves a
-    cross-file fragment through the heading table of contents, so an anchor in
-    a table cell is unreachable and the file merely opens at the top.
-    """
-    return ANCHOR_CITE_LINK.sub(
-        lambda match: "](%s/%s.md)" % (target, match.group(1)), text
-    )
 
 
 def apply_rewrites(root: Path, slug: str, rewrites: dict[str, str]) -> int:
@@ -447,11 +426,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="rewrite REFERENCES.md from the store, merging nothing",
     )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="merge even when it would leave the store with fewer records",
-    )
     return parser
 
 
@@ -487,10 +461,10 @@ def run(argv: list[str] | None = None) -> tuple[int, dict]:
 
     # literature/ is not in version control, so a store this run damaged cannot
     # be recovered from anywhere. Adding a paper only ever grows it.
-    if len(store) < before and not args.force:
+    if len(store) < before:
         return 1, {
-            "error": "this would leave the store with %d records instead of %d; "
-                     "pass --force if that is meant" % (len(store), before),
+            "error": "this would leave the store with %d records instead of %d"
+                     % (len(store), before),
         }
 
     retagged = apply_rewrites(root, slug, rewrites)

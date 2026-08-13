@@ -26,7 +26,6 @@ grows with the size of a bibliography. An agent reads the report.
 Usage:
     add_paper.py --auto 2307.09241 1706.03621
     add_paper.py --auto --title "NuSTEC White Paper" --author "Alvarez-Ruso"
-    add_paper.py --summarize jeong_2023_shallow_deep_inelastic
     add_paper.py --index-only jeong_2023_shallow_deep_inelastic
 """
 
@@ -178,7 +177,6 @@ def blank_report(arxiv_id: str = "") -> dict:
                    "residue": [], "elsewhere": {}, "dangling_refs": 0,
                    "pre_existing": 0, "ok": True},
         "collection_row": "",
-        "summary_state": "pending",
         "manifest": "",
         "warnings": [],
         "exception": None,
@@ -330,8 +328,7 @@ def file_paper(manifest: dict, slug: str, args, report: dict) -> None:
     index_path = write_index.write(paper_dir, manifest)
     report["index"] = str(index_path)
 
-    manifest_path = args.manifest_out or (paper_dir / MANIFEST_NAME)
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path = paper_dir / MANIFEST_NAME
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False),
                              encoding="utf-8")
     report["manifest"] = str(manifest_path)
@@ -475,8 +472,6 @@ def ingest(arxiv_id: str, args, manifest: dict | None = None) -> dict:
         raise
 
     report["status"] = "ingested"
-    report["summary_state"] = "pending"
-    report["next_action"] = "summarize"
     report["warnings"] = report["warnings"][:REPORT_WARNINGS_SHOWN]
     return report
 
@@ -486,33 +481,8 @@ def ingest(arxiv_id: str, args, manifest: dict | None = None) -> dict:
 # --------------------------------------------------------------------------
 
 
-def summarize(slug: str, args) -> dict:
-    """Say which chapters still have no summary, and where to write them.
-
-    The pass itself is an agent's work: it reads a chapter and says what the
-    chapter covers. This answers what is left to read.
-    """
-    paper_dir = args.literature_root / slug
-    manifest = write_index.load_manifest(paper_dir)
-    index_path = paper_dir / write_index.INDEX_NAME
-    left = write_index.pending(index_path, manifest)
-
-    report = blank_report(manifest.get("arxiv_id", ""))
-    describe(manifest, report)
-    report["status"] = "ingested"
-    report["index"] = str(index_path)
-    report["manifest"] = str(paper_dir / MANIFEST_NAME)
-    report["summary_state"] = "pending" if left else "written"
-    report["next_action"] = "summarize" if left else "none"
-    report["chapters"] = [
-        dict(entry, pending=any(item["file"] == entry["file"] for item in left))
-        for entry in report["chapters"]
-    ]
-    return report
-
-
 def rebuild_index(slug: str, args) -> dict:
-    """Write `INDEX.md` again from the manifest and the files, keeping summaries."""
+    """Write `INDEX.md` again from the manifest and the files on disk."""
     paper_dir = args.literature_root / slug
     manifest = write_index.load_manifest(paper_dir)
     index_path = write_index.write(paper_dir, manifest)
@@ -522,8 +492,6 @@ def rebuild_index(slug: str, args) -> dict:
     report["status"] = "ingested"
     report["index"] = str(index_path)
     report["manifest"] = str(paper_dir / MANIFEST_NAME)
-    left = write_index.pending(index_path, manifest)
-    report["summary_state"] = "pending" if left else "written"
 
     description = collection_index.first_sentence(manifest.get("abstract") or "")
     try:
@@ -546,8 +514,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("arxiv_ids", nargs="*", help="one or more arXiv identifiers")
     parser.add_argument("--auto", action="store_true",
                         help="ingest the papers named, and report what happened")
-    parser.add_argument("--summarize", metavar="SLUG",
-                        help="say which chapters of a held paper have no summary")
     parser.add_argument("--index-only", metavar="SLUG",
                         help="write INDEX.md again from the manifest and the files")
     parser.add_argument("--title", help="search arXiv for this title instead")
@@ -562,10 +528,6 @@ def build_parser() -> argparse.ArgumentParser:
                         help="skip the INSPIRE-HEP lookup")
     parser.add_argument("--no-references", action="store_true",
                         help="skip the bibliography and the reference merge")
-    parser.add_argument("--no-pipeline", action="store_true",
-                        help="run every stage in one thread, one paper at a time")
-    parser.add_argument("--manifest-out", type=Path,
-                        help="write the full manifest here rather than in the paper directory")
     return parser
 
 
@@ -606,7 +568,7 @@ def run_auto(args) -> int:
         return 1
 
     status = 0
-    if args.no_pipeline or len(arxiv_ids) == 1:
+    if len(arxiv_ids) == 1:
         for arxiv_id in arxiv_ids:
             status = max(status, one(arxiv_id, args, None))
         return status
@@ -641,10 +603,8 @@ def one(arxiv_id: str, args, manifest: dict | None) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    chosen = [bool(args.auto), bool(args.summarize), bool(args.index_only)]
-    if sum(chosen) != 1:
-        print(json.dumps(
-            {"error": "give exactly one of --auto, --summarize, --index-only"}))
+    if bool(args.auto) == bool(args.index_only):
+        print(json.dumps({"error": "give exactly one of --auto, --index-only"}))
         return 1
 
     # The collection this run writes is the collection whose gate it locks. The
@@ -661,9 +621,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return run_auto(args)
 
-    slug = args.summarize or args.index_only
     try:
-        report = summarize(slug, args) if args.summarize else rebuild_index(slug, args)
+        report = rebuild_index(args.index_only, args)
     except Exception2 as error:
         emit(failed(blank_report(), error))
         return 2

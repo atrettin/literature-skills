@@ -18,17 +18,6 @@ FIVE_COLUMN = """# Literature
 | [Later Paper](later_2023_thing/INDEX.md) | Y. Jeong et al. | 2023 | Phys.Rev.D 108 | the later one |
 """
 
-FOUR_COLUMN = """# Literature
-
-## Papers
-
-| Title | Authors | Year | What it is about |
-|---|---|---|---|
-| [Old Paper](old_2002_thing/INDEX.md) | P. Lipari | 2002 | an early look |
-| [Later Paper](later_2023_thing/INDEX.md) | Y. Jeong et al. | 2023 | the later one |
-"""
-
-
 def report(year: int = 2015, journal: str = "", slug: str = "lovelace_2015_small_paper") -> dict:
     return {
         "slug": slug,
@@ -84,22 +73,6 @@ def test_a_paper_of_a_year_already_there_goes_after_it(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 # the Journal column
 # --------------------------------------------------------------------------
-
-
-def test_a_four_column_table_gains_the_journal_column(tmp_path: Path) -> None:
-    root = build(tmp_path, FOUR_COLUMN)
-
-    collection_index.add_row(root, report(year=2015, journal="Phys.Rev.C 91 045501"))
-
-    lines = (root / "README.md").read_text(encoding="utf-8").splitlines()
-    header = next(line for line in lines if line.startswith("| Title |"))
-    separator = lines[lines.index(header) + 1]
-
-    assert collection_index.cells(header) == list(collection_index.COLUMNS)
-    assert len(collection_index.cells(separator)) == len(collection_index.COLUMNS)
-    # Nothing here knows where the papers already listed were published.
-    assert collection_index.cells(rows(root)[0])[3] == "—"
-    assert collection_index.cells(rows(root)[1])[3] == "Phys.Rev.C 91 045501"
 
 
 def test_a_second_run_writes_only_the_journal_cell(tmp_path: Path) -> None:
