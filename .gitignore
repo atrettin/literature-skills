@@ -13,6 +13,7 @@ __pycache__/
 # The rest of .claude/ stays tracked — settings and skills belong to the repo.
 /.claude/worktrees/
 /.claude/TODOS.md
+/.claude/ISSUE_TRACKER.md
 
 # macOS
 .DS_Store
