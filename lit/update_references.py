@@ -40,8 +40,10 @@ import re
 import sys
 from pathlib import Path
 
-from lit import reference_store
-from lit.arxiv_search import collapse_whitespace
+from lit import cli, paths, reference_store
+from lit.paths import written_files
+from lit import text
+from lit.text import collapse_whitespace, escape_cell as escape
 
 # Beyond this many, the author list stops informing and starts wrapping.
 MAX_AUTHORS = 3
@@ -90,7 +92,7 @@ COLUMNS = ("Title", "Authors", "Year", "Journal", "DOI", "arXiv", "Cited", "Cite
 # contents, so it cannot reach an anchor in a table cell, and a heading it could
 # reach would have to be slugified to be linked to — which would take the tag
 # out of the citation, and the tag is what an agent resolves.
-RECORDS_DIR = reference_store.RECORDS_DIR
+RECORDS_DIR = paths.RECORDS_DIR
 
 UNVERIFIED_NOTE = (
     "⚠ **Not confirmed.** Nothing at INSPIRE-HEP or Crossref matched this "
@@ -105,37 +107,8 @@ UNVERIFIED_NOTE = (
 # --------------------------------------------------------------------------
 
 
-def escape(text: str) -> str:
-    """Make a value safe to sit in a Markdown table cell.
-
-    Only the pipe has to go: it splits the row into extra columns and every
-    cell after it lands under the wrong heading, which stops the table being a
-    lookup. Nothing else is touched. Titles in this field carry maths, and
-    escaping `$` and `\\` turns a readable formula into backslash soup — worse
-    to read than the emphasis it would prevent.
-    """
-    return collapse_whitespace(str(text or "")).replace("|", "\\|")
-
-
-def display_name(author: str) -> str:
-    """'Lipari, Paolo' -> 'P. Lipari', which is how a reader expects to see it."""
-    author = collapse_whitespace(author)
-    if "," not in author:
-        return author
-    family, _, given = author.partition(",")
-    initials = " ".join(
-        "%s." % part[0] for part in re.split(r"[\s.]+", given) if part and part[0].isalpha()
-    )
-    return collapse_whitespace("%s %s" % (initials, family))
-
-
 def display_authors(authors: list[str]) -> str:
-    names = [display_name(name) for name in authors or [] if collapse_whitespace(name)]
-    if not names:
-        return "—"
-    if len(names) > MAX_AUTHORS:
-        return "%s et al." % names[0]
-    return ", ".join(names)
+    return text.display_authors(authors, MAX_AUTHORS)
 
 
 def display_cited_by(record: dict) -> str:
@@ -280,11 +253,6 @@ def write_records(root: Path, store: list[dict]) -> tuple[int, int]:
     return written, removed
 
 
-def sort_key(record: dict) -> tuple:
-    citations = record.get("citation_count")
-    return (-(citations if isinstance(citations, int) else -1), record.get("tag") or "")
-
-
 def render_table(records: list[dict]) -> str:
     lines = [HEADER.rstrip("\n"), ""]
     if not records:
@@ -292,7 +260,7 @@ def render_table(records: list[dict]) -> str:
         return "\n".join(lines) + "\n"
     lines.append("| %s |" % " | ".join(COLUMNS))
     lines.append("|%s|" % "|".join("---" for _ in COLUMNS))
-    lines.extend(render_row(record) for record in sorted(records, key=sort_key))
+    lines.extend(render_row(record) for record in sorted(records, key=reference_store.most_cited_first))
     unverified = sum(1 for record in records if not record.get("verified"))
     lines.append("")
     lines.append(
@@ -328,20 +296,6 @@ def citation_text(record: dict) -> str:
     if len(authors) > 1:
         who += " et al."
     return "%s, %s" % (who, record.get("year") or "n.d.")
-
-
-def written_files(root: Path, slug: str) -> list[Path]:
-    """The Markdown of the papers: what a citation can appear in.
-
-    `references/` is skipped. Its pages are rendered from the store on every
-    run, so rewriting them here would be undone immediately, and their links
-    are not citations — they point back at the papers that cite them.
-    """
-    if slug:
-        return sorted((root / slug).rglob("*.md"))
-    return sorted(
-        path for path in root.rglob("*/*.md") if path.parent.name != RECORDS_DIR
-    )
 
 
 def relink_citations(root: Path, slug: str, store: list[dict]) -> int:
@@ -415,11 +369,9 @@ def apply_rewrites(root: Path, slug: str, rewrites: dict[str, str]) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument("--manifest", type=Path, help="the JSON arxiv_fetch.py printed")
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
+    cli.add_root_argument(parser)
     parser.add_argument(
         "--render-only",
         action="store_true",
@@ -434,7 +386,7 @@ def run(argv: list[str] | None = None) -> tuple[int, dict]:
     `add_paper.py` calls this rather than the command line, so the counts come
     back as an object instead of as text it would have to parse off stdout.
     """
-    args = build_parser().parse_args(argv)
+    args = cli.parse(build_parser(), argv)
     root = args.literature_root
     if not root.exists():
         return 1, {"error": "%s does not exist" % root}
@@ -492,7 +444,7 @@ def run(argv: list[str] | None = None) -> tuple[int, dict]:
 
 def main(argv: list[str] | None = None) -> int:
     status, report = run(argv)
-    print(json.dumps(report, indent=2))
+    cli.emit(report)
     return status
 
 

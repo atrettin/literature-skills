@@ -36,13 +36,13 @@ import re
 import tempfile
 from pathlib import Path
 
-from lit.arxiv_search import collapse_whitespace, normalize_title, slugify
+from lit.paths import RECORDS_DIR, index_files
+from lit.text import collapse_whitespace, normalize_title, slugify, surname
 
 STORE_NAME = ".references.jsonl"
 VIEW_NAME = "REFERENCES.md"
 # One page per cited work, for a reader following a citation. The tag names the
 # file, so a citation carries its tag in plain sight either way.
-RECORDS_DIR = "references"
 
 # How a citation is written, in the two forms it passes through. The
 # conversion leaves the marker; update_references.py turns it into the link a
@@ -83,6 +83,17 @@ def normalize_arxiv(arxiv_id: str) -> str:
     identifier = re.sub(r"^(?:arxiv:)\s*", "", identifier, flags=re.IGNORECASE)
     identifier = re.sub(r"v\d+$", "", identifier)
     return identifier.lower()
+
+
+def most_cited_first(record: dict, tiebreak: str = "tag") -> tuple[int, str]:
+    """A sort key that puts the works the field leans on at the top.
+
+    A record with no count sorts after every record that has one, however
+    small. An unknown count is not a count of zero: INSPIRE simply did not say,
+    and reading that as zero would bury a paper for being unlooked-up.
+    """
+    count = record.get("citation_count")
+    return (-count if isinstance(count, int) else 1, record.get(tiebreak) or "")
 
 
 def identity_keys(record: dict) -> list[str]:
@@ -145,18 +156,6 @@ def add_to_index(index: dict[str, dict], record: dict) -> None:
 # --------------------------------------------------------------------------
 # tags
 # --------------------------------------------------------------------------
-
-
-def surname(author: str) -> str:
-    """The family name out of 'Lipari, Paolo' or 'P. Lipari' or 'Lipari'."""
-    author = collapse_whitespace(re.sub(r"\\[a-zA-Z]+", " ", str(author or "")))
-    if "," in author:
-        return author.split(",", 1)[0].strip()
-    parts = [part for part in author.split() if part]
-    # Trailing initials happen ("Brieva F.A."); the name is what is left.
-    while len(parts) > 1 and re.fullmatch(r"(?:[A-Z]\.?){1,3}", parts[-1]):
-        parts.pop()
-    return parts[-1] if parts else ""
 
 
 def base_tag(record: dict) -> str:
@@ -309,7 +308,7 @@ def held_index(root: Path) -> dict[str, str]:
     project may have no collection yet.
     """
     held: dict[str, str] = {}
-    for index_file in sorted(root.glob("*/INDEX.md")):
+    for index_file in index_files(root):
         text = index_file.read_text(encoding="utf-8", errors="replace")
         slug = index_file.parent.name
         for match in re.finditer(r"^\|\s*arXiv\s*\|\s*\[([^\]]+)\]", text, flags=re.MULTILINE):
@@ -344,21 +343,6 @@ def mark_held(records: list[dict], root: Path) -> int:
 # --------------------------------------------------------------------------
 # the file
 # --------------------------------------------------------------------------
-
-
-def default_root() -> Path:
-    """Where the collection is: `$LITERATURE_ROOT`, or `literature` beside you.
-
-    One collection can serve many projects. A paper costs a download, a
-    conversion and a place in the reference store, and paying that again in
-    the next project buys nothing. The variable names a directory that outlives
-    any one project; without it the collection belongs to the project, as the
-    path in every skill says.
-
-    Every script reads this as the default of `--literature-root`, so the flag
-    still wins where a caller names a root of its own.
-    """
-    return Path(os.environ.get("LITERATURE_ROOT") or "literature")
 
 
 def store_path(root: Path) -> Path:

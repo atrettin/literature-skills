@@ -47,8 +47,8 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
-from lit import reference_store
-from lit.arxiv_search import collapse_whitespace
+from lit import cli, paths, reference_store
+from lit.text import collapse_whitespace
 from lit.check_references import ANCHOR
 
 # `[Katori 2018](../literature/katori_2018/chapters/03_model.md#sec-form-factors)`.
@@ -241,7 +241,7 @@ def by_layout(parts: tuple[str, ...]) -> tuple[str, ...] | None:
     carries one of these names does not take the link away from the paper.
     """
     for index in range(len(parts) - 1, 0, -1):
-        if parts[index] == reference_store.RECORDS_DIR and index == len(parts) - 2:
+        if parts[index] == paths.RECORDS_DIR and index == len(parts) - 2:
             return parts[index:]
         if parts[index] in PAPER_SUBDIRS and parts[index - 1] not in (".", ".."):
             return parts[index - 1 :]
@@ -262,7 +262,7 @@ def cited_work(link: dict, root: Path) -> tuple[str, str] | None:
     if parts is None:
         return None
     if (
-        parts[0] == reference_store.RECORDS_DIR
+        parts[0] == paths.RECORDS_DIR
         and len(parts) == 2
         and parts[1].lower().endswith(".md")
     ):
@@ -315,7 +315,7 @@ def is_held(name: str, root: Path) -> bool:
     """Whether the collection holds the work that a canonical name names."""
     kind, _, rest = name.partition(":")
     if kind == "tag":
-        return (root / reference_store.RECORDS_DIR / ("%s.md" % rest)).is_file()
+        return (root / paths.RECORDS_DIR / ("%s.md" % rest)).is_file()
     return (root / rest).is_dir()
 
 
@@ -426,22 +426,18 @@ def check(report_path: Path, root: Path) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument("report", type=Path, help="the report to check")
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
-    args = parser.parse_args(argv)
+    cli.add_root_argument(parser)
+    args = cli.parse(parser, argv)
 
     if not args.report.is_file():
-        print(json.dumps({"error": "%s is not a file" % args.report}, indent=2))
-        return 1
+        return cli.fail("%s is not a file" % args.report, cli.ABSENT)
 
     try:
         report = check(args.report, args.literature_root)
     except RuntimeError as error:
-        print(json.dumps({"error": str(error)}, indent=2))
-        return 1
+        return cli.fail(str(error), cli.ABSENT)
 
     report["ok"] = not (
         report["broken_links"]
@@ -455,7 +451,7 @@ def main(argv: list[str] | None = None) -> int:
         # every other check here is a special case of.
         or not report["citations"]
     )
-    print(json.dumps(report, indent=2, ensure_ascii=False))
+    cli.emit(report)
     return 0 if report["ok"] else 1
 
 

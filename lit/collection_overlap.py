@@ -74,7 +74,7 @@ import json
 import sys
 from pathlib import Path
 
-from lit import inspire_citations
+from lit import cli, inspire_citations
 from lit import inspire_lookup
 from lit import rate_gate
 from lit import reference_store
@@ -347,7 +347,7 @@ def score(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument("arxiv_id", nargs="?", help="the candidate, by its arXiv identifier")
     parser.add_argument("--doi", help="name the candidate by DOI instead")
     parser.add_argument("--recid", help="name the candidate by INSPIRE record number instead")
@@ -377,19 +377,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-papers", type=int, default=MAX_PAPERS, metavar="N",
         help="how many held papers each list reports (default %d)" % MAX_PAPERS,
     )
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
+    cli.add_root_argument(parser)
     return parser
 
 
 def fail(message: str, code: int, **fields: object) -> int:
-    print(json.dumps({"error": message, "band": None, **fields}, indent=2))
-    return code
+    return cli.fail(message, code, band=None, **fields)
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args = cli.parse(build_parser(), argv)
     root = args.literature_root
 
     if not (args.arxiv_id or args.doi or args.recid):
@@ -497,7 +494,7 @@ def main(argv: list[str] | None = None) -> int:
         "band": scored["band"],
         "reading": scored["reading"],
     }
-    print(json.dumps(report, indent=2, ensure_ascii=False))
+    cli.emit(report)
     return 0
 
 

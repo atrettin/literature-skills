@@ -31,8 +31,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from lit import rate_gate
-from lit.arxiv_search import USER_AGENT, collapse_whitespace
+from lit import cli, http, rate_gate, reference_store
+from lit.text import collapse_whitespace
 
 API_ROOT = "https://inspirehep.net/api"
 API_HOST = "inspirehep.net"
@@ -118,35 +118,21 @@ def format_publication(publication_info: list[dict] | None) -> tuple[dict, list[
 # --------------------------------------------------------------------------
 
 
-def strip_version(arxiv_id: str) -> str:
-    """'2307.09241v3' -> '2307.09241'."""
-    return re.sub(r"v\d+$", "", collapse_whitespace(arxiv_id))
-
-
 def fetch_record(path: str) -> dict | None:
     """GET one INSPIRE record. None means INSPIRE does not hold it (404)."""
     url = "%s/%s" % (API_ROOT, path)
-    query = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     last_error = None
     for attempt in range(MAX_RETRIES):
         delay = RETRY_DELAY_S
         try:
             # The gate paces this against every other INSPIRE request, here and
             # in any other process reading the same collection.
-            with rate_gate.request(API_HOST):
-                with urllib.request.urlopen(query, timeout=REQUEST_TIMEOUT_S) as response:
-                    return json.loads(response.read().decode("utf-8", errors="replace"))
+            return http.get_json(url, API_HOST, REQUEST_TIMEOUT_S)
         except urllib.error.HTTPError as error:
             if error.code == 404:
                 return None
             if error.code == 429:
-                # Never less than the rate-limit window, and longer when
-                # INSPIRE says so itself.
-                retry_after = error.headers.get("Retry-After") if error.headers else None
-                delay = RATE_LIMIT_WINDOW_S
-                if retry_after and str(retry_after).strip().isdigit():
-                    delay = max(delay, float(str(retry_after).strip()))
-                delay = min(delay, MAX_RETRY_DELAY_S)
+                delay = http.retry_after(error, RATE_LIMIT_WINDOW_S, MAX_RETRY_DELAY_S)
                 last_error = error
             elif 500 <= error.code < 600:
                 last_error = error
@@ -203,7 +189,7 @@ def missing(reason: str) -> dict:
 
 def lookup_by_arxiv(arxiv_id: str) -> dict:
     """Look a paper up by its arXiv identifier. Never raises."""
-    identifier = strip_version(arxiv_id)
+    identifier = reference_store.normalize_arxiv(arxiv_id)
     if not identifier:
         return missing("no arXiv identifier given")
     try:
@@ -235,10 +221,10 @@ def lookup_by_doi(doi: str) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument("arxiv_id", nargs="?", help="arXiv identifier, for example 2307.09241")
     parser.add_argument("--doi", help="look the paper up by DOI instead")
-    args = parser.parse_args()
+    args = cli.parse(parser)
 
     if not args.arxiv_id and not args.doi:
         parser.error("give an arXiv identifier or --doi")
@@ -247,7 +233,7 @@ def main() -> int:
     if not report["found"] and args.doi:
         report = lookup_by_doi(args.doi)
 
-    print(json.dumps(report, indent=2))
+    cli.emit(report)
     return 0
 
 

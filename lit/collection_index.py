@@ -21,7 +21,8 @@ import re
 from pathlib import Path
 
 from lit import reference_store
-from lit.arxiv_search import collapse_whitespace
+from lit import text as lit_text
+from lit.text import EMPTY, escape_cell as escape, split_cells as cells
 
 INDEX_NAME = "README.md"
 
@@ -29,10 +30,12 @@ INDEX_NAME = "README.md"
 ROW_DESCRIPTION_CHARS = 160
 
 COLUMNS = ("Title", "Authors", "Year", "Journal", "What it is about")
-# Where the Journal column sits, for a table written before there was one.
+# Where the Journal column sits.
 JOURNAL_COLUMN = 3
 
-EMPTY = "—"
+# How many authors the row names before "et al.". One: the column is narrow,
+# and the row is a pointer to INDEX.md rather than a citation.
+ROW_AUTHORS_SHOWN = 1
 
 # A separator row: `|---|---|---|`, in any of the shapes Markdown allows.
 SEPARATOR = re.compile(r"^\|(?:\s*:?-{2,}:?\s*\|)+\s*$")
@@ -61,23 +64,6 @@ class CollectionIndexUnreadable(RuntimeError):
         super().__init__(message)
         self.path = str(path)
         self.reason = message
-
-
-def escape(text: str) -> str:
-    """Make a value safe to sit in a Markdown table cell. Only the pipe has to go."""
-    return collapse_whitespace(str(text or "")).replace("|", "\\|")
-
-
-def cells(line: str) -> list[str]:
-    """The cells of one table row, without the outer pipes.
-
-    A pipe the writer escaped stays inside its cell: it is a character of the
-    title, and splitting on it would give the row a column that is not there.
-    """
-    inner = line.strip()
-    inner = inner[1:] if inner.startswith("|") else inner
-    inner = inner[:-1] if inner.endswith("|") else inner
-    return [cell.strip() for cell in re.split(r"(?<!\\)\|", inner)]
 
 
 # --------------------------------------------------------------------------
@@ -129,27 +115,7 @@ def row_year(line: str) -> int:
 
 
 def first_sentence(text: str, limit: int = ROW_DESCRIPTION_CHARS) -> str:
-    """The opening of an abstract, as the description of a paper.
-
-    It stands in until somebody writes a better one. The abstract's own first
-    sentence says what the paper is about more often than not, and it is the
-    only description available at ingest that nobody had to invent.
-    """
-    text = collapse_whitespace(text)
-    if not text:
-        return ""
-    match = re.search(r"(?<=[.!?])\s", text)
-    sentence = text[: match.start()] if match else text
-    if len(sentence) <= limit:
-        return sentence
-    return sentence[: limit - 1].rstrip() + "…"
-
-
-def first_author(authors: list[str]) -> str:
-    names = [collapse_whitespace(name) for name in authors or [] if collapse_whitespace(name)]
-    if not names:
-        return EMPTY
-    return "%s et al." % names[0] if len(names) > 1 else names[0]
+    return lit_text.first_sentence(text, limit)
 
 
 def build_row(report: dict, description: str) -> str:
@@ -157,7 +123,8 @@ def build_row(report: dict, description: str) -> str:
     return "| [%s](%s/INDEX.md) | %s | %s | %s | %s |" % (
         escape(report.get("title") or report.get("slug") or ""),
         report.get("slug", ""),
-        escape(first_author(report.get("authors") or [])),
+        lit_text.display_authors(report.get("authors") or [], ROW_AUTHORS_SHOWN,
+                                initials=False),
         report.get("submitted_year") or EMPTY,
         escape(publication.get("journal") or "") or EMPTY,
         escape(description) or EMPTY,

@@ -38,7 +38,8 @@ import re
 import sys
 from pathlib import Path
 
-from lit import reference_store
+from lit import cli, paths, reference_store
+from lit import text
 from lit.check_references import ANCHOR, written_files
 
 # The longest sentence the answer prints. Enough to see the words around the
@@ -52,8 +53,6 @@ MAX_RESULTS = 20
 MIN_BACKOFF_WORDS = 3
 
 ELLIPSIS = "…"
-# The end of a sentence, as the flat text writes it: one space follows.
-SENTENCE_ENDS = (". ", "! ", "? ")
 # A curly mark and its ASCII form. A paper writes the curly one; a person
 # quoting it types the straight one.
 QUOTES = {
@@ -127,16 +126,7 @@ def clip(sentence: str, start: int, end: int) -> str:
 
 def sentence_around(flat: str, start: int, end: int) -> str:
     """The sentence of the flat text that holds the match."""
-    begin = 0
-    for mark in SENTENCE_ENDS:
-        found = flat.rfind(mark, 0, start)
-        if found != -1:
-            begin = max(begin, found + len(mark))
-    finish = len(flat)
-    for mark in SENTENCE_ENDS:
-        found = flat.find(mark, end)
-        if found != -1:
-            finish = min(finish, found + 1)
+    begin, finish = text.span_around(flat, start, end)
     return clip(flat[begin:finish], start - begin, end - begin)
 
 
@@ -251,7 +241,7 @@ def search(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument("phrase", help="the text to find; literal unless --regex")
     parser.add_argument("--regex", action="store_true",
                         help="read the phrase as a Python regular expression")
@@ -261,34 +251,30 @@ def build_parser() -> argparse.ArgumentParser:
                         help="search this paper only; repeat for more than one")
     parser.add_argument("--max-results", type=int, default=MAX_RESULTS, metavar="N",
                         help="report at most N matches (default %d)" % MAX_RESULTS)
-    parser.add_argument("--literature-root", type=Path,
-                        default=reference_store.default_root())
+    cli.add_root_argument(parser)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args = cli.parse(build_parser(), argv)
     root = args.literature_root
 
     if not root.is_dir():
-        print(json.dumps({"error": "%s does not exist" % root}, indent=2))
-        return 2
+        return cli.fail("%s does not exist" % root, cli.JUDGEMENT)
 
-    held = {path.relative_to(root).parts[0] for path in written_files(root)}
+    held = {paths.slug_of(root, path) for path in written_files(root)}
     unknown = sorted(slug for slug in args.paper if slug not in held)
     if unknown:
-        # Never 1. Status 1 says the phrase is absent, and this phrase was
-        # never searched for.
-        print(json.dumps({"error": "no such paper in the collection",
-                          "unknown_papers": unknown,
-                          "papers": sorted(held)}, indent=2))
-        return 2
+        # Never ABSENT. That status says the phrase is absent, and this phrase
+        # was never searched for.
+        return cli.fail("no such paper in the collection", cli.JUDGEMENT,
+                        unknown_papers=unknown, papers=sorted(held))
 
     report = search(
         root, args.phrase, args.paper, max(args.max_results, 1),
         as_regex=args.regex, case_sensitive=args.case_sensitive,
     )
-    print(json.dumps(report, indent=2, ensure_ascii=False))
+    cli.emit(report)
     # 1 says the papers in scope do not carry the phrase. `partial_matches`
     # says which of its words they do carry.
     return 0 if report["matches"] else 1

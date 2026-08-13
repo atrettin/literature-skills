@@ -37,6 +37,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from lit import paths
+
 try:
     import fcntl as _fcntl
 except ImportError:  # a platform with no flock; the local lock still works
@@ -104,7 +106,7 @@ _root: Path | None = None
 def use_root(root: Path) -> None:
     """Name the collection whose gate file this process shares.
 
-    Without this the gate falls back to `reference_store.default_root()`, which
+    Without this the gate falls back to `paths.default_root()`, which
     is relative to the working directory. Two processes on one collection,
     started from two directories, would then take two different locks and neither
     would hold the other back — which is the whole of what the gate promises.
@@ -130,12 +132,7 @@ def gate_path(root: Path | None = None) -> Path:
     if root is None:
         root = _root
     if root is None:
-        # Imported here rather than at the top: `reference_store` reaches
-        # `arxiv_search`, which reaches this module, and a top-level import
-        # would close that ring while `arxiv_search` is still half built.
-        from lit import reference_store
-
-        root = reference_store.default_root()
+        root = paths.default_root()
     return root / GATE_NAME
 
 

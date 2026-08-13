@@ -17,7 +17,7 @@ from lit import arxiv_fetch
 from lit import check_references
 from lit import reference_store
 from lit import update_references
-from lit.arxiv_search import slugify
+from lit.text import slugify
 
 TABLE_WITH_MATHS = r"""
 Some opening prose.

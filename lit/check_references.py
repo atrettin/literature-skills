@@ -49,8 +49,9 @@ import re
 import sys
 from pathlib import Path
 
-from lit import reference_store
-from lit.arxiv_search import collapse_whitespace
+from lit import cli, paths, reference_store
+from lit.paths import written_files
+from lit.text import collapse_whitespace
 
 # A cross-reference the conversion could not resolve keeps its marker.
 REF_TAG = re.compile(r"\[ref:\s*([^\]]*)\]")
@@ -62,20 +63,6 @@ RESIDUE = re.compile(r"PH\d+")
 # Every C0 control character other than the newline and the tab. A NUL byte
 # makes `grep` read the whole file as binary, and report nothing at all.
 CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b-\x1f]")
-
-
-def written_files(root: Path) -> list[Path]:
-    """The Markdown of the papers, which is all this has anything to say about.
-
-    The files at the root and the pages under `references/` are rendered from
-    the store on every run. A citation cannot go stale in a file that is
-    rewritten from the thing it would go stale against.
-    """
-    return sorted(
-        path
-        for path in root.rglob("*.md")
-        if path.parent != root and path.parent.name != reference_store.RECORDS_DIR
-    )
 
 
 def read_markdown(root: Path) -> dict[Path, str]:
@@ -270,7 +257,7 @@ def check(root: Path, paper: str | None = None) -> dict:
         "missing_pages": sorted(
             tag
             for tag in cited
-            if tag in tags and not (root / reference_store.RECORDS_DIR / ("%s.md" % tag)).is_file()
+            if tag in tags and not (root / paths.RECORDS_DIR / ("%s.md" % tag)).is_file()
         ),
         "stale": sorted(
             record.get("tag", "")
@@ -288,25 +275,21 @@ def check(root: Path, paper: str | None = None) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
+    parser = cli.parser(__doc__)
+    cli.add_root_argument(parser)
     parser.add_argument(
         "--paper",
         help="slug of the paper the answer is about; the read stays collection-wide",
     )
-    args = parser.parse_args(argv)
+    args = cli.parse(parser, argv)
 
     if not args.literature_root.exists():
-        print(json.dumps({"error": "%s does not exist" % args.literature_root}, indent=2))
-        return 1
+        return cli.fail("%s does not exist" % args.literature_root, cli.ABSENT)
 
     try:
         report = check(args.literature_root, args.paper)
     except RuntimeError as error:
-        print(json.dumps({"error": str(error)}, indent=2))
-        return 1
+        return cli.fail(str(error), cli.ABSENT)
 
     report["ok"] = not (
         report["unresolved"]
@@ -314,7 +297,7 @@ def main(argv: list[str] | None = None) -> int:
         or report["stale"]
         or report["missing_pages"]
     )
-    print(json.dumps(report, indent=2))
+    cli.emit(report)
     return 0 if report["ok"] else 1
 
 

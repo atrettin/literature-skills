@@ -55,9 +55,10 @@ import re
 import sys
 from pathlib import Path
 
-from lit import arxiv_discover
+from lit import arxiv_discover, cli, paths
 from lit import reference_store
-from lit.arxiv_search import normalize_title
+from lit import text
+from lit.text import normalize_title
 
 # `term_matches` decides when a word of a title is a word the topic already
 # holds. It compares two words by prefix, at `rerank.MIN_PREFIX`, thus
@@ -237,9 +238,6 @@ MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 MATH = re.compile(r"\$[^$]*\$")
 HEADING = re.compile(r"^#{1,6}\s+(?:\d+(?:\.\d+)*\.?\s*)?(.*)$")
 CAPTION = re.compile(r"^\*\*Fig")
-SENTENCE_END = re.compile(r"(?<=[.;])\s+")
-
-
 def readable(text: str) -> str:
     """One paragraph with its markup gone, on one line.
 
@@ -255,8 +253,9 @@ def readable(text: str) -> str:
     return " ".join(text.split())
 
 
-def sentences_of(text: str) -> list[str]:
-    return [piece for piece in SENTENCE_END.split(text) if piece.strip()]
+def sentences_of(passage: str) -> list[str]:
+    """One clause at a time. A cue word governs its own clause and no more."""
+    return text.sentences(passage, clauses=True)
 
 
 def units_of(root: Path, slug: str) -> list[dict]:
@@ -675,18 +674,13 @@ def papers_of(root: Path, records: list[dict]) -> list[str]:
     works that it cites. The scan reads both, thus a slug is recognised whether
     or not the caller's root holds the paper directories.
     """
-    slugs = {path.parent.name for path in root.glob("*/INDEX.md")}
+    slugs = set(paths.papers_on_disk(root))
     for record in records:
         for entry in record.get("cited_by") or []:
             slug = str(entry.get("slug") or "")
             if slug:
                 slugs.add(slug)
     return sorted(slugs)
-
-
-def papers_on_disk(root: Path) -> list[str]:
-    """The papers this root holds in full, which are the ones `--in-text` reads."""
-    return sorted(path.parent.name for path in root.glob("*/INDEX.md"))
 
 
 def cited_by(records: list[dict], slugs: list[str]) -> list[dict]:
@@ -790,7 +784,7 @@ def scan(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument(
         "--topic",
         required=True,
@@ -834,19 +828,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-terms", type=int, default=MAX_TERMS, metavar="N",
         help="how many terms the report holds (default %d)" % MAX_TERMS,
     )
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
+    cli.add_root_argument(parser)
     return parser
 
 
 def fail(message: str, code: int, **fields: object) -> int:
-    print(json.dumps({"error": message, "terms": [], **fields}, indent=2))
-    return code
+    return cli.fail(message, code, terms=[], **fields)
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args = cli.parse(build_parser(), argv)
     root = args.literature_root
 
     if not (args.in_text or args.cited_by or args.all_papers):
@@ -868,7 +859,7 @@ def main(argv: list[str] | None = None) -> int:
         return fail(str(error), 1)
 
     papers = papers_of(root, records)
-    held = papers_on_disk(root)
+    held = paths.papers_on_disk(root)
 
     if args.all_papers:
         mode, scope_papers, in_scope, units = "all_papers", papers, records, []
@@ -909,7 +900,7 @@ def main(argv: list[str] | None = None) -> int:
         min_weight=max(args.min_weight, 1),
         max_terms=max(args.max_terms, 1),
     )
-    print(json.dumps(report, indent=2, ensure_ascii=False))
+    cli.emit(report)
     return 0
 
 

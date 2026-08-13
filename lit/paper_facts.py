@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 
 from lit import references
-from lit.arxiv_search import collapse_whitespace
+from lit.text import collapse_whitespace
 
 # The first "<number> page" or "<number> pages" of an arXiv comment. The comment
 # is free text, so this reads a length where the authors wrote one and nothing

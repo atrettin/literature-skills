@@ -41,7 +41,7 @@ import tempfile
 from datetime import date
 from pathlib import Path
 
-from lit import arxiv_fetch
+from lit import arxiv_fetch, cli
 from lit import check_references
 from lit import collection_index
 from lit import identity
@@ -49,7 +49,7 @@ from lit import rate_gate
 from lit import reference_store
 from lit import update_references
 from lit import write_index
-from lit.arxiv_search import collapse_whitespace
+from lit.text import collapse_whitespace
 
 SCHEMA = "add-paper/report/1"
 
@@ -509,7 +509,7 @@ def rebuild_index(slug: str, args) -> dict:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument("arxiv_ids", nargs="*", help="one or more arXiv identifiers")
     parser.add_argument("--auto", action="store_true",
                         help="ingest the papers named, and report what happened")
@@ -521,8 +521,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--slug", help="the directory name to use, rather than a derived one")
     parser.add_argument("--force", action="store_true",
                         help="replace a paper directory that is already there")
-    parser.add_argument("--literature-root", type=Path,
-                        default=reference_store.default_root())
+    cli.add_root_argument(parser)
     parser.add_argument("--no-inspire", action="store_true",
                         help="skip the INSPIRE-HEP lookup")
     parser.add_argument("--no-references", action="store_true",
@@ -600,7 +599,7 @@ def one(arxiv_id: str, args, manifest: dict | None) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args = cli.parse(build_parser(), argv)
 
     if bool(args.auto) == bool(args.index_only):
         print(json.dumps({"error": "give exactly one of --auto, --index-only"}))

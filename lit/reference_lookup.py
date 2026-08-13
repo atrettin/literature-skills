@@ -29,8 +29,8 @@ import json
 import sys
 from pathlib import Path
 
-from lit import reference_store
-from lit.arxiv_search import collapse_whitespace
+from lit import cli, reference_store
+from lit.text import collapse_whitespace
 
 DEFAULT_AUTHORS = 3
 
@@ -79,7 +79,7 @@ def haystack(record: dict) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument("tags", nargs="*", help="one or more reference tags")
     parser.add_argument("--search", help="substring of a title, author, journal or identifier")
     parser.add_argument("--doi", help="look a work up by DOI")
@@ -95,22 +95,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="show at most N authors of each work (default %d)" % DEFAULT_AUTHORS,
     )
     parser.add_argument("--all-authors", action="store_true", help="show every author")
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
+    cli.add_root_argument(parser)
     return parser
 
 
 def main() -> int:
-    args = build_parser().parse_args()
+    args = cli.parse(build_parser())
     if not (args.tags or args.search or args.doi or args.arxiv or args.cited_by):
         build_parser().error("give a tag, --search, --doi, --arxiv or --cited-by")
 
     try:
         store = reference_store.load(args.literature_root)
     except RuntimeError as error:
-        print(json.dumps({"error": str(error)}, indent=2))
-        return 1
+        return cli.fail(str(error), cli.ABSENT)
 
     limit = None if args.all_authors else max(args.authors, 1)
     by_tag = {record.get("tag", ""): record for record in store}
@@ -164,19 +161,13 @@ def main() -> int:
             if needle in haystack(record):
                 take(record)
 
-    def most_cited_first(record: dict) -> tuple[int, str]:
-        # A record with no count sorts after every record that has one, however
-        # small: an unknown count is not a count of zero.
-        count = record.get("citation_count")
-        return (-count if isinstance(count, int) else 1, record.get("tag") or "")
+    found.sort(key=reference_store.most_cited_first)
 
-    found.sort(key=most_cited_first)
-
-    print(json.dumps({
+    cli.emit({
         "found": len(found),
         "missing": missing,
         "references": [present(record, limit) for record in found],
-    }, indent=2, ensure_ascii=False))
+    })
     # A tag that answers to nothing is the failure this tooling exists to catch.
     return 1 if missing else 0
 

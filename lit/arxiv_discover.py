@@ -34,17 +34,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from lit import paper_facts
+from lit import cli, paper_facts, paths
 from lit import rate_gate
 from lit import reference_store
 from lit import rerank
-from lit.arxiv_search import (
-    SUMMARY_CHARS,
-    fetch_feed,
-    parse_entries,
-    query_words,
-    truncate,
-)
+from lit.arxiv_search import SUMMARY_CHARS, fetch_feed, parse_entries
+from lit.text import query_words, truncate
 
 # arXiv orders by relevance across the whole corpus, which is a coarser judgement
 # than the one this script makes. Ask for far more than the caller wants and let
@@ -106,7 +101,7 @@ class Options:
     max_results: int = 15
     kind: str = "any"
     sort: str = DEFAULT_SORT
-    literature_root: Path = field(default_factory=reference_store.default_root)
+    literature_root: Path = field(default_factory=paths.default_root)
 
 
 # --------------------------------------------------------------------------
@@ -420,7 +415,7 @@ def join_notes(*notes: str | None) -> str | None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument(
         "--topic",
         help="the subject to search for, written as a full phrase; the search "
@@ -452,19 +447,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="the order of the shortlist; it re-orders the papers the ranking "
         "chose, and never changes which papers those are",
     )
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
+    cli.add_root_argument(parser)
     return parser
 
 
 def fail(message: str, code: int) -> int:
-    print(json.dumps({"error": message, "results": []}, indent=2))
-    return code
+    return cli.fail(message, code, results=[])
 
 
 def main() -> int:
-    args = build_parser().parse_args()
+    args = cli.parse(build_parser())
     if not args.topic:
         return fail("give --topic", 2)
     rate_gate.use_root(args.literature_root)
@@ -488,7 +480,7 @@ def main() -> int:
     except (RuntimeError, ET.ParseError, urllib.error.URLError) as error:
         return fail(str(error), 1)
 
-    print(json.dumps(report, indent=2, ensure_ascii=False))
+    cli.emit(report)
     return 0
 
 

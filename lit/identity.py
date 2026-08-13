@@ -23,6 +23,7 @@ from pathlib import Path
 
 from lit import arxiv_search
 from lit import reference_store
+from lit import text
 
 # How many title words a derived slug carries. A higher value separates two
 # papers of one author in one year more often, and gives a longer directory
@@ -152,7 +153,7 @@ def base_slug(metadata: dict) -> str:
     collection are built on the submission, so that they agree with each other.
     """
     authors = metadata.get("authors") or []
-    who = arxiv_search.slugify(
+    who = text.slugify(
         reference_store.surname(authors[0]) if authors else "", limit=24, default="anon"
     )
     year = metadata.get("submitted_year") or metadata.get("year")
@@ -168,7 +169,7 @@ def title_words(metadata: dict, count: int) -> str:
     """
     words = [
         word
-        for word in arxiv_search.slugify(
+        for word in text.slugify(
             metadata.get("title") or "", limit=200, default=""
         ).split("_")
         if word and word not in reference_store.TAG_STOPWORDS and not word.isdigit()
@@ -259,7 +260,7 @@ def derive_slug(metadata: dict, root: Path) -> str:
 def longer_slug(metadata: dict) -> str:
     """The same name with one more title word, for a caller settling a collision."""
     authors = metadata.get("authors") or []
-    who = arxiv_search.slugify(
+    who = text.slugify(
         reference_store.surname(authors[0]) if authors else "", limit=24, default="anon"
     )
     year = metadata.get("submitted_year") or metadata.get("year")

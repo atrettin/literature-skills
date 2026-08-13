@@ -18,17 +18,18 @@ from __future__ import annotations
 
 import difflib
 import re
-import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-from lit import rate_gate
+from lit import http, rate_gate
+from lit import text
+from lit.text import collapse_whitespace, normalize_title, query_words, truncate
 
 API_URL = "http://export.arxiv.org/api/query"
 API_HOST = "export.arxiv.org"
-USER_AGENT = "neutrino-factory-literature/0.1 (local research tooling)"
+USER_AGENT = http.USER_AGENT
 ATOM = "{http://www.w3.org/2005/Atom}"
 ARXIV_NS = "{http://arxiv.org/schemas/atom}"
 
@@ -51,78 +52,14 @@ APPROX_TITLE_RATIO = 0.60
 SUMMARY_CHARS = 400
 
 
-# --------------------------------------------------------------------------
-# text helpers
-# --------------------------------------------------------------------------
-
-
-def normalize_title(text: str) -> str:
-    """Case-fold, drop LaTeX markup and punctuation, collapse whitespace."""
-    # Drop the command names of LaTeX markup ("$C_5^A$", "\emph{...}"). The
-    # punctuation rule below would otherwise leave "emph" in the title and
-    # push a true match under EXACT_TITLE_RATIO.
-    text = re.sub(r"\\[a-zA-Z]+", " ", text)
-    text = re.sub(r"[^0-9a-zA-Z]+", " ", text.lower())
-    return " ".join(text.split())
-
-
-def collapse_whitespace(text: str) -> str:
-    return " ".join(text.split())
-
-
-# The length under which a name keeps a cut word rather than lose more of the
-# title. A name that says too little is worse than a name ending in half a word.
-SLUG_MIN_CHARS = 24
-
-
-def slugify(
-    text: str, limit: int = 48, default: str = "section", whole_words: bool = False
-) -> str:
-    """Reduce text to the lower-case underscore form used for names on disk.
-
-    Directory names, chapter file names and reference tags all pass through
-    here, so a work held in full and the same work cited by another paper end
-    up under one identifier. Callers naming something other than a section
-    should say so: `default` is what comes back when nothing survives.
-
-    `whole_words` cuts back to the last `_` when the cut at `limit` falls
-    inside a word. It is off by default, and only a chapter file name asks for
-    it: a reference tag sits inside the chapters of every paper citing the
-    work, so a tag that moves breaks citations across the whole collection.
-    """
-    text = re.sub(r"\\[a-zA-Z]+", " ", text)
-    # Fold accents onto their base letter first. Stripping them as punctuation
-    # instead turns Glück into gl_ck and Argüelles into arg_elles, which read
-    # as damage rather than as names.
-    text = "".join(
-        character
-        for character in unicodedata.normalize("NFKD", text)
-        if not unicodedata.combining(character)
-    )
-    text = re.sub(r"[^0-9a-zA-Z]+", "_", text).strip("_").lower()
-    cut = text[:limit]
-    if whole_words and len(text) > limit and text[limit] != "_":
-        # The cut fell inside a word. The last `_` is where that word began.
-        shorter = cut.rsplit("_", 1)[0] if "_" in cut else cut
-        if len(shorter) >= SLUG_MIN_CHARS:
-            cut = shorter
-    return cut.rstrip("_") or default
-
-
-def query_words(text: str) -> str:
-    """Reduce a title to the bare words that arXiv's phrase search accepts."""
-    text = re.sub(r"\\[a-zA-Z]+", " ", text)
-    text = re.sub(r"[^0-9a-zA-Z]+", " ", text)
-    return " ".join(text.split())
-
-
 def last_name(author: str) -> str:
-    """Return the surname of a 'First M. Last' or 'Last, First' string."""
-    author = collapse_whitespace(author)
-    if "," in author:
-        return normalize_title(author.split(",", 1)[0])
-    parts = author.split()
-    return normalize_title(parts[-1]) if parts else ""
+    """The surname of a 'First M. Last' or 'Last, First' string, normalised.
+
+    `text.surname` answers the same question for a tag, and keeps the case and
+    the accents that a tag folds later. This one is for scoring a match, so it
+    folds them here.
+    """
+    return normalize_title(text.surname(author))
 
 
 # --------------------------------------------------------------------------
@@ -191,15 +128,12 @@ def build_loose_query(title: str | None, author: str | None) -> str | None:
 
 def read_feed(params: dict) -> str:
     url = "%s?%s" % (API_URL, urllib.parse.urlencode(params))
-    query = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     last_error: Exception | None = None
     for _ in range(MAX_RETRIES):
         try:
             # The gate holds the three seconds arXiv asks for, so a retry waits
             # exactly as long as a first attempt does.
-            with rate_gate.request(API_HOST):
-                with urllib.request.urlopen(query, timeout=REQUEST_TIMEOUT_S) as response:
-                    return response.read().decode("utf-8", errors="replace")
+            return http.get_text(url, API_HOST, REQUEST_TIMEOUT_S)
         except (urllib.error.URLError, TimeoutError) as error:  # noqa: PERF203
             last_error = error
     raise RuntimeError("arXiv API request failed: %s" % last_error)
@@ -348,12 +282,6 @@ def score_entry(
     return score, match, agreement
 
 
-def truncate(text: str, limit: int = SUMMARY_CHARS) -> str:
-    if len(text) <= limit:
-        return text
-    return text[: limit - 1].rstrip() + "…"
-
-
 def run_search(
     title: str | None, author: str | None, year: int | None, max_results: int = 10
 ) -> dict:
@@ -384,7 +312,7 @@ def run_search(
         if match == "none":
             continue
         entry = dict(entry)
-        entry["summary"] = truncate(entry["summary"])
+        entry["summary"] = truncate(entry["summary"], SUMMARY_CHARS)
         entry["score"] = round(score, 4)
         entry["match"] = match
         entry["agreement"] = agreement

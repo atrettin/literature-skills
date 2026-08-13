@@ -34,16 +34,12 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from lit import http
 from lit import inspire_lookup
 from lit import rate_gate
 from lit import reference_store
-from lit.arxiv_search import (
-    EXACT_TITLE_RATIO,
-    USER_AGENT,
-    collapse_whitespace,
-    fetch_by_ids,
-    normalize_title,
-)
+from lit.arxiv_search import EXACT_TITLE_RATIO, fetch_by_ids
+from lit.text import collapse_whitespace, normalize_title
 
 CROSSREF_URL = "https://api.crossref.org/works/%s"
 CROSSREF_HOST = "api.crossref.org"
@@ -924,11 +920,8 @@ def fetch_by_recid(recids: list[str]) -> dict[str, dict]:
 def fetch_crossref(doi: str) -> dict | None:
     """Resolve a DOI that INSPIRE does not hold. Never raises."""
     url = CROSSREF_URL % urllib.parse.quote(doi, safe="/")
-    query = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with rate_gate.request(CROSSREF_HOST):
-            with urllib.request.urlopen(query, timeout=CROSSREF_TIMEOUT_S) as response:
-                payload = json.loads(response.read().decode("utf-8", errors="replace"))
+        payload = http.get_json(url, CROSSREF_HOST, CROSSREF_TIMEOUT_S)
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError,
             rate_gate.GateTimeout):
         return None

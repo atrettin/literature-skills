@@ -25,7 +25,8 @@ import json
 import re
 from pathlib import Path
 
-from lit.arxiv_search import collapse_whitespace
+from lit import text
+from lit.text import EMPTY, collapse_whitespace, escape_cell as escape
 
 MANIFEST_NAME = ".ingest-manifest.json"
 INDEX_NAME = "INDEX.md"
@@ -41,9 +42,6 @@ AUTHORS_SHOWN = 3
 # here: it addresses a paragraph, and every long paragraph has one.
 NAMED_ANCHOR = re.compile(r'<a id="((?:sec|eq|fig|tab)-[^"]*)"></a>')
 
-# What a cell holds when nothing has filled it in.
-EMPTY = "—"
-
 # A cross-reference the conversion could not resolve keeps this marker. A
 # subsection title can carry one, usually inside its own brackets, as
 # "Challenges (Section [ref: expt_motive])". The first pattern takes the
@@ -53,15 +51,6 @@ REF_IN_BRACKETS = re.compile(
     r"|Equation|Eq\.?)?\s*\[ref:[^\]]*\]\s*\)"
 )
 REF_MARKER = re.compile(r"\s*\[ref:[^\]]*\]")
-
-
-def escape(text: str) -> str:
-    """Make a value safe to sit in a Markdown table cell.
-
-    Only the pipe has to go: it splits the row into further columns, and every
-    cell after it then sits under the wrong heading.
-    """
-    return collapse_whitespace(str(text or "")).replace("|", "\\|")
 
 
 # --------------------------------------------------------------------------
@@ -130,15 +119,6 @@ def show_subsections(titles: list[str]) -> str:
 # --------------------------------------------------------------------------
 
 
-def show_authors(authors: list[str]) -> str:
-    names = [collapse_whitespace(name) for name in authors or [] if collapse_whitespace(name)]
-    if not names:
-        return EMPTY
-    if len(names) > AUTHORS_SHOWN:
-        return escape(", ".join(names[:AUTHORS_SHOWN]) + " et al.")
-    return escape(", ".join(names))
-
-
 def identity_rows(manifest: dict) -> list[tuple[str, str]]:
     """The two-column table at the top: what this paper is.
 
@@ -152,7 +132,8 @@ def identity_rows(manifest: dict) -> list[tuple[str, str]]:
     published = publication.get("published_year")
 
     rows = [
-        ("Authors", show_authors(manifest.get("authors") or [])),
+        ("Authors", text.display_authors(manifest.get("authors") or [],
+                                        AUTHORS_SHOWN, initials=False)),
         ("Submitted", str(manifest.get("submitted_year") or EMPTY)),
         ("Published", str(published) if published else "preprint"),
         ("Journal", escape(publication.get("journal") or "") or EMPTY),

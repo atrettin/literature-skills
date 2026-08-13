@@ -44,12 +44,13 @@ import sys
 import urllib.parse
 from pathlib import Path
 
-from lit import arxiv_discover
+from lit import arxiv_discover, cli
 from lit import inspire_lookup
 from lit import rate_gate
 from lit import reference_store
 from lit import references
-from lit.arxiv_search import SUMMARY_CHARS, collapse_whitespace, truncate
+from lit.arxiv_search import SUMMARY_CHARS
+from lit.text import collapse_whitespace, truncate
 
 AUTHORS_SHOWN = 3
 
@@ -82,7 +83,7 @@ def resolve_paper(arxiv_id: str, doi: str, recid: str) -> dict:
         path = "literature/%s" % urllib.parse.quote(recid, safe="")
         label = "recid %s" % recid
     elif arxiv_id:
-        identifier = inspire_lookup.strip_version(arxiv_id)
+        identifier = reference_store.normalize_arxiv(arxiv_id)
         path = "arxiv/%s" % urllib.parse.quote(identifier, safe="/.")
         label = "arXiv:%s" % identifier
     else:
@@ -191,11 +192,7 @@ def cited_from_store(slug: str, root: Path, max_results: int) -> dict:
         if any(entry.get("slug") == slug for entry in record.get("cited_by") or [])
     ]
 
-    def most_cited_first(record: dict) -> tuple[int, str]:
-        count = record.get("citation_count")
-        return (-count if isinstance(count, int) else 1, record.get("tag") or "")
-
-    found.sort(key=most_cited_first)
+    found.sort(key=reference_store.most_cited_first)
     kept = found[:max_results]
     for record in kept:
         # The store answers `known_as` itself, and it answers for works no
@@ -229,10 +226,7 @@ def cited_from_inspire(recid: str, root: Path, max_results: int) -> dict:
     # puts the works the field leans on at the top.
     ordered = sorted(
         fetched.values(),
-        key=lambda record: (
-            -record["citation_count"] if isinstance(record.get("citation_count"), int) else 1,
-            record.get("title") or "",
-        ),
+        key=lambda record: reference_store.most_cited_first(record, "title"),
     )
     return section(ordered[:max_results], root, "inspire", len(entries))
 
@@ -243,7 +237,7 @@ def cited_from_inspire(recid: str, root: Path, max_results: int) -> dict:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument("arxiv_id", nargs="?", help="arXiv identifier, for example 1706.03621")
     parser.add_argument("--doi", help="name the paper by DOI instead")
     parser.add_argument("--recid", help="name the paper by INSPIRE record number instead")
@@ -261,20 +255,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="order of the citing papers (default: %s)" % DEFAULT_SORT,
     )
     parser.add_argument("--max-results", type=int, default=MAX_RESULTS)
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
+    cli.add_root_argument(parser)
     return parser
 
 
 def fail(message: str, code: int) -> int:
-    print(json.dumps({"found": False, "reason": message}, indent=2))
+    cli.emit({"found": False, "reason": message})
     return code
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = cli.parse(parser, argv)
     if not (args.arxiv_id or args.doi or args.recid):
         return fail("give an arXiv identifier, --doi or --recid", 2)
     if args.max_results < 1:
@@ -320,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
             else cited_from_inspire(recid, root, args.max_results)
         )
 
-    print(json.dumps(report, indent=2, ensure_ascii=False))
+    cli.emit(report)
     return 0
 
 

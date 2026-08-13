@@ -37,19 +37,13 @@ import xml.etree.ElementTree as ET
 from datetime import date
 from pathlib import Path
 
-from lit import convert_figures
+from lit import cli, convert_figures, http
 from lit import inspire_lookup
 from lit import rate_gate
 from lit import reference_store
 from lit import references
-from lit.arxiv_search import (
-    USER_AGENT,
-    collapse_whitespace,
-    fetch_feed,
-    parse_entries,
-    read_feed,
-    slugify,
-)
+from lit.arxiv_search import fetch_feed, parse_entries, read_feed
+from lit.text import collapse_whitespace, slugify
 
 EPRINT_URL = "https://arxiv.org/e-print/%s"
 EPRINT_HOST = "arxiv.org"
@@ -298,11 +292,8 @@ class ParserFailure(RuntimeError):
 
 def download_source(arxiv_id: str, work_dir: Path) -> Path:
     url = EPRINT_URL % arxiv_id
-    query = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with rate_gate.request(EPRINT_HOST):
-            with urllib.request.urlopen(query, timeout=REQUEST_TIMEOUT_S) as response:
-                payload = response.read()
+        payload = http.get(url, EPRINT_HOST, REQUEST_TIMEOUT_S)
     except urllib.error.HTTPError as error:
         raise NoSource(
             "arXiv returned HTTP %s for %s. The submission may be PDF-only, "
@@ -1784,12 +1775,10 @@ def fetch_metadata_by_id(arxiv_id: str) -> dict:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    parser = cli.parser(__doc__)
     parser.add_argument("arxiv_id", help="arXiv identifier, for example 1706.03621")
     parser.add_argument("--slug", required=True, help="directory name under the literature root")
-    parser.add_argument(
-        "--literature-root", type=Path, default=reference_store.default_root()
-    )
+    cli.add_root_argument(parser)
     parser.add_argument("--max-chapter-bytes", type=int, default=DEFAULT_MAX_CHAPTER_BYTES)
     parser.add_argument("--force", action="store_true", help="overwrite an existing paper directory")
     parser.add_argument(
@@ -2041,7 +2030,7 @@ def convert(args) -> dict:
 
 
 def main() -> int:
-    args = build_parser().parse_args()
+    args = cli.parse(build_parser())
     rate_gate.use_root(args.literature_root)
 
     paper_dir = args.literature_root / args.slug
@@ -2055,7 +2044,7 @@ def main() -> int:
         fail(str(error))
         return 1
 
-    print(json.dumps(manifest, indent=2))
+    cli.emit(manifest)
     return 0
 
 
@@ -2116,7 +2105,7 @@ def build_manifest(
 
 
 def fail(message: str) -> None:
-    print(json.dumps({"error": message}, indent=2), file=sys.stdout)
+    cli.emit({"error": message})
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from lit.arxiv_search import normalize_title
+from lit.text import normalize_title
 
 MODEL_NAME = "ms-marco-MiniLM-L-12-v2"
 
