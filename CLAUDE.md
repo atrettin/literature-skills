@@ -47,9 +47,10 @@ you could not verify, and keep it visible.
 - When an agent starts to implement a plan, it must update the `TODO.md`. If
   the task being worked on is not yet in `TODO.md`, add it and mark it as being
   in progress.
-- `README.md` documents the skills, their scripts and their commands. When you
-  change something that `README.md` describes, update `README.md` in the same
-  change.
+- `README.md` is the front page: what the skills are, how to install them, and
+  a link to each document. `docs/` holds the deep documentation, one file per
+  subject. When you change something a document describes, update that document
+  in the same change.
 - `TUNING.md` lists the parameters that decide how good an answer is. Such a
   parameter does not decide whether the answer is correct. A threshold, a limit,
   a weight, a word list and a choice of model are all of this kind. When you add
@@ -58,9 +59,9 @@ you could not verify, and keep it visible.
   judgement, so write that. Never report a number as measured when nobody
   measured it. Something outside this repository fixes some numbers, such as the
   rate limit of an API. Put those in the last section of that file.
-- The arXiv API and the INSPIRE-HEP API both limit their rate. `rate_gate.py`
-  holds every script to one request at a time, at the pace each API asks for,
-  and it does so across processes. One `add_paper.py --auto` command therefore
+- The arXiv API and the INSPIRE-HEP API both limit their rate. `lit/rate_gate.py`
+  holds every command to one request at a time, at the pace each API asks for,
+  and it does so across processes. One `lit add-paper --auto` command therefore
   ingests a whole queue of papers. Do not call these APIs beside a running
   ingest, and do not spawn sub-agents that call them in parallel. A rate limit
   that you hit costs more time than the work that you tried to make parallel.

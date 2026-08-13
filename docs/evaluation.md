@@ -14,7 +14,7 @@ that a script can give.
 
 | Question | How it is answered |
 |---|---|
-| Does each citation open the text it names? | `check_report.py`. Measured. |
+| Does each citation open the text it names? | `lit check-report`. Measured. |
 | Does the report cite the papers that the task needs? | Compare against a set of papers that a person chose. Measured, against a judgement. |
 | Does the cited text support the claim beside it? | A person or a model reads both. Judged. |
 | Is the report honest about what the literature does not settle? | A person or a model reads it. Judged. |
@@ -52,7 +52,7 @@ Run one task at a time. arXiv and INSPIRE limit their rate.
 
 | Number | Where it comes from | Kind |
 |---|---|---|
-| Audit | `check_report.py` on the report. Record whether it passed at the first try, and what failed if it did not. | measured |
+| Audit | `lit check-report` on the report. Record whether it passed at the first try, and what failed if it did not. | measured |
 | Must-cite recall | the share of the must-cite papers that the references of the report name. Match by DOI and arXiv identifier. | measured |
 | Extra papers | how many papers the report cites that the must-cite set does not name. A high number is not a failure. Read them: they are either a wider answer or a wandering search. | measured |
 | Iterations, ingests, API calls | the research log. This is why the log is written as the work runs, and never edited. | measured |
@@ -84,7 +84,7 @@ one that a different model gave.
 
 ## What a run costs
 
-Read the limits in [TUNING.md](TUNING.md). With `MAX_TOTAL_INGESTS` at 20, one
+Read the limits in [TUNING.md](../TUNING.md). With `MAX_TOTAL_INGESTS` at 20, one
 task that starts from an empty collection can ingest twenty papers. Each ingest
 downloads a source archive from arXiv and asks INSPIRE about the paper and its
 bibliography. Each search is one or two requests to arXiv, three seconds apart.
