@@ -54,6 +54,11 @@ AUTHORS_SHOWN = 3
 MAX_TERMS = 12
 MIN_TERM_CHARS = 3
 
+# A topic of at most this many words could be the title of a paper, and the
+# title rung then asks arXiv for that title. A longer topic is a question, no
+# title reads like it, and the request would buy nothing.
+PHRASE_MAX_WORDS = 6
+
 # How many of the ranked candidates one INSPIRE request describes. `--kind` and
 # `--sort` work over this shortlist. `references.BATCH_SIZE` is 40, so this
 # value costs one request.
@@ -174,6 +179,25 @@ def build_strict_query(terms: list[str], options: Options) -> str:
     return " AND ".join(["abs:%s" % term for term in terms] + build_filters(options))
 
 
+def build_phrase_query(topic: str, options: Options) -> str:
+    """The topic as a title, quoted.
+
+    For the caller who names a paper rather than a subject. `ti:"NuSTEC White
+    Paper"` returns that one paper. The same three words in the broad rung
+    become `(all:nustec OR all:white OR all:paper)`, which returns a hundred
+    white papers about everything else and leaves the wanted one outside the
+    window: `white` and `paper` are common enough that arXiv's own relevance
+    order buries the paper that carries all three.
+
+    Here a quoted phrase is right where `build_strict_query` explains that it
+    is wrong. Scoped to an abstract it is far too strict, because an abstract
+    states a subject in whatever words it likes. A title is a fixed string, and
+    a caller who quotes one quotes it as it stands.
+    """
+    phrase = " ".join(query_words(topic).split())
+    return " AND ".join(['ti:"%s"' % phrase] + build_filters(options))
+
+
 def build_broad_query(terms: list[str], options: Options) -> str:
     """Any term, anywhere in the record.
 
@@ -195,14 +219,52 @@ def build_broad_query(terms: list[str], options: Options) -> str:
 Fetch = Callable[[str, int], str]
 
 
+def climb(
+    entries: list[dict],
+    queries: list[dict],
+    rung: str,
+    query: str,
+    fetch: Fetch,
+) -> None:
+    """Run one more rung and add what it alone found. Failure changes nothing.
+
+    A later rung adds to an earlier one rather than replacing it: a paper that
+    carried every term is a better answer than one that carried any, and the
+    merge keeps that order for the ranking to start from. A rung that fails is
+    a widening lost, which is worth less than the hits already in hand, so it
+    is not an error and the rung then goes unreported.
+    """
+    try:
+        found = parse_entries(fetch(query, CANDIDATES))
+    except (RuntimeError, ET.ParseError, urllib.error.URLError):
+        return
+
+    seen = {entry["arxiv_id"] for entry in entries}
+    for entry in found:
+        if entry["arxiv_id"] not in seen:
+            entry["found_by"] = rung
+            entries.append(entry)
+            seen.add(entry["arxiv_id"])
+    queries.append({"rung": rung, "search_query": query})
+
+
 def gather(terms: list[str], options: Options, fetch: Fetch) -> tuple[list[dict], list[dict]]:
     """Run the ladder. Returns (entries, the queries that ran).
 
-    The broad rung adds to the strict rung's hits rather than replacing them: a
-    paper that carried every term is a better answer than one that carried any,
-    and the merge keeps that order for the ranking to start from. Both queries
-    are reported, because both shaped the result and each result says which of
-    them found it.
+    Three rungs, each wider than the last, and the climb stops as soon as one
+    of them has said enough:
+
+        strict  every term, each scoped to the abstract
+        title   the topic, quoted, as the title of a paper
+        broad   any term, anywhere in the record
+
+    The title rung sits in the middle because it answers a caller who names a
+    paper. That caller fails the strict rung — the words of a title are rarely
+    all in the abstract — and the broad rung answers them worst of all, by
+    dragging in every paper that shares a common word with the title.
+
+    Every query that ran is reported, because each shaped the result and each
+    result says which rung found it.
     """
     strict = build_strict_query(terms, options)
     entries = parse_entries(fetch(strict, CANDIDATES))
@@ -212,26 +274,17 @@ def gather(terms: list[str], options: Options, fetch: Fetch) -> tuple[list[dict]
     if len(entries) >= MIN_RESULTS:
         return entries, queries
 
+    # Each rung waits behind the last at the gate, which is where the pace
+    # arXiv asks for is kept.
+    words = query_words(options.topic).split()
+    if 1 < len(words) <= PHRASE_MAX_WORDS:
+        climb(entries, queries, "title", build_phrase_query(options.topic, options), fetch)
+        if len(entries) >= MIN_RESULTS:
+            return entries, queries
+
     broad = build_broad_query(terms, options)
-    if broad == strict:
-        return entries, queries
-
-    # The broad rung waits behind the strict one at the gate, which is where
-    # the pace arXiv asks for is kept.
-    try:
-        found = parse_entries(fetch(broad, CANDIDATES))
-    except (RuntimeError, ET.ParseError, urllib.error.URLError):
-        # The strict rung already answered something. Losing the widening is
-        # worth less than losing that.
-        return entries, queries
-
-    seen = {entry["arxiv_id"] for entry in entries}
-    for entry in found:
-        if entry["arxiv_id"] not in seen:
-            entry["found_by"] = "broad"
-            entries.append(entry)
-            seen.add(entry["arxiv_id"])
-    queries.append({"rung": "broad", "search_query": broad})
+    if broad != strict:
+        climb(entries, queries, "broad", broad, fetch)
     return entries, queries
 
 
@@ -357,7 +410,10 @@ def search(options: Options, fetch: Fetch = fetch_feed) -> dict:
         raise ValueError("--topic holds no word to search for; write the subject in full")
 
     entries, queries = gather(terms, options, fetch)
-    ranked, backend, note = rerank.rank(options.topic, terms, entries)
+    # Measured here rather than inside the ranking, so that the report carries
+    # the same numbers the order was made on.
+    weights = rerank.term_weights(terms, entries)
+    ranked, backend, note = rerank.rank(options.topic, terms, entries, weights)
     for position, entry in enumerate(ranked, start=1):
         entry["relevance_rank"] = position
 
@@ -385,6 +441,9 @@ def search(options: Options, fetch: Fetch = fetch_feed) -> dict:
         "query": {
             "topic": options.topic,
             "terms": terms,
+            # What each term was worth to the order. A reader who sees a paper
+            # ranked above a plausible-looking one must be able to say why.
+            "term_weights": {term: round(weight, 2) for term, weight in weights.items()},
             "meta_terms_dropped": meta_terms_of(options.topic),
             "categories": options.categories,
             "since": options.since,

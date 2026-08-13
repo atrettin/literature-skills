@@ -1,13 +1,14 @@
 ---
 name: find-papers
-description: Finds papers on arXiv by the subject of their abstracts, and says which of them the local literature/ collection already holds. Use when a research question needs a paper that the collection may not hold yet.
+description: Finds papers on arXiv by the subject of their abstracts, or by the title when you name one paper, and says which of them the local literature/ collection already holds. Use when a research question needs a paper that the collection may not hold yet.
 ---
 
 # Find papers on a subject
 
-This skill searches arXiv for papers about a question. It reads abstracts and
-not titles. It therefore finds a paper on the subject when the title of that
-paper never gives the words.
+This skill searches arXiv for papers about a question. It reads abstracts
+first, and so it finds a paper on the subject when the title of that paper
+never gives the words. When the abstracts answer with too little, it asks for
+the topic as a title, and so it also finds the one paper you name.
 
 Use `use-literature` first. It reads the papers the project holds already, and
 that costs nothing. Use this skill when the collection cannot answer the
@@ -64,6 +65,16 @@ paper fail the strict rung. The report names them in
 `query.meta_terms_dropped`. They stay in the phrase the cross-encoder reads,
 and there they do their work.
 
+### Give the title, when you want one named paper
+
+`--topic` takes a title as readily as a subject. Give the title on its own, up
+to six words, and the search asks arXiv for that title before it widens:
+`--topic "Zeitgeist Report on Coastal Erosion"` returns that report. Adding the
+subject as well — `"Zeitgeist Report on Coastal Erosion sediment transport"` —
+makes the topic too long to read as a title, and the search then widens to
+every paper that shares a common word with it. Search for the title first, and
+for the subject in a second search.
+
 | Option | What it does |
 |---|---|
 | `--topic` | the subject, as a phrase. Required. |
@@ -104,6 +115,7 @@ It prints JSON. Read these fields first:
 | `query.terms` | the words the search used. Read them: they show what the search asked arXiv for. |
 | `query.meta_terms_dropped` | the words that describe the wanted kind of paper. The search dropped them, the ranking kept them. |
 | `query.queries` | the query of each rung that ran. |
+| `query.term_weights` | what each term was worth to the order. A term that nearly every candidate carries weighs almost nothing, because it separated none of them; a term that one candidate carries weighs everything. This is why a paper can rank first while carrying fewer of the words than the paper below it. |
 | `enrichment` | how many papers of the shortlist INSPIRE described. A `matched` of 0 means that INSPIRE described none of them. Every `citation_count` below is then `null`. |
 | `kind_filter` | what `--kind` kept and what it dropped. It is `null` when `--kind` is `any`. |
 
@@ -116,9 +128,9 @@ Then, for each result:
 | `citation_count` | how many papers INSPIRE knows that cite this one. `null` means that INSPIRE holds no record of it. |
 | `pages` | the length of the paper. `pages_source` says which source gave it. `null` means that neither source did. |
 | `kind` | `review`, `article`, or `unknown`. `unknown` means that no venue and no document type described the paper. Every preprint is of that kind. |
-| `coverage` | the share of the terms this paper's title and abstract carry. |
-| `missing_terms` | the terms it does not carry. |
-| `found_by` | `strict` means the paper carries every term. `broad` means it carries some of them. |
+| `coverage` | the share of the terms this paper's title and abstract carry, weighed by `query.term_weights`. It is not the plain count: missing the one term that picks a paper out costs nearly all of it, and missing a term that every candidate carries costs almost none. |
+| `missing_terms` | the terms it does not carry. This is the plain list, unweighed — check it against the abstract. |
+| `found_by` | `strict` means the paper carries every term. `title` means the topic is its title. `broad` means it carries some of the terms. |
 | `held_as`, `known_as`, `cited_by` | what the collection knows. Step 3 uses these. |
 
 **Read `ranking.backend` before you trust the order.**
