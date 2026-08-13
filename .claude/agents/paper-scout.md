@@ -45,7 +45,7 @@ Seven rules:
   beside it.
 - **Grep a few words at most.** Chapter text wraps at about 70 characters. A
   grep for a whole sentence thus finds nothing while the sentence is there. You
-  have no `Bash` tool, thus you cannot run `search_literature.py`. The caller
+  have no `Bash` tool, thus you cannot run `lit search`. The caller
   runs it. When a grep finds nothing, read the chapter. Never say the paper does
   not hold a text because a grep missed it.
 - **Quote exactly.** Copy the words of the paper inside the quotation marks.

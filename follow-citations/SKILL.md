@@ -15,26 +15,17 @@ answer is frequently one step along the graph.
 
 ## Before you start
 
-This skill is installed one time and used from any project. Two shorthands are
-used below:
-
-- **`$CITE`** — `<the add-paper skill's directory>/scripts/inspire_citations.py`.
-  The `add-paper` skill prints its own base directory when it loads. If it is
-  not installed beside this one, `find ~/.claude/skills -name inspire_citations.py`
-  finds it.
-- **`$PY`** — the project's Python. Use `.venv/bin/python` when the project has
-  a virtual environment. If it does not, use `python3`.
+Run every command from the root of the project, so that `literature/` resolves.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, the collection is `literature/` in the project. The script reads the
-variable itself, thus you do not give `--literature-root`. Run every command
-from the root of the project.
+set, it is `literature/` in the project. `lit` reads the variable itself, thus
+you do not give `--literature-root`.
 
 ## Step 1. Choose the direction
 
 | What you need | The direction |
 |---|---|
-| The source of a claim that a paper you read borrowed | `--direction cited`. Try `reference_lookup.py <tag>` first: for a paper the collection holds, that is the same answer and it costs no request. |
+| The source of a claim that a paper you read borrowed | `--direction cited`. Try `lit lookup <tag>` first: for a paper the collection holds, that is the same answer and it costs no request. |
 | The work that came after an old paper | `--direction citing --sort mostrecent` |
 | The accepted treatment of the subject of a key paper | `--direction citing --sort mostcited` |
 | Both lists at one time | `--direction both` |
@@ -42,7 +33,7 @@ from the root of the project.
 ## Step 2. Run it
 
 ```bash
-$PY $CITE 1706.03621 --direction citing --sort mostcited
+lit citations 1706.03621 --direction citing --sort mostcited
 ```
 
 | Option | What it does |
@@ -61,7 +52,7 @@ request at all.
 
 ## Step 3. Read the answer
 
-The script prints JSON with these parts:
+It prints JSON with these parts:
 
 | Field | What it holds |
 |---|---|
@@ -89,7 +80,7 @@ you asked for.
 | The result | What you do |
 |---|---|
 | `held_as` holds a directory name | The collection holds the paper. Read it with `use-literature`. |
-| `known_as` holds a tag, `held_as` is `null` | A paper here cites this work. Run `reference_lookup.py <tag>` for the record. Ingest it with `add-paper` when the question needs the work itself. |
+| `known_as` holds a tag, `held_as` is `null` | A paper here cites this work. Run `lit lookup <tag>` for the record. Ingest it with `add-paper` when the question needs the work itself. |
 | both are `null` | The collection does not know this paper. Report it, and offer `add-paper` with the arXiv identifier. |
 
 ## Rules

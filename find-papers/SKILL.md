@@ -18,41 +18,22 @@ new and what is on disk already.
 
 ## Before you start
 
-This skill is installed once and used from any project, so nothing below can
-assume a fixed path. Three shorthands are used throughout:
-
-- **`$DISCOVER`** — `<the add-paper skill's directory>/scripts/arxiv_discover.py`.
-  The `add-paper` skill prints its own base directory when it loads. If it is
-  not installed beside this one, `find ~/.claude/skills -name arxiv_discover.py`
-  finds it.
-- **`$OVERLAP`** — `<the add-paper skill's directory>/scripts/collection_overlap.py`,
-  beside `$DISCOVER`. Step 4 uses it.
-- **`$PY`** — the project's Python. Use `.venv/bin/python` when the project has
-  a virtual environment, otherwise `python3`.
-
 Run every command from the root of the project, so that `literature/` resolves.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project. The scripts read the variable
-themselves, thus you do not give `--literature-root`. Read and write the
-collection's files at that path.
+set, it is `literature/` in the project. `lit` reads the variable itself, thus
+you do not give `--literature-root`.
 
-The search runs with no package installed. One optional package gives a better
-order of the results:
-
-```bash
-$PY -m pip install -r <this skill's directory>/requirements.txt
-```
-
-Step 2 tells you how to read which order you got.
+`lit find` orders its results with a cross-encoder when one is installed. Step 2
+tells you how to read which order you got.
 
 ## Step 1. Turn the question into a topic
 
 ```bash
-$PY $DISCOVER --topic "how meson exchange currents change the quasielastic neutrino cross section"
+lit find --topic "how meson exchange currents change the quasielastic neutrino cross section"
 ```
 
-**Write the question as a full phrase.** The script reads `--topic` two times,
+**Write the question as a full phrase.** `lit find` reads `--topic` two times,
 and each read uses a different part of it:
 
 1. It removes the common words. It searches arXiv for the terms that remain.
@@ -104,7 +85,7 @@ second one three seconds later when the first finds little. It then reads up to
 a hundred abstracts with the cross-encoder. One INSPIRE request follows the
 arXiv requests, and it describes the shortlist with its length and its citation
 count. The first search of all also fetches the model, which adds a few seconds
-and happens one time. The script writes what it is doing to the error output
+and happens one time. It writes what it is doing to the error output
 while you wait. Wait for it. Do not start a second search because the first
 looks slow.
 
@@ -113,14 +94,14 @@ a separate category and not a part of it. Give both when you want both.
 
 ## Step 2. Read the answer
 
-The script prints JSON. Read these fields first:
+It prints JSON. Read these fields first:
 
 | Field | What it holds |
 |---|---|
 | `ranking.backend` | which of the two orders you are reading. See below. |
 | `ranking.sort` | the order the results are in. It differs from the order you asked for when no source could answer that order. `ranking.note` then says why. |
 | `counts` | how many results are `held`, `cited`, and `new`. |
-| `query.terms` | the words the search used. Read them: they show what the script asked arXiv for. |
+| `query.terms` | the words the search used. Read them: they show what the search asked arXiv for. |
 | `query.meta_terms_dropped` | the words that describe the wanted kind of paper. The search dropped them, the ranking kept them. |
 | `query.queries` | the query of each rung that ran. |
 | `enrichment` | how many papers of the shortlist INSPIRE described. A `matched` of 0 means that INSPIRE described none of them. Every `citation_count` below is then `null`. |
@@ -167,18 +148,18 @@ paper from it.
 |---|---|
 | `held_as` holds a directory name | The collection holds this paper in full. Read it with `use-literature`. Do not ingest it again. |
 | `held_as` holds a directory name, and your task did not put it there | Read the paper. Add it to the working set of your task when its text bears on a sub-question. `research-report/SKILL.md` defines the working set. |
-| `known_as` holds a tag, `held_as` is `null` | A paper in the collection cites this work. Run `reference_lookup.py <tag>` for the full record. Ingest it with `add-paper` when the question needs the work itself. |
+| `known_as` holds a tag, `held_as` is `null` | A paper in the collection cites this work. Run `lit lookup <tag>` for the full record. Ingest it with `add-paper` when the question needs the work itself. |
 | both are `null` | The collection does not know this paper. Report it, and offer the `add-paper` skill with the arXiv identifier. |
 
 ## Step 4. Weigh a candidate against the papers of your question
 
 A rank says how well a candidate's abstract answers your question. It does not
 say whether the candidate builds on the same works as the papers you hold for
-that question. `$OVERLAP` answers that from the reference store, which already
+that question. `lit overlap` answers that from the reference store, which already
 holds every work that every held paper cites.
 
 ```bash
-$PY $OVERLAP <arxiv-id> --scope <slug> --scope <slug>
+lit overlap <arxiv-id> --scope <slug> --scope <slug>
 ```
 
 That command is an example. Replace each `<slug>` with a paper of your own
@@ -194,7 +175,7 @@ papers must not decide your band: a candidate that shares nothing with your
 subject still shares references with whatever an earlier task ingested, and
 measured against all of it that candidate reads `high`. You would then decline
 an ingest your question needs. A caller with no such list yet gives no `--scope`,
-and the script says so instead of guessing.
+and it says so instead of guessing.
 
 **State the cost.** A candidate the collection does not hold costs two requests
 to INSPIRE: one resolves the identifier to a record, one reads the reference

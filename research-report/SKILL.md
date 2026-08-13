@@ -33,17 +33,11 @@ file below the literature root.
 
 ## Before you start
 
-Seven shorthands are used below. The `add-paper` skill prints its own base
-directory when it loads; its `scripts/` directory holds each script.
+Run every command from the root of the project, so that `literature/` resolves.
 
-- **`$PY`** — the project's Python. Use `.venv/bin/python` when the project has
-  a virtual environment. If it does not, use `python3`.
-- **`$LOOKUP`** — `<add-paper>/scripts/reference_lookup.py`
-- **`$CITE`** — `<add-paper>/scripts/inspire_citations.py`
-- **`$SEARCH`** — `<add-paper>/scripts/search_literature.py`
-- **`$SCAN`** — `<add-paper>/scripts/terminology_scan.py`
-- **`$OVERLAP`** — `<add-paper>/scripts/collection_overlap.py`
-- **`$AUDIT`** — `<add-paper>/scripts/check_report.py`
+The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
+set, it is `literature/` in the project. `lit` reads the variable itself, thus
+you do not give `--literature-root`.
 
 **Find the collection first.** It is at `$LITERATURE_ROOT` when that variable is
 set. If it is not set, it is `literature/` in the project. If neither is there,
@@ -55,7 +49,7 @@ the full text of a paper is large. Three agents keep that text out of it:
 
 | Agent | What it does |
 |---|---|
-| `paper-ingestor` | handles an exception of the ingest script for one paper. It reports the slug and the warnings, and no paper text. |
+| `paper-ingestor` | handles an exception of the ingest for one paper. It reports the slug and the warnings, and no paper text. |
 | `paper-scout` | reads one paper that is on disk against your sub-questions. It reports the locations that answer them. It uses no API, thus several can run at the same time. |
 | `terminology-scout` | says how one term of the literature relates to your subject. It uses no API, thus several can run at the same time. |
 | `terminology-prospector` | reads one paper in full for the names it uses for your subject. It uses no API, thus several can run at the same time. A gate decides when it runs, because it reads a whole paper. |
@@ -105,9 +99,9 @@ set is that scope:
 
 | Tool | How you pass the set |
 |---|---|
-| `$SEARCH` | `--paper <slug>` for each paper of the set, when you verify a claim of this task |
-| `$SCAN` | `--in-text <slug>` and `--cited-by <slug>` for each paper of the set, when you look for the other names of your subject |
-| `$OVERLAP` | `--scope <slug>` for each paper of the set, when you weigh a candidate against what you hold |
+| `lit search` | `--paper <slug>` for each paper of the set, when you verify a claim of this task |
+| `lit terminology` | `--in-text <slug>` and `--cited-by <slug>` for each paper of the set, when you look for the other names of your subject |
+| `lit overlap` | `--scope <slug>` for each paper of the set, when you weigh a candidate against what you hold |
 
 A tool that you run over the whole collection answers a question about the
 collection. It does not answer a question about your task.
@@ -151,10 +145,10 @@ needs no ingest, and it counts against no limit. Pass a queue of identifiers to
 one command:
 
 ```bash
-$PY <add-paper>/scripts/add_paper.py --auto <arxiv-id> [<arxiv-id> …]
+lit add-paper --auto <arxiv-id> [<arxiv-id> …]
 ```
 
-The script sends one request at a time by itself, thus one command ingests the
+It sends one request at a time by itself, thus one command ingests the
 whole queue. It prints one JSON report per paper, as one object per line. It
 exits 2 when any paper raised an exception.
 
@@ -167,7 +161,7 @@ weigh them against what you already hold.** A rank says how well an abstract
 answers the question. It does not say whether the candidate builds on the same
 works as the papers of your working set, and the reference store does say that.
 
-1. Run `$PY $OVERLAP <arxiv-id> --scope <slug> …` on each candidate. Run one
+1. Run `lit overlap <arxiv-id> --scope <slug> …` on each candidate. Run one
    check at a time: it asks INSPIRE, and INSPIRE limits its rate. Give
    `--scope <slug>` for each paper of your working set, out of the `## Working
    set` table of the log. Never `--all-papers`: the collection serves other
@@ -202,12 +196,12 @@ reading opens files on disk. Neither one sends a request.
 |---|---|
 | a `paper-scout`, or a `terminology-prospector`, on a paper that is on disk | yes |
 | your own read of a chapter | yes |
-| `$PY $LOOKUP <tag>`, which reads the local store | yes |
-| `$PY $SEARCH "<phrase>"`, which reads the chapters on disk | yes |
-| a second `add_paper.py --auto` command, or a `paper-ingestor` | **no** |
+| `lit lookup <tag>`, which reads the local store | yes |
+| `lit search "<phrase>"`, which reads the chapters on disk | yes |
+| a second `lit add-paper --auto` command, or a `paper-ingestor` | **no** |
 | a `find-papers` search | **no** |
-| `$PY $CITE …`, which asks INSPIRE | **no** |
-| `$PY $OVERLAP …`, which asks INSPIRE | **no** |
+| `lit citations …`, which asks INSPIRE | **no** |
+| `lit overlap …`, which asks INSPIRE | **no** |
 
 **Read a paper only after the command that ingests it reports.** The chapters
 are incomplete until then, and a scout that starts early reads a part of the
@@ -237,7 +231,7 @@ When the words are not at that line, do not conclude that the scout invented
 them. Find them instead:
 
 ```bash
-$PY $SEARCH "<the words the scout quoted>" --paper <slug>
+lit search "<the words the scout quoted>" --paper <slug>
 ```
 
 **Never search for a quotation with `grep`.** The text wraps, thus `grep` misses
@@ -284,7 +278,7 @@ Name the paper that supplies the answer. Remove that paper's text, and the
 answer goes with it. Ask INSPIRE which papers cite that paper, newest first:
 
 ```bash
-$PY $CITE <arxiv-id> --direction citing --sort mostrecent
+lit citations <arxiv-id> --direction citing --sort mostrecent
 ```
 
 Read the titles and the summaries, and act:
@@ -325,15 +319,15 @@ the papers that your query lacks.
 each paper in your working set, and no more:
 
 ```bash
-$PY $SCAN --topic "<your topic phrase>" \
+lit terminology --topic "<your topic phrase>" \
           --in-text <slug> --cited-by <slug> \
           --in-text <slug> --cited-by <slug>
 ```
 
 The collection is persistent. It holds the papers of tasks that came before
 yours, and their words carry the vocabulary of other subjects. A scan of the
-whole store thus offers you the other names of somebody else's question. The
-script refuses to run without a scope for that reason. Never use `--all-papers`
+whole store thus offers you the other names of somebody else's question. `lit
+terminology` refuses to run without a scope for that reason. Never use `--all-papers`
 here: it answers a question about the collection, and not about your task.
 
 Check the `scope` block of the report. Its `papers` list must equal your working
@@ -411,7 +405,7 @@ reported, so that it does not hand you those back.
 A prospector calls no API, thus several run at the same time.
 
 **A term it proposes is a lead, and not a citation.** Open the line it gave you
-with `$SEARCH` before any part of your report rests on it, exactly as you do for
+with `lit search` before any part of your report rests on it, exactly as you do for
 a `paper-scout`. Discard a row whose line does not hold the words.
 
 Write the table in the log under `### Terminology`, **and the reason the gate
@@ -437,9 +431,9 @@ reader must know which one stopped you.
 |---|---|
 | The papers use a term that your query did not have | Search again with the words of the papers. Your first query used the words of the person who asked. |
 | The scan found a term that names your subject, and your query did not have it | Search again with that term in the topic phrase. |
-| A paper you read cites the claim that a sub-question needs | Backward: `$PY $LOOKUP <tag>`. It costs nothing. Ingest the source only when the claim must be read at the source. |
-| The best paper is old, or the sub-question asks for the state of the art | Forward: `$PY $CITE <arxiv-id> --direction citing --sort mostrecent` |
-| The sub-question needs the accepted treatment | Forward: `$PY $CITE <arxiv-id> --direction citing --sort mostcited` |
+| A paper you read cites the claim that a sub-question needs | Backward: `lit lookup <tag>`. It costs nothing. Ingest the source only when the claim must be read at the source. |
+| The best paper is old, or the sub-question asks for the state of the art | Forward: `lit citations <arxiv-id> --direction citing --sort mostrecent` |
+| The sub-question needs the accepted treatment | Forward: `lit citations <arxiv-id> --direction citing --sort mostcited` |
 | A sub-question is about a subject that no paper you read reaches | A new search, with a narrower phrase. This is the one case where a search beats the citation graph. |
 | Each result is broad and shallow | Divide the sub-question in two. Work on the halves. |
 
@@ -585,7 +579,7 @@ that says what that means.
 ## Step 6. Audit the report
 
 ```bash
-$PY $AUDIT reports/<task-slug>.md
+lit check-report reports/<task-slug>.md
 ```
 
 It checks five things:
@@ -611,15 +605,15 @@ Then tell the user:
 
 ## Rules
 
-- **One request at a time reaches arXiv and INSPIRE.** `rate_gate.py` holds
-  every script to that, across processes, so one `add_paper.py --auto` command
-  ingests a whole queue. Do not start a search, a `$CITE` lookup or a second
+- **One request at a time reaches arXiv and INSPIRE.** The request gate holds
+  every command to that, across processes, so one `lit add-paper --auto` command
+  ingests a whole queue. Do not start a search, a `lit citations` lookup or a second
   ingest beside a running ingest. A scout and your own reading call no API, thus
   they run beside an ingest.
 - **Check for later work before you call a sub-question answered.** Step 4 says
   how, and the log says that you did it.
 - **Keep the full text out of your context.** Read `INDEX.md` files, the reports
-  of the agents, the JSON of the scripts, and the chapters that you cite.
+  of the agents, the JSON of the commands, and the chapters that you cite.
   Never read a paper from beginning to end yourself. That is what a `paper-scout`
   does for your sub-questions, and a `terminology-prospector` for its words.
 - **Cite only what you read.** Not an abstract. Not a summary. Not a quotation
