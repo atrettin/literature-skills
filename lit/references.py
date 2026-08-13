@@ -28,18 +28,16 @@ import datetime
 import difflib
 import json
 import re
-import sys
 import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import inspire_lookup  # noqa: E402
-import rate_gate  # noqa: E402
-import reference_store  # noqa: E402
-from arxiv_search import (  # noqa: E402
+from lit import inspire_lookup
+from lit import rate_gate
+from lit import reference_store
+from lit.arxiv_search import (
     EXACT_TITLE_RATIO,
     USER_AGENT,
     collapse_whitespace,

@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import arxiv_discover
-import reference_store
+from lit import arxiv_discover
+from lit import reference_store
 
 
 # --------------------------------------------------------------------------

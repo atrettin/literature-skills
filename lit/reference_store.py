@@ -33,12 +33,10 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from arxiv_search import collapse_whitespace, normalize_title, slugify  # noqa: E402
+from lit.arxiv_search import collapse_whitespace, normalize_title, slugify
 
 STORE_NAME = ".references.jsonl"
 VIEW_NAME = "REFERENCES.md"

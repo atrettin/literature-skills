@@ -44,13 +44,12 @@ import sys
 import urllib.parse
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import arxiv_discover  # noqa: E402
-import inspire_lookup  # noqa: E402
-import rate_gate  # noqa: E402
-import reference_store  # noqa: E402
-import references  # noqa: E402
-from arxiv_search import SUMMARY_CHARS, collapse_whitespace, truncate  # noqa: E402
+from lit import arxiv_discover
+from lit import inspire_lookup
+from lit import rate_gate
+from lit import reference_store
+from lit import references
+from lit.arxiv_search import SUMMARY_CHARS, collapse_whitespace, truncate
 
 AUTHORS_SHOWN = 3
 

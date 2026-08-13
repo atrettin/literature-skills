@@ -19,12 +19,10 @@ Neither answer is printed for a reader. `add_paper.py` calls both.
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import arxiv_search  # noqa: E402
-import reference_store  # noqa: E402
+from lit import arxiv_search
+from lit import reference_store
 
 # How many title words a derived slug carries. A higher value separates two
 # papers of one author in one year more often, and gives a longer directory

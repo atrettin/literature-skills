@@ -49,9 +49,8 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import reference_store  # noqa: E402
-from arxiv_search import collapse_whitespace  # noqa: E402
+from lit import reference_store
+from lit.arxiv_search import collapse_whitespace
 
 # A cross-reference the conversion could not resolve keeps its marker.
 REF_TAG = re.compile(r"\[ref:\s*([^\]]*)\]")

@@ -23,8 +23,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from arxiv_search import normalize_title  # noqa: E402
+from lit.arxiv_search import normalize_title
 
 MODEL_NAME = "ms-marco-MiniLM-L-12-v2"
 

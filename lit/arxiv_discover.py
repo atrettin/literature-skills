@@ -34,12 +34,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import paper_facts  # noqa: E402
-import rate_gate  # noqa: E402
-import reference_store  # noqa: E402
-import rerank  # noqa: E402
-from arxiv_search import (  # noqa: E402
+from lit import paper_facts
+from lit import rate_gate
+from lit import reference_store
+from lit import rerank
+from lit.arxiv_search import (
     SUMMARY_CHARS,
     fetch_feed,
     parse_entries,

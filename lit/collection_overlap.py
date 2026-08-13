@@ -74,12 +74,11 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import inspire_citations  # noqa: E402
-import inspire_lookup  # noqa: E402
-import rate_gate  # noqa: E402
-import reference_store  # noqa: E402
-import references  # noqa: E402
+from lit import inspire_citations
+from lit import inspire_lookup
+from lit import rate_gate
+from lit import reference_store
+from lit import references
 
 # How many identified references a candidate needs before the report gives it a
 # band. One reference moves the coefficient by 1/N, so a candidate with six of

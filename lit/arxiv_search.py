@@ -17,18 +17,14 @@ Usage:
 from __future__ import annotations
 
 import difflib
-import json
 import re
-import sys
 import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import rate_gate  # noqa: E402
+from lit import rate_gate
 
 API_URL = "http://export.arxiv.org/api/query"
 API_HOST = "export.arxiv.org"

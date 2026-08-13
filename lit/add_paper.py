@@ -41,16 +41,15 @@ import tempfile
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import arxiv_fetch  # noqa: E402
-import check_references  # noqa: E402
-import collection_index  # noqa: E402
-import identity  # noqa: E402
-import rate_gate  # noqa: E402
-import reference_store  # noqa: E402
-import update_references  # noqa: E402
-import write_index  # noqa: E402
-from arxiv_search import collapse_whitespace  # noqa: E402
+from lit import arxiv_fetch
+from lit import check_references
+from lit import collection_index
+from lit import identity
+from lit import rate_gate
+from lit import reference_store
+from lit import update_references
+from lit import write_index
+from lit.arxiv_search import collapse_whitespace
 
 SCHEMA = "add-paper/report/1"
 

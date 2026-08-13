@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import write_index
+from lit import write_index
 
 CHAPTER = """# 2. Introduction
 

@@ -30,11 +30,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import rate_gate  # noqa: E402
-from arxiv_search import USER_AGENT, collapse_whitespace  # noqa: E402
+from lit import rate_gate
+from lit.arxiv_search import USER_AGENT, collapse_whitespace
 
 API_ROOT = "https://inspirehep.net/api"
 API_HOST = "inspirehep.net"

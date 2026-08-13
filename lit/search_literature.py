@@ -38,9 +38,8 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import reference_store  # noqa: E402
-from check_references import ANCHOR, written_files  # noqa: E402
+from lit import reference_store
+from lit.check_references import ANCHOR, written_files
 
 # The longest sentence the answer prints. Enough to see the words around the
 # match; short enough that twenty matches do not fill a context window.

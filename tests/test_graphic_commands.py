@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-import arxiv_fetch
+from lit import arxiv_fetch
 
 
 @pytest.mark.parametrize("source,wanted", [

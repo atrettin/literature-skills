@@ -1,6 +1,5 @@
 {
-  "include": ["add-paper/scripts", "tests"],
-  "extraPaths": ["add-paper/scripts"],
+  "include": ["lit", "tests"],
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.10",

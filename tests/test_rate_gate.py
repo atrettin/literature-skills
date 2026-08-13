@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-import rate_gate
+from lit import rate_gate
 
 
 @pytest.fixture(autouse=True)
@@ -195,9 +195,9 @@ def test_the_gate_never_creates_the_collection(tmp_path: Path) -> None:
 
 def test_every_api_this_repository_calls_has_a_pace() -> None:
     """Each host a script sends a request to is registered by the module owning it."""
-    import arxiv_search  # noqa: F401
-    import inspire_lookup  # noqa: F401
-    import references  # noqa: F401
+    from lit import arxiv_search  # noqa: F401
+    from lit import inspire_lookup  # noqa: F401
+    from lit import references  # noqa: F401
 
     for host in ("export.arxiv.org", "arxiv.org", "inspirehep.net", "api.crossref.org"):
         assert host in rate_gate.HOST_INTERVALS

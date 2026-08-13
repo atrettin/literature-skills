@@ -37,13 +37,12 @@ import xml.etree.ElementTree as ET
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import convert_figures  # noqa: E402
-import inspire_lookup  # noqa: E402
-import rate_gate  # noqa: E402
-import reference_store  # noqa: E402
-import references  # noqa: E402
-from arxiv_search import (  # noqa: E402
+from lit import convert_figures
+from lit import inspire_lookup
+from lit import rate_gate
+from lit import reference_store
+from lit import references
+from lit.arxiv_search import (
     USER_AGENT,
     collapse_whitespace,
     fetch_feed,

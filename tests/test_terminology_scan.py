@@ -25,8 +25,8 @@ from pathlib import Path
 
 import pytest
 
-import rerank
-import terminology_scan
+from lit import rerank
+from lit import terminology_scan
 
 MINE = "vogt_2019_myocardial_infarction"
 THEIRS = "abbott_2016_binary_black_hole"

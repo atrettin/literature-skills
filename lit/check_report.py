@@ -47,10 +47,9 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import reference_store  # noqa: E402
-from arxiv_search import collapse_whitespace  # noqa: E402
-from check_references import ANCHOR  # noqa: E402
+from lit import reference_store
+from lit.arxiv_search import collapse_whitespace
+from lit.check_references import ANCHOR
 
 # `[Katori 2018](../literature/katori_2018/chapters/03_model.md#sec-form-factors)`.
 # The target stops at the first space, so a link carrying a title —

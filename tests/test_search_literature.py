@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-import search_literature
+from lit import search_literature
 
 PAPER = "jeong_2023_shallow_deep_inelastic"
 OTHER = "juszczak_2003_recoil_nucleon_spectrum"

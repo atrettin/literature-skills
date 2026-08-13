@@ -18,12 +18,10 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import reference_store  # noqa: E402
-from arxiv_search import collapse_whitespace  # noqa: E402
+from lit import reference_store
+from lit.arxiv_search import collapse_whitespace
 
 INDEX_NAME = "README.md"
 

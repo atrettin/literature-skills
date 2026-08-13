@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-import add_paper
-import check_references
-import inspire_lookup
+from lit import add_paper
+from lit import check_references
+from lit import inspire_lookup
 from conftest import DATA, FakeInspire
 
 ARXIV_ID = "2501.00001"
@@ -118,7 +118,7 @@ def test_a_source_with_no_section_fails_the_parse(
     collection: Path, small_paper: dict, inspire_silent: FakeInspire,
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     def bare(arxiv_id: str, work_dir: Path) -> Path:
         source_dir = work_dir / "source"
@@ -141,7 +141,7 @@ def test_no_source_is_its_own_exception(
     collection: Path, small_paper: dict, inspire_silent: FakeInspire,
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     def pdf_only(arxiv_id: str, work_dir: Path) -> Path:
         raise arxiv_fetch.NoSource("arXiv served a PDF for %s" % arxiv_id, http_status=403)
@@ -164,7 +164,7 @@ def test_a_metadata_failure_is_reported_and_writes_nothing(
     collection row. A lookup that answered `{}` gave a paper with none of them,
     a meaningless directory name, and an exit code of 0.
     """
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     def refuse(arxiv_id: str) -> dict:
         raise arxiv_fetch.MetadataUnavailable("arXiv did not answer for %s" % arxiv_id)
@@ -183,7 +183,7 @@ def test_an_identifier_arxiv_does_not_know_is_not_ingestable(
     gate_off: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An empty feed means arXiv holds no such paper. It never means `{}`."""
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     monkeypatch.setattr(
         arxiv_fetch, "read_feed",
@@ -197,7 +197,7 @@ def test_an_identifier_arxiv_does_not_know_is_not_ingestable(
 def test_an_arxiv_that_does_not_answer_raises(
     gate_off: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     def refuse(params: dict) -> str:
         raise RuntimeError("arXiv API request failed: timed out")
@@ -209,7 +209,7 @@ def test_an_arxiv_that_does_not_answer_raises(
 
 
 def test_metadata_comes_back_whole(gate_off: None, monkeypatch: pytest.MonkeyPatch) -> None:
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     monkeypatch.setattr(
         arxiv_fetch, "read_feed",
@@ -266,7 +266,7 @@ def test_residue_comes_from_the_check_and_not_from_a_scan(
     collection: Path, small_paper: dict, inspire_silent: FakeInspire,
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import arxiv_fetch
+    from lit import arxiv_fetch
 
     original = arxiv_fetch.sanitise
 

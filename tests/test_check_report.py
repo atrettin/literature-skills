@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-import check_report
-import update_references
+from lit import check_report
+from lit import update_references
 
 GOOD = """\
 # What the axial mass is

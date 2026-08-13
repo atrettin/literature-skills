@@ -133,7 +133,7 @@ def gate_path(root: Path | None = None) -> Path:
         # Imported here rather than at the top: `reference_store` reaches
         # `arxiv_search`, which reaches this module, and a top-level import
         # would close that ring while `arxiv_search` is still half built.
-        import reference_store
+        from lit import reference_store
 
         root = reference_store.default_root()
     return root / GATE_NAME

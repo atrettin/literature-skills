@@ -16,12 +16,9 @@ A fact that no source gives is `None`. It is never `0`, and never a guess.
 from __future__ import annotations
 
 import re
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import references  # noqa: E402
-from arxiv_search import collapse_whitespace  # noqa: E402
+from lit import references
+from lit.arxiv_search import collapse_whitespace
 
 # The first "<number> page" or "<number> pages" of an arXiv comment. The comment
 # is free text, so this reads a length where the authors wrote one and nothing

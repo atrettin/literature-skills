@@ -55,17 +55,16 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import arxiv_discover  # noqa: E402
-import reference_store  # noqa: E402
-from arxiv_search import normalize_title  # noqa: E402
+from lit import arxiv_discover
+from lit import reference_store
+from lit.arxiv_search import normalize_title
 
 # `term_matches` decides when a word of a title is a word the topic already
 # holds. It compares two words by prefix, at `rerank.MIN_PREFIX`, thus
 # `neutrinos` answers `neutrino`. That constant needs no row of its own in
 # TUNING.md: the row for `rerank.MIN_PREFIX` covers it, and the rule here is the
 # rule the arXiv search uses.
-from rerank import term_matches  # noqa: E402
+from lit.rerank import term_matches
 
 # The lengths of a term. A single word is what the topic's own term list already
 # holds, and one word is too ambiguous to name a subject. A phrase of four words

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-import arxiv_fetch
+from lit import arxiv_fetch
 
 
 def chapter(file: str, title: str, text: str) -> dict:

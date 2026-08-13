@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
-import arxiv_discover
-import rerank
-from arxiv_search import fetch_by_ids, fetch_feed
+from lit import arxiv_discover
+from lit import rerank
+from lit.arxiv_search import fetch_by_ids, fetch_feed
 
 pytestmark = pytest.mark.network
 

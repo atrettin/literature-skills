@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-import check_references
-import reference_store
-import update_references
+from lit import check_references
+from lit import reference_store
+from lit import update_references
 
 CHAPTER = "jeong_2023_shallow_deep_inelastic/chapters/02_introduction.md"
 LIPARI = "lipari_2002_neutrino_oscillation_neutrino_cross"

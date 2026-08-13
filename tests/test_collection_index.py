@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import collection_index
+from lit import collection_index
 
 FIVE_COLUMN = """# Literature
 

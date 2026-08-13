@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-import arxiv_discover
-import check_references
-import collection_overlap
-import inspire_citations
-import reference_lookup
-import reference_store
-import search_literature
+from lit import arxiv_discover
+from lit import check_references
+from lit import collection_overlap
+from lit import inspire_citations
+from lit import reference_lookup
+from lit import reference_store
+from lit import search_literature
 
 
 def test_default_root_is_the_project_collection(monkeypatch: pytest.MonkeyPatch) -> None:
