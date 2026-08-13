@@ -4,6 +4,9 @@ __pycache__/
 .venv
 .pytest_cache/
 
+# What `pip install --editable .` leaves beside the package.
+*.egg-info/
+
 # Worktrees live inside the repository, and each one holds a whole checkout.
 # The leading slash matters: it anchors the pattern to this directory, so the
 # rule cannot reach a directory of the same name somewhere else in the tree.
