@@ -28,17 +28,15 @@ the papers whose venue or INSPIRE document type names them a review, and
 `--sort {relevance,recent,cited}` re-orders the shortlist without changing which
 papers are on it.
 
-`lit terminology` reads two corpora, and the difference between them is the
-point. `--in-text <slug>` reads the papers themselves: the title, the abstract,
-the headings, the figure captions and the paragraphs. `--cited-by <slug>` reads
-the titles of the works those papers cite. They combine, and they name the same
-working set from two sides.
+`lit terminology` finds new search terms that are related to the topic in
+one of two different corpora. Calling it with `--in-text <slug>` reads the
+papers themselves: the title, the abstract, the headings, the figure captions
+and the paragraphs. `--cited-by <slug>` reads the titles of the works those
+papers cite.
 
-The papers' own text is where the second name is. Two names for one object
-almost never share a title, because a title names one thing once. They share a
-sentence, where an author writes the equation between them — "an acute coronary
-event, **or** myocardial infarction". A scan of cited titles alone cannot reach
-that sentence, and so it cannot reach the name.
+The papers' own text is where alternative terms for the input topic can usually
+be found. They are detected where an author writes the equation between them —
+"an acute coronary event, **or** myocardial infarction".
 
 An occurrence is weighed by the kind of text that holds it: a heading is the
 author naming what a section is about, and a paragraph is the author using the
