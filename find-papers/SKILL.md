@@ -1,13 +1,14 @@
 ---
 name: find-papers
-description: Finds papers on arXiv by the subject of their abstracts, and says which of them the local literature/ collection already holds. Use when a research question needs a paper that the collection may not hold yet.
+description: Finds papers on arXiv by the subject of their abstracts, or by the title when you name one paper, and says which of them the local literature/ collection already holds. Use when a research question needs a paper that the collection may not hold yet.
 ---
 
 # Find papers on a subject
 
-This skill searches arXiv for papers about a question. It reads abstracts and
-not titles. It therefore finds a paper on the subject when the title of that
-paper never gives the words.
+This skill searches arXiv for papers about a question. It reads abstracts
+first, and so it finds a paper on the subject when the title of that paper
+never gives the words. When the abstracts answer with too little, it asks for
+the topic as a title, and so it also finds the one paper you name.
 
 Use `use-literature` first. It reads the papers the project holds already, and
 that costs nothing. Use this skill when the collection cannot answer the
