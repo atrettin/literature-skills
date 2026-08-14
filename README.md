@@ -26,7 +26,7 @@ cd ~/work/software/literature-skills
 ```
 
 That installs the `lit` command and symlinks the six skills into
-`~/.claude/skills/` and the five agents into `~/.claude/agents/`. Because they
+`~/.claude/skills/` and the four agents into `~/.claude/agents/`. Because they
 are symlinks, `git pull` in the clone updates every project at once.
 
 It installs into whichever Python runs it. To choose one:

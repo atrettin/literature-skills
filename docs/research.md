@@ -15,12 +15,13 @@ A sub-question counts as answered only after the loop asks INSPIRE which papers
 cite the paper that supplies the answer. The research log holds that search,
 under `Currency checks`, so a reader can see it.
 
-Five agents divide the work, and the division is about context rather than
-speed:
+The skill runs in the agent that was given the task. That agent reads
+`paper.json` files, the reports of the agents below, and the chapters it cites,
+and it never reads a full text. Four agents take the reading off it, and the
+division is about context rather than speed:
 
 | Agent | Reads | Why it is separate |
 |---|---|---|
-| `literature-researcher` | `paper.json` files, the reports of the other two, and the chapters it cites | it runs the loop and writes the report. |
 | `paper-ingestor` | one report, and no chapter | it handles an exception of the ingest — an ambiguous title, a name two works want. `lit add-paper` does the rest, and it reads no paper into any context. |
 | `paper-scout` | the whole paper, against the open sub-questions | `paper.json` says how long each chapter is and what it is called, and neither was written against these questions, so the record cannot say which chapter answers one. |
 | `terminology-scout` | the chapters that use one term | a term the query lacks is a question about the words of the field. The answer must differentiate the two names, and it must never equate them: "myocardial infarction" names the tissue death, and "heart attack" is also said of the event that causes it. |

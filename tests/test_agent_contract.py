@@ -65,10 +65,6 @@ def test_research_report_tells_the_caller_to_discard() -> None:
     )
 
 
-def test_literature_researcher_states_the_rule() -> None:
-    assert "no line number" in read(".claude/agents/literature-researcher.md")
-
-
 def test_the_research_document_shows_the_address_form() -> None:
     assert EXAMPLE in read("docs/research.md")
 

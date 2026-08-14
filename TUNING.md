@@ -186,7 +186,6 @@ model costs less and reads less well.
 | `model` of `terminology-scout` | `sonnet` | The model that says how one term relates to the subject. This is judgement about a referent, and not extraction. `haiku` is the cheaper value to try, and a smaller model tends to answer `yes` where the true answer is `narrower` — which is the failure this agent exists to prevent. |
 | `model` of `terminology-prospector` | `sonnet` | The model that reads a whole paper for the names it gives the subject. It must separate a name for the subject from a topic the paper discusses beside it, and then judge the referent as a scout does. `haiku` is the cheaper value to try, and a smaller model returns the paper's subject headings as names. |
 | `model` of `paper-scout` | `haiku` | The model that reads one paper against the sub-questions. This is targeted extraction, and not synthesis. `sonnet` is the value to try when scouts miss a passage that answers a question. |
-| `model` of `literature-researcher` | `inherit` | The model that runs the loop and writes the report. It reads no full text, and it makes every judgement. |
 
 ## Matching a paper you can name
 
