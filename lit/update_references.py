@@ -35,13 +35,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
 
 from lit import cli, paths, reference_store
-from lit.paths import written_files
+from lit.paths import stored_files
 from lit import text
 from lit.text import collapse_whitespace, escape_cell as escape
 
@@ -298,54 +297,17 @@ def citation_text(record: dict) -> str:
     return "%s, %s" % (who, record.get("year") or "n.d.")
 
 
-def relink_citations(root: Path, slug: str, store: list[dict]) -> int:
-    """Point every citation in the collection at its work's page.
-
-    The conversion writes a `[cite: tag]` marker, because at that point the
-    store has not been merged yet and the author and year a citation reads by
-    come from the store — the version INSPIRE and Crossref confirmed, not the
-    version the citing paper's bibliography happened to print. So this is where
-    a citation becomes readable, on the run right after the paper is fetched.
-
-    It runs over the whole collection on --render-only, and over one paper
-    otherwise.
-    """
-    texts = {record["tag"]: citation_text(record) for record in store if record.get("tag")}
-    directory = (root / RECORDS_DIR).resolve()
-    touched = 0
-
-    for path in written_files(root, slug):
-        text = path.read_text(encoding="utf-8")
-        # From a chapter this is `../../references`, from an INDEX.md
-        # `../references`. Computed per file rather than assumed, so a citation
-        # anywhere in the tree links to the right place.
-        target = os.path.relpath(directory, path.resolve().parent)
-
-        def replace(match: re.Match) -> str:
-            tags = [collapse_whitespace(tag) for tag in match.group(1).split(",")]
-            tags = [tag for tag in tags if tag]
-            # A key the bibliography never defined survives the conversion as
-            # itself. There is nothing to link it to, and half-linking the
-            # marker would hide the one tag check_references.py must report.
-            if not tags or any(tag not in texts for tag in tags):
-                return match.group(0)
-            return "(%s)" % "; ".join(
-                "[%s](%s/%s.md)" % (texts[tag], target, tag) for tag in tags
-            )
-
-        replaced = reference_store.CITE_TAG.sub(replace, text)
-        if replaced != text:
-            path.write_text(replaced, encoding="utf-8")
-            touched += 1
-    return touched
-
-
 def apply_rewrites(root: Path, slug: str, rewrites: dict[str, str]) -> int:
-    """Repoint citations at the tag the store settled on for a work.
+    """Repoint citation markers at the tag the store settled on for a work.
 
     A paper ingested before another paper's references were merged can be given
     a fresh tag for a work the store already knew under a different one. The
-    merge says which; without this the citation names a row that is not there.
+    merge says which; without this the citation names a record that is not
+    there.
+
+    It rewrites the stored text and never a rendered file, because every render
+    is written again from the store. A tag corrected once here is corrected in
+    every rendering of the collection.
     """
     if not rewrites:
         return 0
@@ -354,13 +316,24 @@ def apply_rewrites(root: Path, slug: str, rewrites: dict[str, str]) -> int:
         % "|".join(re.escape(old) for old in sorted(rewrites, key=len, reverse=True))
     )
     touched = 0
-    for path in written_files(root, slug):
+    for path in stored_files(root, slug):
         text = path.read_text(encoding="utf-8")
         replaced = pattern.sub(lambda match: rewrites[match.group(1)], text)
         if replaced != text:
             path.write_text(replaced, encoding="utf-8")
             touched += 1
     return touched
+
+
+def render_views(root: Path, store: list[dict]) -> dict:
+    """Write `REFERENCES.md` and the page of every cited work.
+
+    Both are rendered from the store alone and carry no anchor of their own, so
+    they read the same whichever flavor the collection is rendered in.
+    """
+    (root / reference_store.VIEW_NAME).write_text(render_table(store), encoding="utf-8")
+    written, removed = write_records(root, store)
+    return {"pages_written": written, "pages_removed": removed}
 
 
 # --------------------------------------------------------------------------
@@ -419,12 +392,10 @@ def run(argv: list[str] | None = None) -> tuple[int, dict]:
         }
 
     retagged = apply_rewrites(root, slug, rewrites)
-    relinked = relink_citations(root, slug, store)
     reference_store.mark_held(store, root)
     if not args.render_only:
         reference_store.save(root, store)
-    (root / reference_store.VIEW_NAME).write_text(render_table(store), encoding="utf-8")
-    written, removed = write_records(root, store)
+    views = render_views(root, store)
 
     return 0, {
         "slug": slug,
@@ -433,9 +404,7 @@ def run(argv: list[str] | None = None) -> tuple[int, dict]:
         "held": sum(1 for record in store if record.get("held_as")),
         **counts,
         "retagged": retagged,
-        "relinked": relinked,
-        "pages_written": written,
-        "pages_removed": removed,
+        **views,
         "store": str(reference_store.store_path(root)),
         "view": str(root / reference_store.VIEW_NAME),
         "pages": str(root / RECORDS_DIR),

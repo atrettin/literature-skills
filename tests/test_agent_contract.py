@@ -2,7 +2,7 @@
 
 An agent instruction is prose, and prose carries no unit test. What it can carry
 is a check that the contract still says what the caller relies on. A scout
-reports `chapters/03_results.md:181`, and the caller discards a quotation that
+reports `text/03_results.jsonl:181`, and the caller discards a quotation that
 carries no line number. Both halves live in Markdown, in more than one file, so
 a change to one file can leave another stating the old contract. These cases
 read the files and assert the strings.
@@ -16,11 +16,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 
-EXAMPLE = "chapters/03_results.md:181"
+EXAMPLE = "text/03_results.jsonl:181"
 
 # The contract as it read before a line number was required. A copy of it
 # anywhere is a file that step 1 to step 4 of the change missed.
-WITHOUT_LINE = "chapters/03_results.md | #sec-axialff"
+WITHOUT_LINE = "text/03_results.jsonl | #sec-axialff"
 
 # Every place that states the contract, or could restate it.
 CONTRACT_FILES = (
@@ -63,10 +63,6 @@ def test_research_report_tells_the_caller_to_discard() -> None:
     assert "Discard a quotation that carries no line number" in read(
         "research-report/SKILL.md"
     )
-
-
-def test_literature_researcher_states_the_rule() -> None:
-    assert "no line number" in read(".claude/agents/literature-researcher.md")
 
 
 def test_the_research_document_shows_the_address_form() -> None:

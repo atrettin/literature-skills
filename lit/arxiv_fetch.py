@@ -3,12 +3,14 @@
 
 Writes, under `<literature-root>/<slug>/`:
 
-    chapters/NN_<title>.md        one file per \\section, long ones split further
+    text/NN_<title>.jsonl         one file per \\section, long ones split further
     figures/<figure files>        every figure the paper includes
-    figures/FIGURES.md            file name, label, chapter and caption per figure
 
-It does **not** write INDEX.md. The calling agent writes that, from the JSON
-manifest this script prints on stdout plus its own reading of the chapters.
+It writes what is **stored** and nothing that is rendered. `lit render` turns
+the stored blocks into the Markdown a person reads, in whichever flavor the
+collection holds, and `paper.json` is written by the caller: the slug is derived
+from the metadata this fetch brings, so the paper is converted into a scratch
+directory and moved to its name afterwards.
 
 The manifest's `publication` block says where the paper was published. arXiv
 alone cannot answer that, so it comes from INSPIRE-HEP; pass --no-inspire to
@@ -37,8 +39,9 @@ import xml.etree.ElementTree as ET
 from datetime import date
 from pathlib import Path
 
-from lit import cli, convert_figures, http
+from lit import blocks, cli, convert_figures, http
 from lit import inspire_lookup
+from lit import paths
 from lit import rate_gate
 from lit import reference_store
 from lit import references
@@ -405,6 +408,20 @@ def inline_inputs(text: str, base_dir: Path, source_dir: Path, depth: int = 0) -
 # structure: split the body into sections
 # ==========================================================================
 
+# Commands this conversion reads itself. A paper is free to redefine any of
+# them — `\let\Oldsection\section` followed by
+# `\renewcommand{\section}[1]{\Oldsection{\bf #1}}` is a common way to make
+# headings bold — and the definition says nothing about the structure of the
+# paper. Expanded, it renames every heading to a command no scan knows, and the
+# paper arrives as one chapter of undivided text. So the name keeps its LaTeX
+# meaning, and the redefinition is dropped.
+STRUCTURAL_COMMANDS = frozenset({
+    "part", "chapter", "section", "subsection", "subsubsection",
+    "paragraph", "subparagraph", "appendix", "abstract",
+    "caption", "label", "ref", "cite", "bibitem",
+    "includegraphics", "input", "include", "begin", "end",
+})
+
 
 def collect_macros(preamble: str) -> dict:
     """Collect \\newcommand / \\def shorthands from the preamble.
@@ -422,6 +439,9 @@ def collect_macros(preamble: str) -> dict:
     argument (`\\newcommand{\\x}[2][default]{...}`) or with delimiter tokens in
     its `\\def` parameter text is skipped: expanding those needs a real TeX
     engine, and getting them wrong is worse than leaving them alone.
+
+    A redefinition of a command this conversion reads is skipped too — see
+    `STRUCTURAL_COMMANDS`.
     """
     macros = {}
     pattern = re.compile(r"\\(?:newcommand|renewcommand|providecommand)\*?\s*")
@@ -460,8 +480,10 @@ def collect_macros(preamble: str) -> dict:
         if after >= len(preamble) or preamble[after] != "{":
             continue
         end = match_brace(preamble, after)
-        macros[name[1:]] = (arity, preamble[after + 1 : end - 1])
         cursor = end
+        if name[1:] in STRUCTURAL_COMMANDS:
+            continue
+        macros[name[1:]] = (arity, preamble[after + 1 : end - 1])
 
     for match in re.finditer(r"\\def\s*\\([a-zA-Z]+)\s*((?:#\d)*)\s*\{", preamble):
         params = match.group(2)
@@ -469,11 +491,69 @@ def collect_macros(preamble: str) -> dict:
         # parameter text, which this expander cannot honour.
         if params and not re.fullmatch(r"(?:#\d)+", params):
             continue
+        if match.group(1) in STRUCTURAL_COMMANDS:
+            continue
         end = match_brace(preamble, match.end() - 1)
         macros.setdefault(
             match.group(1), (len(params) // 2, preamble[match.end() : end - 1])
         )
     return macros
+
+
+DEFINITION_COMMAND = re.compile(
+    r"\\(newcommand|renewcommand|providecommand|DeclareRobustCommand)\*?\s*"
+    r"|\\def\s*(?=\\[a-zA-Z]+)"
+    r"|\\let\s*\\[a-zA-Z]+\s*=?\s*(?:\\[a-zA-Z]+|.)"
+)
+
+
+def drop_definitions(text: str) -> str:
+    """Take the macro definitions out of the text they sit in.
+
+    LaTeX lets a definition stand anywhere, and a paper that writes its
+    `\\newcommand` block after `\\begin{document}` puts it in the body. Left
+    there, the block reaches the reader as prose, and a bare `\\section` inside
+    a `\\let` line is read as a heading, which opens a chapter holding nothing
+    but definitions.
+
+    The definitions are read before this runs — see `collect_macros`. Only the
+    text of them goes.
+    """
+    pieces = []
+    cursor = 0
+    while True:
+        match = DEFINITION_COMMAND.search(text, cursor)
+        if not match:
+            break
+        index = match.end()
+        if match.group(1) or match.group(0).startswith("\\def"):
+            # The name, as `{\x}` or as `\x`, then the argument count, then the
+            # body. A group this cannot read is one to leave in place: a half
+            # cut definition is worse than a whole one.
+            if index < len(text) and text[index] == "{":
+                index = match_brace(text, index)
+            else:
+                name = re.match(r"\\[a-zA-Z]+|\\.", text[index:])
+                if not name:
+                    cursor = match.end()
+                    continue
+                index += name.end()
+            index = skip_spaces(text, index)
+            parameters = re.match(r"(?:#\d)*", text[index:])
+            index += parameters.end() if parameters else 0
+            while index < len(text) and text[index] == "[":
+                closing = text.find("]", index)
+                if closing < 0:
+                    break
+                index = skip_spaces(text, closing + 1)
+            if index >= len(text) or text[index] != "{":
+                cursor = match.end()
+                continue
+            index = match_brace(text, index)
+        pieces.append(text[cursor : match.start()])
+        cursor = index
+    pieces.append(text[cursor:])
+    return "".join(pieces)
 
 
 def substitute_parameters(body: str, args: list[str]) -> str:
@@ -541,9 +621,9 @@ def apply_cite_tags(text: str, key_tags: dict[str, list[str]]) -> str:
     REFERENCES.md. One key can stand for several works, when the bibliography
     packed several into one \\bibitem, so it can expand to several tags.
 
-    The marker is the intermediate form. update_references.py turns it into the
-    link a reader follows, once the store has the author and year to label it
-    with — see relink_citations there.
+    The marker is what is stored. `lit render` turns it into the link a reader
+    follows, once the store has the author and year to label it with — see
+    `render.resolve_citations`.
 
     A key the bibliography never defined keeps its original text: there is
     nothing to point it at, and leaving it visible is how that stays known.
@@ -697,8 +777,9 @@ def sanitise(text: str) -> str:
 
 
 # A line that opens one of these carries its own break: a heading, a list item,
-# a table row, an HTML block, a quote or a maths delimiter.
-LINE_BREAK_PREFIXES = ("#", "-", "*", "|", "<", ">", "$$", "```")
+# a table row, an HTML block, a quote, a maths delimiter, or a block the
+# conversion already knew the structure of.
+LINE_BREAK_PREFIXES = ("#", "-", "*", "|", "<", ">", "$$", "```", blocks.BLOCK_OPEN)
 
 
 def reflow(text: str) -> str:
@@ -751,53 +832,29 @@ def reflow(text: str) -> str:
     return "\n".join(out)
 
 
-# A block that opens with one of these is not prose. `[FIGURE:` names a figure
-# the conversion could not resolve, which is a marker and not a sentence.
-PARAGRAPH_BLOCK_PREFIXES = ("#", "<", "|", "-", "*", ">", "$$", "```", "[FIGURE:")
+def paragraph_anchors(chapter_blocks: list[dict]) -> list[dict]:
+    """Give every prose paragraph of a chapter its own address, as `pN`.
 
+    A heading anchor addresses a section, and a section runs for pages. `#p12`
+    addresses the paragraph that carries the claim. The count starts at `p1` in
+    every file, so this runs after a long chapter is split, and the anchor is no
+    target of a `\\ref`, so it stays out of the label map.
 
-def paragraph_anchors(text: str) -> str:
-    """Write `<a id="pN"></a>` above every prose paragraph of a chapter.
-
-    A heading anchor addresses a section, and a section runs for pages.
-    `chapter.md#p12` addresses the paragraph that carries the claim. The count
-    starts at `p1` in every file, so it has to run after a long chapter is
-    split, and the anchor is no target of a `\\ref`, so it stays out of the
-    label map.
+    A paragraph shorter than `PARAGRAPH_ANCHOR_MIN_CHARS` gets none. A block
+    that short is a stub or a fragment the conversion left standing, and an
+    address on it costs more noise than it earns. One that already carries an
+    anchor keeps it: a label the paper wrote names the block better than a count
+    of paragraphs does.
     """
-    parts = re.split(r"(\n{2,})", text)
-    out: list[str] = []
     number = 0
-    in_fence = False
-    in_math = False
-    for index, part in enumerate(parts):
-        if index % 2:
-            out.append(part)  # the blank lines between two blocks
+    for block in chapter_blocks:
+        if block.get("kind") != "paragraph" or block.get("anchor"):
             continue
-        block = part.strip()
-        prose = (
-            bool(block)
-            and not in_fence
-            and not in_math
-            and not block.startswith(PARAGRAPH_BLOCK_PREFIXES)
-            and len(block) >= PARAGRAPH_ANCHOR_MIN_CHARS
-        )
-        if prose:
-            number += 1
-            out.append('<a id="p%d"></a>\n\n%s' % (number, part))
-        else:
-            out.append(part)
-        for line in block.split("\n"):
-            stripped = line.strip()
-            if in_fence:
-                in_fence = not stripped.startswith("```")
-            elif in_math:
-                in_math = stripped != "$$"
-            elif stripped.startswith("```"):
-                in_fence = True
-            elif stripped == "$$":
-                in_math = True
-    return "".join(out)
+        if len(block.get("text") or "") < PARAGRAPH_ANCHOR_MIN_CHARS:
+            continue
+        number += 1
+        block["anchor"] = "p%d" % number
+    return chapter_blocks
 
 
 def clean_inline(text: str) -> str:
@@ -837,7 +894,8 @@ class Numbering:
     reader with `[ref: eq:ckmt]` and nothing anywhere to match it against. This
     walks the paper in the same order LaTeX does, hands each equation, figure,
     table and section its number, and remembers which chapter it landed in.
-    `apply_ref_links` then turns every marker into a link.
+    `place_labels` then says which chapter file each label landed in, and the
+    renderer turns every marker into a link.
 
     The numbers are recomputed, not read off the paper, so a document that
     renumbers by hand can end up one out. The link still lands on the right
@@ -961,17 +1019,18 @@ def split_math_rows(body: str) -> list[str]:
 
 def number_display_math(
     name: str, body: str, numbering: Numbering | None
-) -> tuple[str, str, str]:
-    """Number a display-maths body. Returns (body, anchor lines, tag).
+) -> tuple[list[str], str]:
+    """Number a display-maths body. Returns (the numbers, the anchor lines).
 
-    A number is written into the maths itself so the chapter reads like the
-    paper: `\\tag{5}` for a block with one number, and `\\qquad (5)` per row for
-    an `align`, where KaTeX does not accept `\\tag`. The tag comes back
-    separately because it has to sit outside the environment the caller wraps
-    the body in — KaTeX rejects it inside one.
+    LaTeX counts equations as it meets them, so the counting has to happen here,
+    in document order, and the answer is stored. Writing the numbers back into
+    the maths does not: `\\tag{5}` and `\\qquad (5)` are two ways of printing the
+    same number, and which one a chapter needs is decided by the renderer that
+    has to parse it. A row-numbered environment yields one entry per row, empty
+    where that row is unnumbered; anything else yields at most one.
     """
     if numbering is None:
-        return body, "", ""
+        return [], ""
 
     starred = name.endswith("*")
     anchors = []
@@ -985,31 +1044,23 @@ def number_display_math(
             anchors.append(numbering.register(label, "equation", number))
         return number
 
-    tag = ""
     if name in ROW_NUMBERED_ENVIRONMENTS:
-        pieces = []
+        numbers = []
         for row in split_math_rows(body):
             label_match = LABEL_COMMAND.search(row)
             label = label_match.group(1) if label_match else ""
             silent = bool(re.search(r"\\(?:nonumber|notag)(?![a-zA-Z])", row))
-            number = take(label, starred or silent)
-            if number and row.strip():
-                row = "%s \\qquad (%s)" % (row.rstrip(), number)
-            pieces.append(row)
-        body = " \\\\ ".join(pieces)
+            numbers.append(take(label, starred or silent))
     else:
         label_match = LABEL_COMMAND.search(body)
         label = label_match.group(1) if label_match else ""
         # `displaymath`, `\[...\]` and `$$...$$` are unnumbered in LaTeX, and
         # arrive here with an empty name.
         unnumbered = starred or name in ("", "displaymath", "split")
-        number = take(label, unnumbered)
-        if number:
-            body = body.rstrip()
-            tag = " \\tag{%s}" % number
+        numbers = [take(label, unnumbered)]
 
     anchor_lines = "".join(anchor_tag(anchor) for anchor in anchors if anchor)
-    return body, anchor_lines, tag
+    return [number for number in numbers], anchor_lines
 
 
 def number_headings(text: str, numbering: Numbering | None) -> str:
@@ -1067,92 +1118,61 @@ def number_headings(text: str, numbering: Numbering | None) -> str:
     return "".join(out)
 
 
-def link_refs(
-    text: str, labels: dict[str, dict], current_file: str, prefix: str = ""
-) -> tuple[str, list[str]]:
-    """Turn every `[ref: label]` into a link to the object it names.
-
-    The link text is the number alone: the paper's own prose already supplies
-    the word and the brackets around it, so `eq.~(\\ref{eq:ckmt})` reads as
-    `eq. ([5](#eq-5))`. A label with no target keeps its marker — that is how a
-    reference the source never defined stays visible.
-    """
-    missing = []
-
-    def replace(match: re.Match) -> str:
-        label = collapse_whitespace(match.group(1))
-        entry = labels.get(label)
-        if not entry:
-            missing.append(label)
-            return match.group(0)
-        target = "" if entry["file"] == current_file and not prefix else (
-            prefix + entry["file"]
-        )
-        return "[%s](%s#%s)" % (entry["number"], target, entry["anchor"])
-
-    return REF_TAG.sub(replace, text), missing
-
-
-def chapter_files_by_title(chapters: list[dict]) -> dict[str, str]:
+def chapter_stems_by_title(chapters: list[dict]) -> dict[str, str]:
     """The file each section title ended up in, first piece wins when it split."""
     by_title: dict[str, str] = {}
     for chapter in chapters:
-        by_title.setdefault(chapter["title"].split(" — ")[0], chapter["file"])
+        by_title.setdefault(chapter["title"].split(" — ")[0], chapter["stem"])
     return by_title
 
 
-def apply_ref_links(chapters: list[dict], numbering: Numbering) -> list[str]:
-    """Resolve the cross-references of every chapter. Returns the labels missed.
+def place_labels(chapters: list[dict], numbering: Numbering) -> list[str]:
+    """Say which chapter file holds each label. Returns the labels with none.
 
-    Runs once the chapters are settled, because a reference reaches across
-    files and the file names are only known after a long chapter is split.
+    A `[ref: label]` marker stays a marker in the store, because what a link to
+    it looks like is decided when the collection is rendered. What cannot be
+    decided then is which file the target landed in, since that depends on where
+    a long chapter was cut — so it is settled here and stored with the label.
+
+    A label whose anchor never made it out of the conversion, because the object
+    it named was dropped, falls back to the first file of the chapter it was
+    numbered in. That is where a reader starts looking.
     """
-    # Where each anchor actually ended up, which is not always the chapter it
-    # was numbered in: a long chapter is split into several files. The chapter
-    # it was numbered in answers for a label whose anchor never made it out --
-    # one on an object the conversion dropped.
     in_file = {}
     for chapter in chapters:
         for found in re.finditer(r'<a id="([^"]*)"></a>', chapter["text"]):
-            in_file.setdefault(found.group(1), chapter["file"])
-    by_title = chapter_files_by_title(chapters)
+            in_file.setdefault(found.group(1), chapter["stem"])
+    by_title = chapter_stems_by_title(chapters)
     for entry in numbering.labels.values():
         entry["file"] = in_file.get(entry["anchor"]) or by_title.get(
             entry["chapter"], ""
         )
 
-    missing: list[str] = []
+    known = set(numbering.labels)
+    missing: set[str] = set()
     for chapter in chapters:
-        chapter["text"], missed = link_refs(
-            chapter["text"], numbering.labels, chapter["file"]
-        )
-        missing.extend(missed)
-    return sorted(set(missing))
+        for found in REF_TAG.finditer(chapter["text"]):
+            label = collapse_whitespace(found.group(1))
+            if label and label not in known:
+                missing.add(label)
+    return sorted(missing)
 
 
 def apply_figure_targets(
     figure_records: list[dict], chapters: list[dict], numbering: Numbering
 ) -> None:
-    """Give every figure record the chapter file that holds its anchor.
+    """Give every figure record the anchor and the chapter file that hold it.
 
-    Runs after `apply_ref_links`, which resolves each label to the file its
-    anchor was written into. That file is not always the first file of the
-    chapter the figure was numbered in, because a long chapter is split into
-    several files and a figure in its later half lands in a later piece. A
-    record whose label resolves to nothing has only the chapter title to go on,
-    and the first file of that chapter is where a reader starts to look.
-
-    The captions are resolved here too. A caption is read in `FIGURES.md`,
-    which sits beside the chapters directory, so its links carry that prefix.
+    Runs after `place_labels`, which resolves each label to the file its anchor
+    was written into. That file is not always the first file of the chapter the
+    figure was numbered in, because a long chapter is split into several files
+    and a figure in its later half lands in a later piece.
     """
-    by_title = chapter_files_by_title(chapters)
+    by_title = chapter_stems_by_title(chapters)
     for record in figure_records:
-        record["caption"], _ = link_refs(
-            record.get("caption", ""), numbering.labels, "", prefix="../chapters/"
-        )
         entry = numbering.labels.get(record.get("label", ""))
         record["anchor"] = entry["anchor"] if entry else ""
-        record["chapter_file"] = (entry["file"] if entry else "") or by_title.get(
+        record["chapter_stem"] = (entry["file"] if entry else "") or by_title.get(
             record.get("chapter", ""), ""
         )
 
@@ -1182,14 +1202,6 @@ def sanitize_math(body: str) -> str:
     return body
 
 
-def display_math(body: str) -> str:
-    """Wrap a display-maths body so a Markdown preview renders it."""
-    body = sanitize_math(body).strip("\n").strip()
-    # A blank line ends a paragraph, and with it the maths block: what follows
-    # would be printed as TeX. The source is free to leave one anywhere.
-    return "\n\n$$\n%s\n$$\n\n" % re.sub(r"\n[ \t]*\n+", "\n", body)
-
-
 def find_first_environment(
     text: str, names, start: int = 0
 ) -> tuple[str, int, int, str] | None:
@@ -1210,36 +1222,19 @@ def find_first_environment(
 def figure_block(
     file_name: str, caption: str, number: str = "", anchor: str = ""
 ) -> str:
-    """Embed a figure so it shows in the preview, with its caption beneath.
+    """A figure, as a stored block with the anchor that names it above.
 
-    The chapters sit in `chapters/`, so the image is one level up in
-    `figures/`. HTML rather than Markdown image syntax, because Markdown has
-    no way to set a width and the figures are far too large at full size.
+    The file name here is the one the TeX gave; `copy_figures` settles what it
+    is actually called once the conversion to PNG has run.
     """
-    # Maths reads as noise in an alt attribute, and its backslashes and quotes
-    # would have to be escaped anyway. The caption below the image keeps it.
-    alt = re.sub(r"\$[^$]*\$", "", caption)
-    # A citation marker goes too, and it must go before the cut below. A tag cut
-    # in half leaves `[cite: Alvarez-Ru...` with no closing bracket, and the
-    # citation reader then matches on to the next `]` anywhere in the file and
-    # reports the whole run of text as a tag no record answers. The caption
-    # under the image carries the citation, where it resolves.
-    alt = reference_store.CITE_TAG.sub("", alt)
-    alt = collapse_whitespace(re.sub(r'["\\<>]', " ", alt))
-    alt = re.sub(r"\s+([,.;:])", r"\1", alt).strip(" ,;:") or "figure"
-    if len(alt) > 120:
-        alt = alt[:117].rstrip() + "..."
-    block = (
-        (anchor_tag(anchor) or "\n")
-        + '\n<p align="center">\n'
-        '<img src="../figures/%s" alt="%s" width="%d"/>\n'
-        "</p>\n" % (file_name, alt, FIGURE_WIDTH_PX)
+    return anchor_tag(anchor) + blocks.sentinel(
+        {
+            "kind": "figure",
+            "file": file_name,
+            "caption": collapse_whitespace(caption),
+            "number": number,
+        }
     )
-    if caption:
-        block += "\n**Figure%s.** %s\n" % (
-            " " + number if number else "", collapse_whitespace(caption)
-        )
-    return block + "\n"
 
 
 def clean_text(
@@ -1332,37 +1327,42 @@ def clean_text(
             label = LABEL_COMMAND.search(body)
             if label:
                 anchor = numbering.register(label.group(1), "table", number)
-        block = "%s\n\n```tex\n%s\n```\n" % (anchor_tag(anchor), body.strip("\n"))
-        if caption:
-            block += "\n**Table%s.** %s\n\n" % (
-                " " + number if number else "", caption
-            )
+        block = anchor_tag(anchor) + blocks.sentinel(
+            {
+                "kind": "table",
+                "tex": body.strip("\n"),
+                "caption": caption,
+                "number": number,
+            }
+        )
         text = text[:start] + holder.stash(block) + text[end:]
 
     # --- display math -----------------------------------------------------
+    # The body is stored as the paper wrote it. Which environment a renderer can
+    # accept, and how it prints a number, is a fact about that renderer.
     while True:
         found = find_first_environment(text, MATH_ENVIRONMENTS)
         if not found:
             break
         name, start, end, body = found
-        body, anchors, tag = number_display_math(name, body, numbering)
-        if name in BARE_MATH_ENVIRONMENTS:
-            inner = body
-        elif name in ALIGNED_MATH_ENVIRONMENTS:
-            # KaTeX has no eqnarray, flalign or multline. aligned takes the
-            # same '&'-separated rows and renders them acceptably.
-            inner = "\\begin{aligned}%s\\end{aligned}" % body
-        else:
-            inner = "\\begin{%s}%s\\end{%s}" % (name, body, name)
+        numbers, anchors = number_display_math(name, body, numbering)
         text = (
             text[:start]
-            + holder.stash(anchors + display_math(inner + tag))
+            + holder.stash(
+                anchors
+                + blocks.sentinel({"kind": "math", "env": name, "tex": body,
+                                   "numbers": numbers})
+            )
             + text[end:]
         )
 
     def bare_display(body: str) -> str:
-        body, anchors, tag = number_display_math("", body, numbering)
-        return holder.stash(anchors + display_math(body + tag))
+        numbers, anchors = number_display_math("", body, numbering)
+        return holder.stash(
+            anchors
+            + blocks.sentinel({"kind": "math", "env": "", "tex": body,
+                               "numbers": numbers})
+        )
 
     text = re.sub(
         r"\\\[(.+?)\\\]", lambda m: bare_display(m.group(1)), text, flags=re.DOTALL
@@ -1372,15 +1372,17 @@ def clean_text(
     )
 
     # --- inline math ------------------------------------------------------
+    # Stashed so the command passes below leave it alone, and kept as the paper
+    # wrote it: what a renderer has to rewrite is the renderer's own business.
     text = re.sub(
         r"(?<!\\)\$(.+?)(?<!\\)\$",
-        lambda m: holder.stash("$%s$" % sanitize_math(m.group(1))),
+        lambda m: holder.stash("$%s$" % m.group(1)),
         text,
         flags=re.DOTALL,
     )
     text = re.sub(
         r"\\\((.+?)\\\)",
-        lambda m: holder.stash("$%s$" % sanitize_math(m.group(1)).strip()),
+        lambda m: holder.stash("$%s$" % m.group(1).strip()),
         text,
         flags=re.DOTALL,
     )
@@ -1654,39 +1656,6 @@ def resolve_figure(reference: str, source_dir: Path) -> Path | None:
     return None
 
 
-def write_figures_index(records: list[dict], figures_dir: Path) -> None:
-    lines = [
-        "# Figures",
-        "",
-        "One row per figure, with the caption as the paper gives it. Search this",
-        "file to find the figure that shows a given thing, then read the image.",
-        "",
-        "| # | File | Label | Chapter | Caption |",
-        "|---|---|---|---|---|",
-    ]
-    for record in records:
-        caption = record["caption"].replace("|", "\\|").replace("\n", " ")
-        chapter = record.get("chapter") or ""
-        chapter_file = record.get("chapter_file") or ""
-        if chapter_file:
-            anchor = record.get("anchor") or ""
-            chapter = "[%s](../chapters/%s%s)" % (
-                chapter, chapter_file, "#" + anchor if anchor else ""
-            )
-        lines.append(
-            "| %s | %s | %s | %s | %s |"
-            % (
-                record.get("number") or "",
-                record.get("file") or "(missing: %s)" % record["source"],
-                record.get("label") or "",
-                chapter,
-                caption,
-            )
-        )
-    figures_dir.mkdir(parents=True, exist_ok=True)
-    (figures_dir / "FIGURES.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
 def arxiv_only_publication(metadata: dict) -> dict:
     """What arXiv alone knows about the publication, which is usually nothing."""
     journal_ref = collapse_whitespace(metadata.get("journal_ref", ""))
@@ -1841,9 +1810,12 @@ def convert(args) -> dict:
 
         main_tex = find_main_tex(source_dir)
         raw = inline_inputs(strip_comments(read_text(main_tex)), main_tex.parent, source_dir)
-        begin_document = raw.find("\\begin{document}")
-        macros = collect_macros(raw[: begin_document if begin_document > 0 else 0])
-        body = expand_macros(extract_body(raw), macros)
+        # The whole file, and not the preamble alone: LaTeX lets a definition
+        # sit after \begin{document}, and papers use that. A paper that defines
+        # \beq there arrives with every display equation left in the prose,
+        # stripped down to the letters of its symbols.
+        macros = collect_macros(raw)
+        body = expand_macros(drop_definitions(extract_body(raw)), macros)
 
         # The bibliography is read before the body is cut down to its sections,
         # since a paper that types its references out sits them after the last
@@ -1900,7 +1872,7 @@ def convert(args) -> dict:
                 for piece_index, (piece_title, piece_text) in enumerate(pieces, start=1):
                     chapters.append(
                         {
-                            "file": "%02d-%02d_%s.md"
+                            "stem": "%02d-%02d_%s"
                             % (index, piece_index,
                                slugify(piece_title, whole_words=True)),
                             "number": "%d.%d" % (index, piece_index),
@@ -1915,7 +1887,7 @@ def convert(args) -> dict:
             else:
                 chapters.append(
                     {
-                        "file": "%02d_%s.md" % (index, slugify(title, whole_words=True)),
+                        "stem": "%02d_%s" % (index, slugify(title, whole_words=True)),
                         "number": str(index),
                         "title": title,
                         "subsections": subsections,
@@ -1944,7 +1916,7 @@ def convert(args) -> dict:
 
         # The chapters are settled, so a cross-reference now knows which file
         # its target ended up in.
-        unresolved_refs = apply_ref_links(chapters, numbering)
+        unresolved_refs = place_labels(chapters, numbering)
         if unresolved_refs:
             warnings.append(
                 "%d cross-reference label(s) had no target in the source and keep "
@@ -1952,7 +1924,7 @@ def convert(args) -> dict:
                 % (len(unresolved_refs), ", ".join(unresolved_refs[:10]))
             )
         residue = {
-            chapter["file"]: len(RESIDUE.findall(chapter["text"]))
+            chapter["stem"]: len(RESIDUE.findall(chapter["text"]))
             for chapter in chapters
             if RESIDUE.search(chapter["text"])
         }
@@ -1974,47 +1946,39 @@ def convert(args) -> dict:
         paper_dir = args.literature_root / args.slug
         if paper_dir.exists():
             shutil.rmtree(paper_dir)
-        chapters_dir = paper_dir / "chapters"
-        chapters_dir.mkdir(parents=True)
+        (paper_dir / blocks.TEXT_DIR).mkdir(parents=True)
 
-        # Before the chapters are written: their [FIGURE: ...] markers name the
-        # file as the TeX source did, and conversion renames it to .png.
         resolved, renames = copy_figures(
             figure_records, source_dir, paper_dir / "figures", warnings
         )
         changed = {old: new for old, new in renames.items() if old != new}
-        # The marker names the figure as the TeX did, which may carry no
+        # A figure block names the file as the TeX did, which may carry no
         # extension at all (\includegraphics{fig1} against fig1.eps on disk).
         for record in resolved:
             hint, final = record.get("file_hint"), record.get("file")
             if hint and final and hint != final:
                 changed[hint] = final
-        if changed:
-            # The name reaches the chapter text in one place: the `src` of the
-            # image tag. It also reads as a run of characters inside the anchor
-            # id above that tag, and inside the link that points at the anchor.
-            # A substitution that is not tied to the `src` rewrites those too,
-            # and `FIGURES.md` carries the anchor as the numbering wrote it, so
-            # its link then names an id the chapter does not hold.
-            pattern = re.compile(
-                r'(?<=src="\.\./figures/)(?:%s)(?=")'
-                % "|".join(
-                    re.escape(old) for old in sorted(changed, key=len, reverse=True)
-                )
-            )
-            for chapter in chapters:
-                chapter["text"] = pattern.sub(
-                    lambda match: changed[match.group(0)], chapter["text"]
-                )
 
         for chapter in chapters:
-            # Last of all: the paragraph numbers count the paragraphs of the
-            # file that holds them, and sanitise answers for what reaches disk.
-            text = sanitise(paragraph_anchors(chapter["text"]))
-            (chapters_dir / chapter["file"]).write_text(text, encoding="utf-8")
-            chapter["bytes"] = len(text.encode("utf-8"))
-
-        write_figures_index(resolved, paper_dir / "figures")
+            # sanitise answers for what reaches disk; the block split and the
+            # paragraph numbers both count the file that holds them, so they run
+            # after a long chapter has been cut into its pieces.
+            chapter_blocks = paragraph_anchors(
+                blocks.parse(sanitise(chapter["text"]))
+            )
+            for block in chapter_blocks:
+                if block.get("kind") == "figure":
+                    block["file"] = changed.get(block.get("file", ""), block.get("file", ""))
+            path = blocks.write(
+                paper_dir / blocks.TEXT_DIR / (chapter["stem"] + blocks.SUFFIX),
+                chapter_blocks,
+            )
+            chapter["bytes"] = path.stat().st_size
+            chapter["blocks"] = len(chapter_blocks)
+            chapter["words"] = sum(
+                len(blocks.words(block).split()) for block in chapter_blocks
+            )
+            chapter["anchors"] = blocks.anchors(chapter_blocks)
 
         if args.keep_source:
             shutil.copytree(source_dir, args.keep_source, dirs_exist_ok=True)
@@ -2022,6 +1986,10 @@ def convert(args) -> dict:
         for chapter in chapters:
             chapter.pop("text", None)
 
+        # `paper.json` is written by the caller, not here. The slug is derived
+        # from the metadata this conversion just brought, so a driver converts
+        # into a scratch directory and moves the paper to its name afterwards —
+        # a record written now would name the scratch directory it sat in.
         return build_manifest(
             args, metadata, publication, cited, abstract, parser_used, chapters, resolved,
             warnings, main_tex, source_dir, numbering, unresolved_refs)
@@ -2074,10 +2042,16 @@ def build_manifest(
         "main_tex": str(main_tex.relative_to(source_dir)),
         "chapters": [
             {
-                "file": chapter["file"],
+                # The stem is shared by the stored text, `text/<stem>.jsonl`,
+                # and by every rendering of it, `chapters/<stem>.md`. One name
+                # addresses both, whatever the collection is rendered as.
+                "stem": chapter["stem"],
                 "number": chapter["number"],
                 "title": chapter["title"],
                 "bytes": chapter.get("bytes", 0),
+                "blocks": chapter.get("blocks", 0),
+                "words": chapter.get("words", 0),
+                "anchors": chapter.get("anchors", []),
                 "subsections": chapter.get("subsections", []),
             }
             for chapter in chapters
@@ -2088,6 +2062,9 @@ def build_manifest(
                 "label": record.get("label", ""),
                 "number": record.get("number", ""),
                 "chapter": record.get("chapter", ""),
+                "chapter_stem": record.get("chapter_stem", ""),
+                "anchor": record.get("anchor", ""),
+                "caption": record.get("caption", ""),
             }
             for record in figures
         ],

@@ -1,0 +1,46 @@
+{
+ "abs_url": "https://arxiv.org/abs/nucl-th/0512004",
+ "abstract": "Placeholder. This paper is here to give a Journal row of an em dash and no DOI row, which is what a preprint looks like on disk.",
+ "arxiv_id": "nucl-th/0512004",
+ "authors": [
+  "Cezary Juszczak",
+  "Jaroslaw A. Nowak",
+  "Jan T. Sobczyk"
+ ],
+ "chapters": [
+  {
+   "anchors": [
+    "sec-introduction"
+   ],
+   "blocks": 1,
+   "bytes": 102,
+   "number": "1",
+   "stem": "01_introduction",
+   "subsections": [],
+   "title": "Introduction",
+   "words": 1
+  }
+ ],
+ "doi": "",
+ "figures": [],
+ "ingested": "2026-08-07",
+ "journal_ref": "",
+ "labels": {},
+ "paper_dir": "tests/data/collection_fixture/juszczak_2003_recoil_nucleon_spectrum",
+ "parser": "texsoup",
+ "publication": {
+  "doi": "",
+  "errata": [],
+  "inspire_url": "",
+  "journal": "",
+  "published_year": null,
+  "source": "none"
+ },
+ "references": [],
+ "slug": "juszczak_2003_recoil_nucleon_spectrum",
+ "submitted_year": 2003,
+ "title": "Recoil nucleon spectrum in neutrino-nucleus scattering",
+ "unresolved_refs": [],
+ "warnings": [],
+ "year": 2003
+}

@@ -15,7 +15,9 @@ unreadable, `2` a bad argument or a judgement for the caller to make.
 | `lit lookup <tag>` | resolves one citation, or searches the reference store |
 | `lit search "<phrase>"` | finds a phrase in the text of the papers, and gives the chapter, the anchor and the line |
 | `lit terminology --topic "…" --in-text <slug> --cited-by <slug>` | weighs the multiword terms of the named papers and of the titles they cite, and reports the ones the topic does not hold, with the passages that state an alias |
-| `lit check-report <report.md>` | asserts that every citation of a report opens the text it names |
+| `lit render` | writes the collection a person reads, from the store, in one flavor |
+| `lit render-report <report.source.md>` | turns the `lit:` markers of a report into the links of that flavor |
+| `lit check-report <report.source.md>` | asserts that every citation of a report names text the collection holds |
 | `lit inspire <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
 | `lit references --render-only` | renders `REFERENCES.md` and the pages under `references/` from the store |
 
@@ -107,6 +109,21 @@ The number orders candidates when the ingest budget is tighter than the list of
 papers worth reading. It never rejects a candidate on its own: it counts shared
 references, so it reads no argument and no result, and the paper that answers a
 question best is often the one that works on the same material.
+
+## Rendering
+
+`lit render` writes the collection a person reads, from the store, in one flavor
+— `vscode` or `obsidian`. Without `--flavor` it renders again in the flavor
+`literature/.collection.json` records; with one it renders in that flavor and
+records it. `--out <dir>` writes elsewhere, recording nothing and deleting
+nothing. It sweeps each paper of rendered files this render did not write, and
+re-renders every report under `reports/`, so a flavor change never leaves a
+report citing anchors that moved.
+
+`lit render-report <path>` turns the `lit:` markers of a report source into the
+links of the recorded flavor, writing `<task>.md` beside `<task>.source.md`.
+[rendering.md](rendering.md) has the three marker forms and what each resolves
+to.
 
 Two options of the conversion stage matter while the conversion is worked on:
 `--dry-run` prints the manifest and writes nothing, and `--keep-source <dir>`

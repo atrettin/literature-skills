@@ -26,7 +26,7 @@ cd ~/work/software/literature-skills
 ```
 
 That installs the `lit` command and symlinks the six skills into
-`~/.claude/skills/` and the five agents into `~/.claude/agents/`. Because they
+`~/.claude/skills/` and the four agents into `~/.claude/agents/`. Because they
 are symlinks, `git pull` in the clone updates every project at once.
 
 It installs into whichever Python runs it. To choose one:
@@ -105,7 +105,8 @@ produced it, so a reader always knows which of the two they have.
 | [docs/commands.md](docs/commands.md) | Every `lit` command, and what each one answers |
 | [docs/research.md](docs/research.md) | The research loop: the agents, the report, and how a citation is checked |
 | [docs/ingest.md](docs/ingest.md) | Ingesting without an agent: the exit codes, the report fields, the warnings |
-| [docs/papers.md](docs/papers.md) | What a paper ends up as on disk, and the anchors a citation reaches |
+| [docs/papers.md](docs/papers.md) | What a paper is stored as, and the anchors a citation reaches |
+| [docs/rendering.md](docs/rendering.md) | The flavors, `lit render`, and the `lit:` markers a report cites with |
 | [docs/references.md](docs/references.md) | Citations, the reference store, and what makes one verifiable |
 | [docs/developing.md](docs/developing.md) | The layout of `lit/`, the tests, and the type checker |
 | [docs/evaluation.md](docs/evaluation.md) | Measuring whether a change to the skills made the answers better |

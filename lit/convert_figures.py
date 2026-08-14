@@ -25,13 +25,14 @@ External tools, all optional until a paper actually needs one:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from lit import paths
+from lit import blocks, paths
 
 RASTER_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff"}
 GHOSTSCRIPT_SUFFIXES = {".eps", ".ps", ".pdf"}
@@ -263,26 +264,42 @@ def stage_originals(figures_dir: Path) -> None:
 
 
 def rewrite_references(paper_dir: Path, renames: dict[str, str]) -> None:
-    """Point the chapters and FIGURES.md at the converted file names."""
+    """Point the stored blocks at the converted file names.
+
+    The name reaches the store in two places, and both are a field of their own:
+    the `file` of a figure block, and the `file` of a figure in `paper.json`.
+    Nothing else has to be searched, and a run of characters that happens to
+    read like a file name inside a caption or an anchor is left alone.
+    """
     changed = {old: new for old, new in renames.items() if old != new}
     if not changed:
         return
-    targets = [paper_dir / FIGURES_DIR_NAME / "FIGURES.md"]
-    chapters_dir = paper_dir / paths.CHAPTERS_DIR
-    if chapters_dir.is_dir():
-        targets.extend(sorted(chapters_dir.glob("*.md")))
-    targets.append(paper_dir / "INDEX.md")
 
-    pattern = re.compile(
-        "|".join(re.escape(old) for old in sorted(changed, key=len, reverse=True))
-    )
-    for path in targets:
-        if not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8")
-        replaced = pattern.sub(lambda match: changed[match.group(0)], text)
-        if replaced != text:
-            path.write_text(replaced, encoding="utf-8")
+    text_dir = paper_dir / paths.TEXT_DIR
+    if text_dir.is_dir():
+        for path in sorted(text_dir.glob("*.jsonl")):
+            chapter_blocks = blocks.read(path)
+            touched = False
+            for block in chapter_blocks:
+                if block.get("kind") == "figure" and block.get("file") in changed:
+                    block["file"] = changed[block["file"]]
+                    touched = True
+            if touched:
+                blocks.write(path, chapter_blocks)
+
+    paper_path = paper_dir / paths.PAPER_NAME
+    if paper_path.is_file():
+        paper = json.loads(paper_path.read_text(encoding="utf-8"))
+        touched = False
+        for figure in paper.get("figures") or []:
+            if figure.get("file") in changed:
+                figure["file"] = changed[figure["file"]]
+                touched = True
+        if touched:
+            paper_path.write_text(
+                json.dumps(paper, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
 
 
 def has_originals(raw_dir: Path) -> bool:

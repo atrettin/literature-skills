@@ -14,6 +14,7 @@ import re
 from pathlib import Path
 
 from lit import arxiv_fetch
+from lit import blocks
 from lit import check_references
 from lit import reference_store
 from lit import update_references
@@ -115,7 +116,7 @@ def test_an_unlabelled_subsection_still_gets_an_anchor() -> None:
         numbering,
     )
 
-    anchors = check_references.ANCHOR.findall(text)
+    anchors = anchors_in(text)
     assert anchors == ["sec-nuclear-effects", "sec-nuclear-effects-2"]
     # No `\ref` names a reserved anchor, so no label answers for one.
     assert numbering.labels == {}
@@ -130,12 +131,17 @@ def test_a_labelled_subsection_keeps_the_anchor_named_after_its_label() -> None:
         r"\subsection{Nuclear effects}\label{sec:nuc} prose", numbering
     )
 
-    assert check_references.ANCHOR.findall(text) == ["sec-nuc"]
+    assert anchors_in(text) == ["sec-nuc"]
 
 
 # --------------------------------------------------------------------------
 # an anchor at every paragraph
 # --------------------------------------------------------------------------
+
+def anchors_in(text: str) -> list[str]:
+    """The anchors of a piece of the intermediate text, in order."""
+    return [found.group(1) for found in re.finditer(r'<a id="([^"]*)"></a>', text)]
+
 
 PARAGRAPH = (
     "The measured cross section rises with the energy of the beam, and the "
@@ -144,21 +150,26 @@ PARAGRAPH = (
 
 
 def test_paragraph_anchors_number_the_prose_in_order() -> None:
-    text = arxiv_fetch.paragraph_anchors(
-        "# 1. Introduction\n\n%s\n\n## 1.1 Method\n\n%s\n" % (PARAGRAPH, PARAGRAPH)
+    numbered = arxiv_fetch.paragraph_anchors(
+        blocks.parse(
+            "# 1. Introduction\n\n%s\n\n## 1.1 Method\n\n%s\n" % (PARAGRAPH, PARAGRAPH)
+        )
     )
 
-    assert check_references.ANCHOR.findall(text) == ["p1", "p2"]
-    assert text.count('<a id="p1"></a>') == 1
-    assert "<a id=\"p1\"></a>\n\n%s" % PARAGRAPH in text
+    assert blocks.anchors(numbered) == ["p1", "p2"]
+    assert [block["text"] for block in numbered if block["kind"] == "paragraph"] == [
+        PARAGRAPH, PARAGRAPH
+    ]
 
 
-def test_paragraph_anchors_stay_out_of_a_fence_and_out_of_display_maths() -> None:
-    text = arxiv_fetch.paragraph_anchors(
-        "```tex\n%s\n\n%s\n```\n\n$$\n%s\n\n%s\n$$\n" % ((PARAGRAPH,) * 4)
+def test_only_prose_is_numbered() -> None:
+    """A fence and a maths block are not paragraphs, so neither is counted."""
+    numbered = arxiv_fetch.paragraph_anchors(
+        blocks.parse("```tex\n%s\n```\n\n%s\n" % (PARAGRAPH, PARAGRAPH))
     )
 
-    assert check_references.ANCHOR.findall(text) == []
+    assert blocks.anchors(numbered) == ["p1"]
+    assert [block["kind"] for block in numbered] == ["code", "paragraph"]
 
 
 def test_a_chapter_that_went_through_the_anchors_answers_a_paragraph_link() -> None:
@@ -168,9 +179,14 @@ def test_a_chapter_that_went_through_the_anchors_answers_a_paragraph_link() -> N
         "%s\n\n%s\n" % (PARAGRAPH, PARAGRAPH), [], "Introduction", numbering
     )
 
-    written = arxiv_fetch.sanitise(arxiv_fetch.paragraph_anchors(text))
+    # As `convert` builds a chapter: the heading, then what `clean_text` made.
+    stored = arxiv_fetch.paragraph_anchors(
+        blocks.parse(arxiv_fetch.sanitise("# 1. Introduction\n\n" + text))
+    )
 
-    assert "p2" in set(check_references.ANCHOR.findall(written))
+    assert blocks.anchors(stored) == ["sec-introduction", "p1", "p2"]
+    # The chapter's anchor names its heading, and not the paragraph under it.
+    assert stored[0]["kind"] == "heading"
 
 
 def test_each_piece_of_a_split_chapter_counts_from_p1() -> None:
@@ -183,8 +199,8 @@ def test_each_piece_of_a_split_chapter_counts_from_p1() -> None:
 
     assert [title for title, _ in pieces] == ["opening", "Second part"]
     for _, piece in pieces:
-        assert check_references.ANCHOR.findall(
-            arxiv_fetch.paragraph_anchors(piece)
+        assert blocks.anchors(
+            arxiv_fetch.paragraph_anchors(blocks.parse(piece))
         ) == ["p1"]
 
 
@@ -219,22 +235,23 @@ def test_a_name_that_would_say_too_little_keeps_its_cut_word() -> None:
 
 def test_residue_is_reported_and_leaves_the_citations_alone(collection: Path) -> None:
     store = reference_store.load(collection)
-    update_references.relink_citations(collection, "", store)
     update_references.write_records(collection, store)
     verdict = check_references.main(["--literature-root", str(collection)])
-    damaged = collection / "juszczak_2003_recoil_nucleon_spectrum" / "chapters"
+    damaged = collection / "juszczak_2003_recoil_nucleon_spectrum" / "text"
     damaged.mkdir(parents=True, exist_ok=True)
     # Written here rather than into tests/data: a fixture file holding a NUL
     # byte is a fixture no editor and no `grep` can read.
-    (damaged / "01_broken.md").write_text(
-        "A fraction of $\\sim PH7 13$% \x00 of the sample.\n", encoding="utf-8"
+    (damaged / "01_broken.jsonl").write_text(
+        '{"kind": "paragraph", "anchor": "p1", '
+        '"text": "A fraction of $\\\\sim PH7 13$% \x00 of the sample."}\n',
+        encoding="utf-8",
     )
 
     report = check_references.check(collection)
 
     assert report["residue"] == [
         {
-            "in": "juszczak_2003_recoil_nucleon_spectrum/chapters/01_broken.md",
+            "in": "juszczak_2003_recoil_nucleon_spectrum/text/01_broken.jsonl",
             "placeholders": 1,
             "control_characters": 1,
         }
@@ -250,6 +267,6 @@ def test_a_collection_with_no_residue_reports_none(collection: Path) -> None:
 
 def test_no_fixture_file_holds_a_control_character() -> None:
     fixture = Path(__file__).resolve().parent / "data" / "collection_fixture"
-    for path in fixture.rglob("*.md"):
+    for path in fixture.rglob("*.jsonl"):
         text = path.read_text(encoding="utf-8", errors="replace")
         assert not re.search(r"[\x00-\x08\x0b-\x1f]", text), path

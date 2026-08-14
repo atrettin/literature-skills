@@ -1,10 +1,10 @@
 """How a citation reads, and where it lands.
 
-A chapter cites `([Bodek et al., 2008](../../references/bodek_2008_….md))`. Two
-things have to hold for that to be worth anything: the label has to name the
+A rendered chapter cites `([Bodek et al., 2008](../../references/bodek_2008_….md))`.
+Two things have to hold for that to be worth anything: the label has to name the
 work a reader would recognise, and the file has to be there, carrying a tag that
 `reference_lookup.py` answers to. Nothing else checks the second — the link is
-written in one script and the page in another.
+written by the renderer and the page by the reference pass.
 
 The rules about what is *not* linked matter as much. A marker naming a tag the
 store does not have is left exactly as it stands, because it is the only visible
@@ -18,22 +18,32 @@ from pathlib import Path
 
 import pytest
 
+from lit import blocks
 from lit import check_references
 from lit import reference_store
+from lit import render
 from lit import update_references
 
 CHAPTER = "jeong_2023_shallow_deep_inelastic/chapters/02_introduction.md"
+STORED_CHAPTER = "jeong_2023_shallow_deep_inelastic/text/02_introduction.jsonl"
 LIPARI = "lipari_2002_neutrino_oscillation_neutrino_cross"
 BODEK = "bodek_2008_axial_mass_quasielastic"
 JEONG = "jeong_2023_shallow_deep_inelastic"
 OTHER = "juszczak_2003_recoil_nucleon_spectrum"
 
 
-def relink(collection: Path) -> tuple[int, str]:
-    """Run the pass over the whole collection and hand back the chapter."""
-    store = reference_store.load(collection)
-    touched = update_references.relink_citations(collection, "", store)
-    return touched, (collection / CHAPTER).read_text(encoding="utf-8")
+def dangle(collection: Path, slug: str) -> None:
+    """Put a cross-reference marker with no target into a paper's stored text."""
+    path = collection / slug / "text" / "01_introduction.jsonl"
+    stored = blocks.read(path)
+    stored.append({"kind": "paragraph", "anchor": "p1",
+                   "text": "See [ref: eq:foo] for the rate."})
+    blocks.write(path, stored)
+
+
+def chapter_text(collection: Path) -> str:
+    """The rendered chapter, as a reader opens it."""
+    return (collection / CHAPTER).read_text(encoding="utf-8")
 
 
 # --------------------------------------------------------------------------
@@ -73,19 +83,19 @@ def test_a_record_with_no_author_says_so() -> None:
 
 
 # --------------------------------------------------------------------------
-# writing them into the chapters
+# writing them into a rendered chapter
 # --------------------------------------------------------------------------
 
 
 def test_a_marker_becomes_a_link_a_reader_can_read(collection: Path) -> None:
-    _, text = relink(collection)
+    text = chapter_text(collection)
 
     assert "([Lipari, 2002](../../references/%s.md))" % LIPARI in text
     assert "([Bodek et al., 2008](../../references/%s.md))" % BODEK in text
 
 
 def test_several_works_share_one_pair_of_brackets(collection: Path) -> None:
-    _, text = relink(collection)
+    text = chapter_text(collection)
 
     assert (
         "([Jeong et al., 2023](../../references/%s.md); "
@@ -93,69 +103,55 @@ def test_several_works_share_one_pair_of_brackets(collection: Path) -> None:
     ) in text
 
 
-def test_the_link_is_relative_to_the_file_it_is_in(collection: Path) -> None:
+def test_the_link_is_relative_to_the_file_it_is_in(stored_collection: Path) -> None:
     """A chapter sits two levels down, an INDEX.md one. Both must reach it."""
-    index = collection / JEONG / "INDEX.md"
-    index.write_text(
-        index.read_text(encoding="utf-8") + "\nSee [cite: %s].\n" % LIPARI,
-        encoding="utf-8",
+    paper = json.loads(
+        (stored_collection / JEONG / "paper.json").read_text(encoding="utf-8")
     )
+    paper["abstract"] = "The abstract cites [cite: %s] too." % LIPARI
+    (stored_collection / JEONG / "paper.json").write_text(
+        json.dumps(paper), encoding="utf-8"
+    )
+    render.render_collection(stored_collection, "vscode")
 
-    _, chapter = relink(collection)
+    chapter = (stored_collection / CHAPTER).read_text(encoding="utf-8")
+    index = (stored_collection / JEONG / "INDEX.md").read_text(encoding="utf-8")
 
     assert "(../../references/%s.md)" % LIPARI in chapter
-    assert "(../references/%s.md)" % LIPARI in index.read_text(encoding="utf-8")
+    assert "(../references/%s.md)" % LIPARI in index
 
 
-def test_the_pages_are_not_themselves_relinked(collection: Path) -> None:
-    """They are rendered from the store, so editing them here achieves nothing."""
-    store = reference_store.load(collection)
-    update_references.write_records(collection, store)
-    page = collection / "references" / ("%s.md" % LIPARI)
-    page.write_text(page.read_text(encoding="utf-8") + "\n[cite: %s]\n" % BODEK,
-                    encoding="utf-8")
+def test_the_store_keeps_the_marker_the_render_resolved(collection: Path) -> None:
+    """The link lives in the render alone. A re-render is what changes it."""
+    stored = (collection / STORED_CHAPTER).read_text(encoding="utf-8")
 
-    update_references.relink_citations(collection, "", store)
-
-    assert "[cite: %s]" % BODEK in page.read_text(encoding="utf-8")
+    assert "[cite: %s]" % LIPARI in stored
+    assert "references/%s.md" % LIPARI not in stored
 
 
 def test_a_tag_the_store_does_not_know_is_left_alone(collection: Path) -> None:
     """It is the only sign that a bibliography entry never resolved."""
-    _, text = relink(collection)
-
-    assert "[cite: Katori:2016yel]" in text
+    assert "[cite: Katori:2016yel]" in chapter_text(collection)
 
 
 def test_one_unknown_tag_holds_back_the_whole_marker(collection: Path) -> None:
     """Linking half of it would hide the tag check_references.py must report."""
-    _, text = relink(collection)
-
-    assert "[cite: Katori:2016yel, %s]" % BODEK in text
+    assert "[cite: Katori:2016yel, %s]" % BODEK in chapter_text(collection)
 
 
 def test_nothing_else_in_the_chapter_moves(collection: Path) -> None:
-    _, text = relink(collection)
+    text = chapter_text(collection)
 
     assert '<a id="sec-introduction"></a>' in text
     assert "The axial mass extracted from deuterium data is $1.03$ GeV" in text
 
 
-def test_a_second_run_changes_nothing(collection: Path) -> None:
-    touched, first = relink(collection)
-    again, second = relink(collection)
+def test_a_second_render_changes_nothing(collection: Path) -> None:
+    first = chapter_text(collection)
 
-    assert touched == 1
-    assert again == 0
-    assert second == first
+    render.render_collection(collection, "vscode")
 
-
-def test_one_paper_can_be_relinked_on_its_own(collection: Path) -> None:
-    """A --manifest run touches the paper it ingested and nothing else."""
-    store = reference_store.load(collection)
-
-    assert update_references.relink_citations(collection, "juszczak_2003_recoil_nucleon_spectrum", store) == 0
-    assert "[cite: %s]" % LIPARI in (collection / CHAPTER).read_text(encoding="utf-8")
+    assert chapter_text(collection) == first
 
 
 # --------------------------------------------------------------------------
@@ -163,13 +159,14 @@ def test_one_paper_can_be_relinked_on_its_own(collection: Path) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_every_cited_work_has_a_page(collection: Path) -> None:
-    store = reference_store.load(collection)
+def test_every_cited_work_has_a_page(stored_collection: Path) -> None:
+    store = reference_store.load(stored_collection)
 
-    written, removed = update_references.write_records(collection, store)
+    written, removed = update_references.write_records(stored_collection, store)
 
     assert written == len(store)
     assert removed == 0
+    collection = stored_collection
     for tag in (LIPARI, BODEK, JEONG):
         assert (collection / "references" / ("%s.md" % tag)).is_file()
 
@@ -252,12 +249,13 @@ def test_the_table_carries_no_anchors(collection: Path) -> None:
 
 def test_check_references_reads_the_links(collection: Path) -> None:
     store = reference_store.load(collection)
-    update_references.relink_citations(collection, "", store)
     update_references.write_records(collection, store)
 
     report = check_references.check(collection)
 
-    assert report["unresolved"] == [{"tag": "Katori:2016yel", "cited_in": [CHAPTER]}]
+    assert report["unresolved"] == [
+        {"tag": "Katori:2016yel", "cited_in": [STORED_CHAPTER]}
+    ]
     assert report["missing_pages"] == []
     assert report["dangling_refs"] == []
     assert set(check_references.read_citations(collection)) >= {LIPARI, BODEK, JEONG}
@@ -265,7 +263,6 @@ def test_check_references_reads_the_links(collection: Path) -> None:
 
 def test_a_cited_work_with_no_page_fails_the_check(collection: Path) -> None:
     store = reference_store.load(collection)
-    update_references.relink_citations(collection, "", store)
     update_references.write_records(collection, store)
     (collection / "references" / ("%s.md" % LIPARI)).unlink()
 
@@ -278,21 +275,18 @@ def test_a_cited_work_with_no_page_fails_the_check(collection: Path) -> None:
 def test_the_pages_do_not_count_as_citing_anything(collection: Path) -> None:
     """A page is rendered from the store; it cannot cite, only be cited."""
     store = reference_store.load(collection)
-    update_references.relink_citations(collection, "", store)
     update_references.write_records(collection, store)
 
     citing = {where for files in check_references.read_citations(collection).values()
               for where in files}
 
-    assert citing == {CHAPTER}
+    assert citing == {STORED_CHAPTER}
 
 
 def test_a_scoped_check_ignores_another_papers_dangling_reference(
     collection: Path,
 ) -> None:
-    other = collection / OTHER / "INDEX.md"
-    other.write_text(other.read_text(encoding="utf-8") + "\nSee [ref: eq:foo].\n",
-                     encoding="utf-8")
+    dangle(collection, OTHER)
 
     report = check_references.check(collection, paper=JEONG)
 
@@ -321,16 +315,16 @@ def test_a_scoped_check_passes_when_the_paper_is_clean(collection: Path) -> None
 
 
 def test_an_unscoped_check_answers_for_the_whole_collection(collection: Path) -> None:
-    other = collection / OTHER / "INDEX.md"
-    other.write_text(other.read_text(encoding="utf-8") + "\nSee [ref: eq:foo].\n",
-                     encoding="utf-8")
+    dangle(collection, OTHER)
 
     report = check_references.check(collection)
 
     assert "scope" not in report
     assert "elsewhere" not in report
     assert [item["tag"] for item in report["unresolved"]] == ["Katori:2016yel"]
-    assert [item["in"] for item in report["dangling_refs"]] == ["%s/INDEX.md" % OTHER]
+    assert [item["in"] for item in report["dangling_refs"]] == [
+        "%s/text/01_introduction.jsonl" % OTHER
+    ]
 
 
 def test_a_tag_many_papers_cite_stays_in_scope(collection: Path) -> None:
@@ -339,28 +333,28 @@ def test_a_tag_many_papers_cite_stays_in_scope(collection: Path) -> None:
     The six files sit in a paper whose slug sorts before this one, so this
     paper's own file falls outside the cut.
     """
-    chapters = collection / "abbott_1999_earlier_by_name" / "chapters"
-    chapters.mkdir(parents=True)
+    text_dir = collection / "abbott_1999_earlier_by_name" / "text"
+    text_dir.mkdir(parents=True)
     for number in range(6):
-        (chapters / ("%02d_more.md" % number)).write_text(
-            "A claim [cite: Katori:2016yel].\n", encoding="utf-8"
-        )
+        blocks.write(text_dir / ("%02d_more.jsonl" % number), [
+            {"kind": "paragraph", "anchor": "p1",
+             "text": "A claim [cite: Katori:2016yel]."},
+        ])
 
     report = check_references.check(collection, paper=JEONG)
 
     assert [item["tag"] for item in report["unresolved"]] == ["Katori:2016yel"]
-    assert CHAPTER not in report["unresolved"][0]["cited_in"]
+    assert STORED_CHAPTER not in report["unresolved"][0]["cited_in"]
 
 
 def test_the_json_says_what_it_wrote(
-    collection: Path, capsys: pytest.CaptureFixture[str]
+    stored_collection: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     exit_code = update_references.main(
-        ["--literature-root", str(collection), "--render-only"]
+        ["--literature-root", str(stored_collection), "--render-only"]
     )
 
     assert exit_code == 0
     report = json.loads(capsys.readouterr().out)
-    assert report["relinked"] == 1
     assert report["pages_written"] == 4
     assert report["pages_removed"] == 0

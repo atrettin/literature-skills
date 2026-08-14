@@ -16,19 +16,82 @@ DATA = Path(__file__).resolve().parent / "data"
 
 @pytest.fixture
 def collection(tmp_path: Path) -> Path:
-    """A copy of the fixture collection, writable, one per test.
+    """A copy of the fixture collection, rendered and writable, one per test.
 
     A copy rather than the fixture itself: `mark_held` writes `held_as` back
     into the records it is given, and a test that saved the store would edit
     the fixture for every test after it.
 
+    The fixture on disk holds only what is stored — `paper.json`, `text/` and
+    the reference store. The render is written here rather than committed, so
+    the two can never drift apart and every test that reads a rendered file
+    reads one this renderer wrote.
+
     The directory on disk is not called `literature`. `.gitignore` holds
     `literature/` with no leading slash, which matches a directory of that name
     at any depth, so a fixture under that name would never be committed.
     """
+    from lit import paths, render
+
+    root = tmp_path / "collection"
+    shutil.copytree(DATA / "collection_fixture", root)
+    render.render_collection(root, paths.flavor(root))
+    return root
+
+
+@pytest.fixture
+def stored_collection(tmp_path: Path) -> Path:
+    """The fixture collection as it is stored, with nothing rendered.
+
+    For a test about the store itself, and for one that renders the collection
+    and asserts on what the render wrote.
+    """
     root = tmp_path / "collection"
     shutil.copytree(DATA / "collection_fixture", root)
     return root
+
+
+def write_paper(root: Path, slug: str, chapters: dict[str, list[dict]], **fields) -> Path:
+    """Store a paper made up for one test. Returns its directory.
+
+    `chapters` maps a chapter stem to its blocks. Every count `paper.json`
+    carries is measured here rather than passed in, so a test never states a
+    number that the store then contradicts.
+    """
+    import json
+
+    from lit import blocks
+
+    paper_dir = root / slug
+    entries = []
+    for stem, chapter_blocks in chapters.items():
+        path = blocks.write(paper_dir / "text" / (stem + ".jsonl"), chapter_blocks)
+        entries.append({
+            "stem": stem,
+            "number": str(len(entries) + 1),
+            "title": stem.split("_", 1)[-1].replace("_", " ").title(),
+            "subsections": [],
+            "bytes": path.stat().st_size,
+            "blocks": len(chapter_blocks),
+            "words": sum(len(blocks.words(block).split()) for block in chapter_blocks),
+            "anchors": blocks.anchors(chapter_blocks),
+        })
+    paper = {
+        "arxiv_id": "", "slug": slug, "paper_dir": str(paper_dir),
+        "title": slug, "authors": [], "year": None, "submitted_year": None,
+        "abs_url": "", "journal_ref": "", "doi": "",
+        "publication": {"source": "none", "journal": "", "published_year": None,
+                        "doi": "", "errata": [], "inspire_url": ""},
+        "abstract": "", "ingested": "2026-08-07", "parser": "texsoup",
+        "chapters": entries, "figures": [], "labels": {},
+        "unresolved_refs": [], "references": [], "warnings": [],
+    }
+    paper.update(fields)
+    (paper_dir / "paper.json").write_text(
+        json.dumps(paper, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return paper_dir
 
 
 @pytest.fixture

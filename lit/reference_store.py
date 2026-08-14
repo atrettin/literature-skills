@@ -36,7 +36,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from lit.paths import RECORDS_DIR, index_files
+from lit.paths import RECORDS_DIR, paper_files
 from lit.text import collapse_whitespace, normalize_title, slugify, surname
 
 STORE_NAME = ".references.jsonl"
@@ -302,27 +302,29 @@ def held_index(root: Path) -> dict[str, str]:
     """Map each identifier of a paper held in full to the directory holding it.
 
     Keys are the `arxiv:` and `doi:` forms of `identity_keys`, read from the
-    INDEX.md of every paper, so a caller with a DOI or an arXiv identifier in
-    hand can ask whether the collection already holds that work. A root that
+    `paper.json` of every paper, so a caller with a DOI or an arXiv identifier
+    in hand can ask whether the collection already holds that work. A root that
     does not exist holds nothing, which is an answer rather than an error: a
     project may have no collection yet.
     """
     held: dict[str, str] = {}
-    for index_file in index_files(root):
-        text = index_file.read_text(encoding="utf-8", errors="replace")
-        slug = index_file.parent.name
-        for match in re.finditer(r"^\|\s*arXiv\s*\|\s*\[([^\]]+)\]", text, flags=re.MULTILINE):
-            held["arxiv:" + normalize_arxiv(match.group(1))] = slug
-        for match in re.finditer(r"^\|\s*DOI\s*\|\s*\[([^\]]+)\]", text, flags=re.MULTILINE):
-            held["doi:" + normalize_doi(match.group(1))] = slug
+    for path in paper_files(root):
+        paper = json.loads(path.read_text(encoding="utf-8"))
+        slug = path.parent.name
+        arxiv_id = paper.get("arxiv_id") or ""
+        if arxiv_id:
+            held["arxiv:" + normalize_arxiv(arxiv_id)] = slug
+        doi = (paper.get("publication") or {}).get("doi") or paper.get("doi") or ""
+        if doi:
+            held["doi:" + normalize_doi(doi)] = slug
     return held
 
 
 def mark_held(records: list[dict], root: Path) -> int:
     """Point every record at the paper directory holding that work in full.
 
-    Matched on the arXiv identifier and DOI written in each INDEX.md, not on
-    the tag, so a paper whose directory name differs from its reference tag is
+    Matched on the arXiv identifier and DOI of each `paper.json`, not on the
+    tag, so a paper whose directory name differs from its reference tag is
     still recognised.
     """
     held = held_index(root)

@@ -26,6 +26,9 @@ from pathlib import Path
 import pytest
 
 from lit import rerank
+import conftest
+
+from lit import blocks
 from lit import terminology_scan
 
 MINE = "vogt_2019_myocardial_infarction"
@@ -436,14 +439,17 @@ def test_a_broken_store_is_reported_and_not_scanned(
 def write_paper(
     root: Path, slug: str, title: str, abstract: str, chapters: dict[str, str]
 ) -> None:
-    """One paper on disk, with the parts that `--in-text` reads."""
-    paper = root / slug
-    (paper / "chapters").mkdir(parents=True, exist_ok=True)
-    (paper / "INDEX.md").write_text(
-        "# %s\n\n## Abstract\n\n[Abstract] %s\n" % (title, abstract), encoding="utf-8"
+    """One paper stored, with the parts that `--in-text` reads.
+
+    Each chapter is given as the intermediate text the conversion builds, and
+    stored through the same parse the conversion uses, so a test says what the
+    paper reads like rather than what its JSON looks like.
+    """
+    conftest.write_paper(
+        root, slug,
+        {stem: blocks.parse(text) for stem, text in chapters.items()},
+        title=title, abstract=abstract,
     )
-    for name, text in chapters.items():
-        (paper / "chapters" / name).write_text(text, encoding="utf-8")
 
 
 def in_text(root: Path, slug: str, topic: str, **options) -> dict:
@@ -463,7 +469,7 @@ def test_a_heading_weighs_more_than_a_paragraph(tmp_path: Path) -> None:
     write_paper(
         tmp_path, MINE, "A paper", "An abstract.",
         {
-            "01.md": "## The Myocardial Infarction\n\n"
+            "01": "## The Myocardial Infarction\n\n"
                      "<a id=\"p1\"></a>\n\nOne mention of statin therapy here.\n",
         },
     )
@@ -484,7 +490,7 @@ def test_the_two_plural_forms_of_one_name_count_together(tmp_path: Path) -> None
     write_paper(
         tmp_path, MINE, "A paper", "An abstract.",
         {
-            "01.md": "<a id=\"p1\"></a>\n\nThe myocardial infarction is one event.\n\n"
+            "01": "<a id=\"p1\"></a>\n\nThe myocardial infarction is one event.\n\n"
                      "<a id=\"p2\"></a>\n\nThe myocardial infarctions are counted.\n",
         },
     )
@@ -513,7 +519,7 @@ def test_an_alias_reaches_the_report_with_the_passage_that_states_it(
     write_paper(
         tmp_path, MINE, "A paper", "An abstract.",
         {
-            "06.md": "<a id=\"p10\"></a>\n\nThe registry counts every heart "
+            "06": "<a id=\"p10\"></a>\n\nThe registry counts every heart "
                      "attack, or myocardial infarction, in the cohort $R_a$.\n",
         },
     )
@@ -523,7 +529,7 @@ def test_an_alias_reaches_the_report_with_the_passage_that_states_it(
 
     assert "myocardial infarction" in stated
     claim = stated["myocardial infarction"]
-    assert claim["chapter"] == "06.md"
+    assert claim["chapter"] == "06"
     assert claim["anchor"] == "p10"
     assert claim["cue"] == "or"
     assert "myocardial infarction" in claim["quote"]
@@ -536,7 +542,7 @@ def test_the_alias_search_anchors_on_the_rarest_word_of_the_topic(
     write_paper(
         tmp_path, MINE, "A paper", "An abstract.",
         {
-            "01.md": "<a id=\"p1\"></a>\n\nThe heart pumps blood.\n\n"
+            "01": "<a id=\"p1\"></a>\n\nThe heart pumps blood.\n\n"
                      "<a id=\"p2\"></a>\n\nThe heart has four chambers.\n\n"
                      "<a id=\"p3\"></a>\n\nA coronary event, also called a "
                      "heart attack, follows plaque rupture.\n",
@@ -554,7 +560,7 @@ def test_an_alias_names_no_phrase_of_running_prose(tmp_path: Path) -> None:
     write_paper(
         tmp_path, MINE, "A paper", "An abstract.",
         {
-            "01.md": "<a id=\"p1\"></a>\n\nIt is possible that heart attack "
+            "01": "<a id=\"p1\"></a>\n\nIt is possible that heart attack "
                      "rates extend below the national average.\n",
         },
     )
@@ -578,7 +584,7 @@ def test_the_text_source_reads_the_papers_and_the_store_does_not(
     write_paper(
         tmp_path, MINE, "Acute coronary syndromes", "A clinical introduction.",
         {
-            "05.md": "## The Myocardial Infarction\n\n<a id=\"p2\"></a>\n\n"
+            "05": "## The Myocardial Infarction\n\n<a id=\"p2\"></a>\n\n"
                      "Heart attacks, sometimes called myocardial infarctions, "
                      "follow plaque rupture.\n",
         },
@@ -624,7 +630,7 @@ def test_the_two_sources_combine(
     write_store(tmp_path, many(SHORTER, enough()))
     write_paper(
         tmp_path, MINE, "A paper", "An abstract.",
-        {"01.md": "<a id=\"p1\"></a>\n\nWe discuss the coronary calcium score.\n"},
+        {"01": "<a id=\"p1\"></a>\n\nWe discuss the coronary calcium score.\n"},
     )
 
     status, report = run(tmp_path, "--topic", "heart attacks",
@@ -652,7 +658,7 @@ def test_a_citation_bracket_is_no_alias_cue(tmp_path: Path) -> None:
         {
             # "Attack" has to be the rarer word of the topic, as it is in a
             # real paper, or the alias search anchors on "heart" instead.
-            "01.md": "<a id=\"p0\"></a>\n\nThe heart pumps.\n\n"
+            "01": "<a id=\"p0\"></a>\n\nThe heart pumps.\n\n"
                      "The heart ages.\n\n"
                      "<a id=\"p1\"></a>\n\nA silent heart attack causes lasting "
                      "damage (Boyarsky, 2009).\n\n"
@@ -673,17 +679,39 @@ def test_a_citation_bracket_is_no_alias_cue(tmp_path: Path) -> None:
     ]
 
 
-def test_the_markup_of_a_chapter_is_not_a_name(tmp_path: Path) -> None:
-    """`<p align="center">` would otherwise report "p align" as a term."""
+def test_a_citation_tag_is_not_a_name(tmp_path: Path) -> None:
+    """A tag holds another author's surname and another paper's title words."""
     write_paper(
         tmp_path, MINE, "A paper", "An abstract.",
         {
-            "01.md": "<a id=\"p1\"></a>\n\n<p align=\"center\"> The myocardial "
-                     "infarction is a diagnosis. </p>\n",
+            "01": '<a id="p1"></a>\n\nThe myocardial infarction is a diagnosis '
+                  "[cite: brown_2019_coronary_artery_disease].\n",
         },
     )
 
     report = in_text(tmp_path, MINE, "heart attacks", min_weight=1)
 
-    assert "p align" not in reported(report)
+    assert "coronary artery" not in reported(report)
+    assert "artery disease" not in reported(report)
     assert "myocardial infarction" in reported(report)
+
+
+def test_the_markup_of_a_figure_is_not_a_name(tmp_path: Path) -> None:
+    """A caption is words; the HTML that carries the image never is.
+
+    A stored figure block holds the caption and the file name in fields of
+    their own, so no rendering of it can reach the scan.
+    """
+    conftest.write_paper(
+        tmp_path, MINE,
+        {"01": [{"kind": "figure", "file": "fig1.png", "number": "1",
+                 "anchor": "fig-mi",
+                 "caption": "The myocardial infarction rate by year."}]},
+        title="A paper", abstract="An abstract.",
+    )
+
+    report = in_text(tmp_path, MINE, "heart attacks", min_weight=1)
+
+    assert "p align" not in reported(report)
+    assert "fig1 png" not in reported(report)
+    assert "myocardial infarction rate" in reported(report)

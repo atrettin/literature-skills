@@ -211,20 +211,20 @@ paper.
 
 | What you have | What you do |
 |---|---|
-| One paper, and its `INDEX.md` names the chapter you need | Read that chapter yourself, as `use-literature` says. |
-| Several papers, or an `INDEX.md` that does not settle it | Start one `paper-scout` agent for each paper. Give it the slug and the open sub-questions. Run at most `MAX_PARALLEL_SCOUTS` at one time. |
+| One paper, and its `paper.json` names the chapter you need | Read that chapter yourself, as `use-literature` says. |
+| Several papers, or a `paper.json` that does not settle it | Start one `paper-scout` agent for each paper. Give it the slug and the open sub-questions. Run at most `MAX_PARALLEL_SCOUTS` at one time. |
 
 A paper that the collection held enters the working set here, and not at the
 search: it enters when you read text in it that bears on a sub-question.
 
-Expect `INDEX.md` to settle it rarely. What names a chapter for you is its
+Expect `paper.json` to settle it rarely. What names a chapter for you is its
 title, the subsection titles and the word count, and none of those was written
 against your sub-questions. That is what a scout is for: it reads the whole
 paper against the questions that you have.
 
 **Verify before you cite.** A scout report tells you where to look. It is not a
 source. Each location it gives carries a line number, as
-`chapters/03_results.md:181`. Read the chapter at that line with the `offset`
+`text/03_results.jsonl:181`. Read the chapter at that line with the `offset`
 option of `Read`, and compare the words there with the quotation.
 
 When the words are not at that line, do not conclude that the scout invented
@@ -234,13 +234,13 @@ them. Find them instead:
 lit search "<the words the scout quoted>" --paper <slug>
 ```
 
-**Never search for a quotation with `grep`.** The text wraps, thus `grep` misses
-a phrase that a line break splits. `grep` also prints nothing for a file that
-holds a NUL byte. A quotation that neither the line nor the search can place is
+**Never search for a quotation with `grep`.** A phrase copied out of a rendered
+chapter carries a line break the store does not have, thus `grep` misses it.
+`grep` also prints nothing for a file that holds a NUL byte. A quotation that neither the line nor the search can place is
 not verified, whatever the scout wrote. Then write the finding in the log:
 
 ```
-SQ2: <the claim, in one sentence> — <slug>/chapters/03_results.md#sec-axialff
+SQ2: <the claim, in one sentence> — <slug>/03_results#sec-axialff
 ```
 
 A finding with no chapter and no anchor is not a finding. The finding and the
@@ -466,11 +466,11 @@ Write one entry for each iteration, in this shape:
 - skip:   <arxiv-id> — found, not ingested, because <reason>
 - scope:  working set = <slug>, <slug>, <slug>
 - scout:  <slug> for SQ2, SQ3
-- read:   <slug>/chapters/03_results.md
+- read:   <slug>/03_results
 - lookup: <tag>, <tag> — verified: <n> of <n>
 
 ### Findings
-- SQ2: <the claim> — <slug>/chapters/03_results.md#sec-axialff
+- SQ2: <the claim> — <slug>/03_results#sec-axialff
 
 ### Currency checks
 - SQ2, SQ7: <slug> (<arxiv-id>) — searched <date>, newest citer <year>, nothing that changes the answer
@@ -532,20 +532,25 @@ failure that this whole skill exists to prevent.
 
 ## How to cite
 
-**Each link is relative to the report.** Compute the path from `reports/` to the
-literature root, whether the root is in the project or outside it. A relative
-path opens in each Markdown viewer and the auditor can check it. An absolute
-path works on one machine only.
+**You write a marker, never a path.** A citation names the paper with a `lit:`
+marker, and `lit render-report` turns every marker into the link that opens the
+collection in whatever flavor it is rendered in. You therefore never compute a
+relative path, and never learn the flavor.
 
 | What you cite | The form |
 |---|---|
-| A paper you read | `(Katori 2018, J.Phys.G 45 (2018) 013001, [§2.3](../literature/katori_2018_neutrino_nucleus/chapters/03_model.md#sec-form-factors))` |
-| A work you traced but did not read in full | `([Bodek et al., 2008](../literature/references/bodek_2008_axial_mass_quasielastic.md))` |
+| A paper you read | `(Katori 2018, J.Phys.G 45 (2018) 013001, [§2.3](lit:katori_2018_neutrino_nucleus/03_model#sec-form-factors))` |
+| A work you traced but did not read in full | `([Bodek et al., 2008](lit:ref/bodek_2008_axial_mass_quasielastic))` |
 | A work that no lookup confirmed | the same, and write "the citing paper attributes this to …", and keep the ⚠ in the entry for it. |
+
+The three forms are `lit:<slug>` for a paper, `lit:<slug>/<stem>#<anchor>` for a
+place in one, and `lit:ref/<tag>` for a work the collection knows and does not
+hold. The chapter **stem** carries no `.md`: it names the paper's chapter and
+not one rendering of it.
 
 Put several works in one pair of brackets, separated by `;`.
 
-**Never link a chapter that you did not open.** The link is a statement that
+**Never cite a chapter that you did not open.** The marker is a statement that
 you read the text there.
 
 The `## References` section holds one entry for each work. **Which page an entry
@@ -553,22 +558,21 @@ opens depends on whether the collection holds the paper:**
 
 | The work | The entry opens |
 |---|---|
-| A paper the collection holds | its `INDEX.md`. |
-| A work that a paper here cites, and the collection does not hold | its page under `references/`. |
+| A paper the collection holds | the paper, as `lit:<slug>`. |
+| A work that a paper here cites, and the collection does not hold | its record, as `lit:ref/<tag>`. |
 
-A page under `references/` exists for a work that a paper of the collection
-cites. A paper that the collection holds and that nothing here cites has no such
-page, and an entry that links one is a dead link. Its `INDEX.md` is the page
-that names it, and it is the better page: it carries the abstract and each
-chapter.
+A record exists for a work that a paper of the collection cites. A paper the
+collection holds and that nothing here cites has no record, and an entry naming
+one is a dead citation. `lit:<slug>` names it, and it is the better page: it
+carries the abstract and each chapter.
 
 ```markdown
 - **<slug>** — Authors (year). *Title*. Journal.
-  [paper](../literature/<slug>/INDEX.md) ·
+  [paper](lit:<slug>) ·
   [arXiv](https://arxiv.org/abs/<id>) ·
-  read: [§2](../literature/<slug>/chapters/02_introduction.md#sec-introduction)
+  read: [§2](lit:<slug>/02_introduction#sec-introduction)
 - **<tag>** — Authors (year). *Title*. Journal.
-  [record](../literature/references/<tag>.md) ·
+  [record](lit:ref/<tag>) ·
   [arXiv](https://arxiv.org/abs/<id>)
 ```
 
@@ -576,16 +580,16 @@ Each work that the body cites goes here. Each work that is here must be cited in
 the body. Mark a work that no lookup confirmed with ⚠, and write one sentence
 that says what that means.
 
-## Step 6. Audit the report
+## Step 6. Audit the report, then render it
 
 ```bash
-lit check-report reports/<task-slug>.md
+lit check-report reports/<task-slug>.source.md
 ```
 
-It checks five things:
+It checks five things, against the store rather than against any rendered file:
 
-1. Each link opens a file that exists.
-2. Each anchor is in the file that the link names.
+1. Each marker names a paper the collection holds.
+2. Each chapter and each anchor is one the paper has.
 3. Each tag has a record in the store.
 4. The body and the references name the same works. `cited_but_not_listed`
    names a work the body cites and the references omit: add the work to the
@@ -594,7 +598,15 @@ It checks five things:
 5. Each unconfirmed work carries its mark.
 
 **The report is not finished until `"ok": true`.** Correct what it reports and
-run it again.
+run it again. Then write the report a person reads:
+
+```bash
+lit render-report reports/<task-slug>.source.md
+```
+
+That writes `reports/<task-slug>.md`, with every marker resolved into a link for
+the collection's current flavor, and the same for the research log. The source
+is the master: a flavor change re-renders it and never edits it.
 
 Then tell the user:
 
@@ -612,7 +624,7 @@ Then tell the user:
   they run beside an ingest.
 - **Check for later work before you call a sub-question answered.** Step 4 says
   how, and the log says that you did it.
-- **Keep the full text out of your context.** Read `INDEX.md` files, the reports
+- **Keep the full text out of your context.** Read `paper.json` files, the reports
   of the agents, the JSON of the commands, and the chapters that you cite.
   Never read a paper from beginning to end yourself. That is what a `paper-scout`
   does for your sub-questions, and a `terminology-prospector` for its words.

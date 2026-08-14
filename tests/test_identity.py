@@ -129,10 +129,9 @@ def test_a_doi_finds_the_record_when_the_identifier_does_not(collection: Path) -
 
 def test_a_name_another_work_holds_is_a_collision(collection: Path) -> None:
     taken = collection / "lovelace_2025_small_paper"
-    (taken / "chapters").mkdir(parents=True)
-    (taken / "INDEX.md").write_text(
-        "| Field | Value |\n|---|---|\n"
-        "| arXiv | [1111.11111](https://arxiv.org/abs/1111.11111) |\n",
+    taken.mkdir(parents=True)
+    (taken / "paper.json").write_text(
+        '{"slug": "lovelace_2025_small_paper", "arxiv_id": "1111.11111"}',
         encoding="utf-8",
     )
 

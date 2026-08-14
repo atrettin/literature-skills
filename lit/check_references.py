@@ -49,15 +49,12 @@ import re
 import sys
 from pathlib import Path
 
-from lit import cli, paths, reference_store
-from lit.paths import written_files
+from lit import blocks, cli, paths, reference_store
+from lit.paths import stored_files
 from lit.text import collapse_whitespace
 
 # A cross-reference the conversion could not resolve keeps its marker.
 REF_TAG = re.compile(r"\[ref:\s*([^\]]*)\]")
-# `[5](03_model.md#eq-ckmt)` and `[5](#eq-ckmt)` for a target in the same file.
-REF_LINK = re.compile(r"\]\(([^)#]*)#([^)\s]+)\)")
-ANCHOR = re.compile(r'<a id="([^"]*)"></a>')
 # What a placeholder key left behind when the conversion failed to restore it.
 RESIDUE = re.compile(r"PH\d+")
 # Every C0 control character other than the newline and the tab. A NUL byte
@@ -65,15 +62,19 @@ RESIDUE = re.compile(r"PH\d+")
 CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b-\x1f]")
 
 
-def read_markdown(root: Path) -> dict[Path, str]:
-    """The text of every written file, read once for every check below.
+def read_text(root: Path) -> dict[Path, str]:
+    """The stored text of every paper, read once for every check below.
+
+    The store is what is checked, and never a render: every rendered file is
+    written again from these, so a defect found here is the defect, and one
+    found in a render would be a defect in the renderer.
 
     `errors="replace"` rather than a failure: a file holding a byte no decoder
     answers is exactly the file this has something to report about.
     """
     return {
         path: path.read_text(encoding="utf-8", errors="replace")
-        for path in written_files(root)
+        for path in stored_files(root)
     }
 
 
@@ -82,18 +83,14 @@ def read_citations(
 ) -> dict[str, list[str]]:
     """tag -> the files citing it, over every paper in the collection.
 
-    Both forms count. A citation normally reads
-    `([Lipari, 2002](../../references/<tag>.md))` and carries its tag as the
-    name of the file it opens; a `[cite: tag]` marker still standing is one
-    update_references.py could not label, and a tag it names is exactly the
-    kind this is here to report.
+    A citation is stored as a `[cite: tag]` marker, and becomes a link only when
+    the collection is rendered. So the marker is what carries the tag, and this
+    is where a tag no record answers is found.
     """
     found: dict[str, list[str]] = collections.defaultdict(list)
-    texts = texts if texts is not None else read_markdown(root)
+    texts = texts if texts is not None else read_text(root)
     for path, text in texts.items():
         where = str(path.relative_to(root))
-        for tag in reference_store.CITE_LINK.findall(text):
-            found[tag].append(where)
         for match in reference_store.CITE_TAG.finditer(text):
             for tag in match.group(1).split(","):
                 tag = collapse_whitespace(tag)
@@ -122,38 +119,40 @@ def read_residue(root: Path, texts: dict[Path, str]) -> list[dict]:
     return found
 
 
-def read_cross_references(
-    root: Path, texts: dict[Path, str] | None = None
-) -> list[dict]:
+def read_cross_references(root: Path) -> list[dict]:
     """Every cross-reference in the collection that lands nowhere.
 
-    A chapter links to its own equations, figures and sections by anchor:
-    `eq. ([5](03_model.md#eq-ckmt))`. Nothing keeps a link and the anchor it
-    names in step, and a `[ref: label]` marker still standing means the label
-    had no target when the paper was converted.
+    A paper refers to its own equations, figures and sections by a `[ref: label]`
+    marker, and `paper.json` says which chapter and anchor each label resolves
+    to. A marker no label answers had no target when the paper was converted; a
+    label whose chapter or anchor is not there is one the store lost.
     """
-    texts = texts if texts is not None else read_markdown(root)
-    anchors: dict[Path, set[str]] = {
-        path.resolve(): set(ANCHOR.findall(text)) for path, text in texts.items()
-    }
-
     broken = []
-    for path, text in texts.items():
-        where = str(path.relative_to(root))
-        for label in REF_TAG.findall(text):
-            broken.append(
-                {"in": where, "label": collapse_whitespace(label), "why": "no target"}
-            )
-        for target, anchor in REF_LINK.findall(text):
-            if "://" in target:
-                continue  # a fragment on someone else's site
-            destination = (path.parent / target).resolve() if target else path.resolve()
-            if destination not in anchors:
-                broken.append({"in": where, "link": target + "#" + anchor,
-                               "why": "no such file"})
-            elif anchor not in anchors[destination]:
-                broken.append({"in": where, "link": target + "#" + anchor,
-                               "why": "no such anchor"})
+    for slug in paths.papers_on_disk(root):
+        paper = paths.read_paper(root, slug)
+        labels = paper.get("labels") or {}
+        anchors = {
+            chapter.get("stem", ""): set(chapter.get("anchors") or [])
+            for chapter in paper.get("chapters") or []
+        }
+        for path in paths.text_of(root, slug):
+            where = str(path.relative_to(root))
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for label in REF_TAG.findall(text):
+                label = collapse_whitespace(label)
+                entry = labels.get(label)
+                if not entry:
+                    broken.append({"in": where, "label": label, "why": "no target"})
+                    continue
+                stem, anchor = entry.get("file") or "", entry.get("anchor") or ""
+                if stem not in anchors:
+                    broken.append({"in": where, "label": label,
+                                   "link": stem + "#" + anchor,
+                                   "why": "no such file"})
+                elif anchor and anchor not in anchors[stem]:
+                    broken.append({"in": where, "label": label,
+                                   "link": stem + "#" + anchor,
+                                   "why": "no such anchor"})
     return broken
 
 
@@ -228,7 +227,7 @@ def scope_report(report: dict, paper: str, store: list[dict],
 def check(root: Path, paper: str | None = None) -> dict:
     store = reference_store.load(root)
     tags = {record.get("tag", "") for record in store}
-    texts = read_markdown(root)
+    texts = read_text(root)
     cited = read_citations(root, texts)
 
     duplicates = []
@@ -265,7 +264,7 @@ def check(root: Path, paper: str | None = None) -> dict:
             if record.get("held_as") and not (root / record["held_as"]).is_dir()
         ),
         "unverified": sum(1 for record in store if not record.get("verified")),
-        "dangling_refs": read_cross_references(root, texts),
+        "dangling_refs": read_cross_references(root),
         # Reported, and it leaves `ok` true: `ok` answers for the citations.
         "residue": read_residue(root, texts),
     }

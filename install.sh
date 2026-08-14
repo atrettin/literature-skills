@@ -15,7 +15,7 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python="${PYTHON:-python3}"
 
 skills=(add-paper find-papers follow-citations init-literature research-report use-literature)
-agents=(literature-researcher paper-ingestor paper-scout terminology-prospector terminology-scout)
+agents=(paper-ingestor paper-scout terminology-prospector terminology-scout)
 
 echo "installing literature-skills from $repo"
 

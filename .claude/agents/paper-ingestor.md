@@ -17,14 +17,15 @@ set, it is `literature/` in the project. `lit` reads the variable itself.
 It prints one JSON report. Its exit code says what you do next.
 
 **Exit 0.** The collection holds the paper. Report the fields below and stop.
-**Do not open a chapter.** The ingest measured every number that `INDEX.md`
-shows. A paper that you read to restate those numbers costs the caller context
+**Do not open a chapter.** The ingest measured every number that `paper.json`
+holds. A paper that you read to restate those numbers costs the caller context
 that the caller needs for the task.
 
 | Field | What it holds |
 |---|---|
 | slug | the directory that now holds the paper. |
-| index | the path of its `INDEX.md`. |
+| paper | the path of its `paper.json`. |
+| index | the path of the `INDEX.md` the render wrote. |
 | title, publication.journal, arxiv_id | what the paper is, in one line. |
 | chapters | how many, and how many words in all. |
 | parser | `texsoup` or `fallback`. |
