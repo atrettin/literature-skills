@@ -65,5 +65,7 @@ you could not verify, and keep it visible.
   ingests a whole queue of papers. Do not call these APIs beside a running
   ingest, and do not spawn sub-agents that call them in parallel. A rate limit
   that you hit costs more time than the work that you tried to make parallel.
+- When you encounter new issues during a session that are beyond the scope of the
+  current session to fix, add them to `.claude/ISSUE_TRACKER.md`.
 
 @./.claude/TODOS.md
