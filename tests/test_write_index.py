@@ -7,23 +7,25 @@ from pathlib import Path
 
 from lit import write_index
 
-CHAPTER = """# 2. Introduction
+# The blocks of one chapter, as they are stored. Four named anchors and two
+# paragraph anchors, so a test can tell the two counts apart.
+BLOCKS = [
+    {"kind": "heading", "level": 1, "number": "2", "title": "Introduction",
+     "anchor": "sec-introduction"},
+    {"kind": "paragraph", "anchor": "p1",
+     "text": "The first paragraph of prose, which carries eight words here."},
+    {"kind": "math", "env": "equation", "tex": "\\sigma = A E^2",
+     "numbers": ["1"], "anchor": "eq-model"},
+    {"kind": "paragraph", "anchor": "p2", "text": "The second paragraph."},
+    {"kind": "figure", "file": "fig1.png", "number": "1", "caption": "A cross section.",
+     "anchor": "fig-xsec"},
+    {"kind": "table", "number": "1", "tex": "\\begin{tabular}{c}1\\end{tabular}",
+     "caption": "Values.", "anchor": "tab-values"},
+]
 
-<a id="sec-introduction"></a>
-
-<a id="p1"></a>
-The first paragraph of prose, which carries eight words here.
-
-<a id="eq-model"></a>
-
-$$\\sigma = A E^2 \\tag{1}$$
-
-<a id="p2"></a>
-The second paragraph.
-
-<a id="fig-xsec"></a>
-<a id="tab-values"></a>
-"""
+# What the words of those blocks come to: the heading, the two paragraphs and
+# the two captions. The maths and the TeX of the table are not words.
+CHAPTER_WORDS = 1 + 10 + 3 + 3 + 1
 
 
 def manifest_for(paper_dir: Path, **overrides) -> dict:
@@ -40,8 +42,10 @@ def manifest_for(paper_dir: Path, **overrides) -> dict:
         "publication": {"source": "none", "journal": "", "published_year": None,
                         "doi": "", "errata": [], "inspire_url": ""},
         "chapters": [
-            {"file": "02_introduction.md", "number": "2", "title": "Introduction",
-             "subsections": ["Fitting"]},
+            {"stem": "02_introduction", "number": "2", "title": "Introduction",
+             "subsections": ["Fitting"], "words": CHAPTER_WORDS, "bytes": 1,
+             "blocks": len(BLOCKS),
+             "anchors": [block["anchor"] for block in BLOCKS]},
         ],
         "figures": [{"file": "fig1.png"}],
     }
@@ -49,10 +53,8 @@ def manifest_for(paper_dir: Path, **overrides) -> dict:
     return base
 
 
-def build(tmp_path: Path, text: str = CHAPTER, **overrides) -> tuple[Path, dict]:
+def build(tmp_path: Path, **overrides) -> tuple[Path, dict]:
     paper_dir = tmp_path / "lovelace_2025_small_paper"
-    (paper_dir / "chapters").mkdir(parents=True)
-    (paper_dir / "chapters" / "02_introduction.md").write_text(text, encoding="utf-8")
     return paper_dir, manifest_for(paper_dir, **overrides)
 
 
@@ -67,12 +69,12 @@ def chapter_row(text: str) -> list[str]:
 # --------------------------------------------------------------------------
 
 
-def test_the_word_count_counts_the_file(tmp_path: Path) -> None:
+def test_the_word_count_counts_the_words_of_the_blocks(tmp_path: Path) -> None:
     paper_dir, manifest = build(tmp_path)
 
     row = chapter_row(write_index.render(manifest))
 
-    assert int(row[2]) == len(CHAPTER.split())
+    assert int(row[2]) == CHAPTER_WORDS
 
 
 def test_paragraph_anchors_are_not_named_anchors(tmp_path: Path) -> None:
@@ -86,21 +88,12 @@ def test_paragraph_anchors_are_not_named_anchors(tmp_path: Path) -> None:
 
 
 def test_a_chapter_of_plain_prose_names_nothing(tmp_path: Path) -> None:
-    plain = '# 2. Introduction\n\n<a id="p1"></a>\nJust prose, and more of it.\n'
-    paper_dir, manifest = build(tmp_path, text=plain)
+    paper_dir, manifest = build(tmp_path)
+    manifest["chapters"][0]["anchors"] = ["p1", "p2"]
 
     row = chapter_row(write_index.render(manifest))
 
     assert int(row[3]) == 0
-
-
-def test_a_missing_file_counts_zero(tmp_path: Path) -> None:
-    paper_dir, manifest = build(tmp_path)
-    (paper_dir / "chapters" / "02_introduction.md").unlink()
-
-    row = chapter_row(write_index.render(manifest))
-
-    assert int(row[2]) == 0
 
 
 def test_subsections_are_cut_at_the_limit(tmp_path: Path) -> None:

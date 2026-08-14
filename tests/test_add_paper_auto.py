@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from lit import add_paper
+from lit import paths
 from lit import check_references
 from lit import inspire_lookup
 from conftest import DATA, FakeInspire
@@ -57,7 +58,8 @@ def test_one_run_ingests_the_paper(collection: Path, small_paper: dict,
 
     paper_dir = collection / SLUG
     assert (paper_dir / "INDEX.md").is_file()
-    assert (paper_dir / add_paper.MANIFEST_NAME).is_file()
+    assert (paper_dir / paths.PAPER_NAME).is_file()
+    assert sorted(path.name for path in (paper_dir / "text").glob("*.jsonl"))
     assert sorted(path.name for path in (paper_dir / "chapters").glob("*.md"))
 
 

@@ -9,7 +9,7 @@ The literature database holds papers as plain text, split into chapters. Agents
 read it with the `use-literature` skill. This skill puts a new paper into it.
 
 `lit add-paper` does the ingest. You handle its exceptions. Never read a
-chapter: the command measures every number that `INDEX.md` shows.
+chapter: the command measures every number that `paper.json` holds.
 
 The paper comes from arXiv, because arXiv is the only source that carries the
 TeX. arXiv does not say where the paper was published — its `journal_ref` field
@@ -133,7 +133,7 @@ The paper directory is already there, and the caller gave no `--force`.
 `existing_arxiv_id` says which paper it holds. Ask the user whether to replace
 it. Re-run with `--force` when the answer is yes.
 
-`--force` empties the paper directory first, which deletes `INDEX.md` with
+`--force` empties the paper directory first, which deletes `paper.json` with
 everything else. Every value in it is derived, so the ingest writes it again.
 
 ### `REFERENCE_CHECK_FAILED`
@@ -167,20 +167,26 @@ it and try again later. This is not a fault of the paper.
 
 ### `literature/<slug>/`
 
-| Path | What it holds |
-|---|---|
-| `INDEX.md` | the identity table, the abstract, and one row per chapter |
-| `chapters/NN_<title>.md` | the text, one file per section, long ones split |
-| `figures/<name>.png` | one cropped PNG per figure, embedded in the chapters |
-| `figures/FIGURES.md` | the caption of each figure |
-| `figures_raw/` | the paper's own figure files, never deleted |
-| `.ingest-manifest.json` | every reference and every label the conversion found |
+| Path | What it holds | |
+|---|---|---|
+| `paper.json` | what the paper is: metadata, one entry per chapter, every label and every reference the conversion found | stored |
+| `text/NN_<title>.jsonl` | the words, one JSON block per line, long sections split | stored |
+| `figures/<name>.png` | one cropped PNG per figure | stored |
+| `figures_raw/` | the paper's own figure files, never deleted | stored |
+| `INDEX.md` | the identity table, the abstract, and one row per chapter | rendered |
+| `chapters/NN_<title>.md` | the same words, for a person to read | rendered |
+| `figures/FIGURES.md` | the caption of each figure | rendered |
 
-The identity table holds `Authors`, `Submitted`, `Published`, `Journal`, `DOI`,
-`arXiv`, `Ingested` and `Parser`, and an `Erratum` row under `Journal` when the
-paper has one. `Submitted` is the arXiv year and always has a value. A paper
-INSPIRE reports no publication for says `preprint` in `Published` and `—` in the
-other two. The slug keeps the submission year, whatever `Published` says.
+The ingest stores the paper and then renders it, in whichever flavor
+`literature/.collection.json` records. The rendered files can be thrown away and
+written again with `lit render`; the stored ones cannot.
+
+The identity table of `INDEX.md` holds `Authors`, `Submitted`, `Published`,
+`Journal`, `DOI`, `arXiv`, `Ingested` and `Parser`, and an `Erratum` row under
+`Journal` when the paper has one. `Submitted` is the arXiv year and always has a
+value. A paper INSPIRE reports no publication for says `preprint` in `Published`
+and `—` in the other two. The slug keeps the submission year, whatever
+`Published` says.
 
 The chapter table has five columns:
 
@@ -246,11 +252,12 @@ A preprint gets published later. Look it up again:
 lit inspire <arxiv_id>
 ```
 
-Then edit the `Published`, `Journal` and `DOI` rows of the paper's `INDEX.md`,
-and re-run `lit add-paper --index-only <slug>` to write the Journal cell of its
-row in `literature/README.md`. Nothing else changes: do not re-fetch, do not
-pass `--force`, and do not touch the chapters or the figures. The text of the
-paper did not change. Only what is known about it did.
+Then edit the `publication` block of the paper's `paper.json`, and re-run
+`lit add-paper --index-only <slug>`. That renders the paper again — `INDEX.md`,
+the chapters and `FIGURES.md` — and writes the Journal cell of its row in
+`literature/README.md`. Nothing else changes: do not re-fetch, do not pass
+`--force`, and never edit a rendered file. The text of the paper did not change.
+Only what is known about it did.
 
 ## Rules
 
@@ -262,7 +269,7 @@ paper did not change. Only what is known about it did.
   therefore ingests a whole queue of papers. Pass every identifier to that one
   command. Do not call these APIs from two agents at once.
 - Never read a chapter during an ingest. The ingest measures every number that
-  `INDEX.md` shows. A paper that you read to restate those numbers costs the
+  `paper.json` holds. A paper that you read to restate those numbers costs the
   context that the task itself needs.
 - Work through `AMBIGUOUS_TITLE` before you report a paper as missing. Most such
   results are one of the three known false negatives.

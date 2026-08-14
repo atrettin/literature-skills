@@ -16,12 +16,12 @@ request means, and which work owns a name that two works want.
         section for each code.
     1   a usage error, or an argument this cannot work with.
 
-**Two artefacts, and they are different sizes.** The full manifest goes to
-`<paper_dir>/.ingest-manifest.json`: every reference of the paper, every label,
-everything the conversion learned. The compact report goes to stdout: the
-identity, the chapter table, the counts and the warnings, and no field that
-grows with the size of a bibliography. An agent reads the report.
-`update_references.py` reads the manifest.
+**Two artefacts, and they are different sizes.** The paper's own record goes to
+`<paper_dir>/paper.json`: every reference of the paper, every label, everything
+the conversion learned. The compact report goes to stdout: the identity, the
+chapter table, the counts and the warnings, and no field that grows with the
+size of a bibliography. An agent reads the report. Every later pass — the
+render, the reference merge, the citation check — reads `paper.json`.
 
 Usage:
     add_paper.py --auto 2307.09241 1706.03621
@@ -45,8 +45,10 @@ from lit import arxiv_fetch, cli
 from lit import check_references
 from lit import collection_index
 from lit import identity
+from lit import paths
 from lit import rate_gate
 from lit import reference_store
+from lit import render
 from lit import update_references
 from lit import write_index
 from lit.text import collapse_whitespace
@@ -64,7 +66,6 @@ REPORT_WARNINGS_SHOWN = 10
 # How many authors the report names. `authors_total` gives the count of the rest.
 AUTHORS_SHOWN = 3
 
-MANIFEST_NAME = write_index.MANIFEST_NAME
 
 
 # --------------------------------------------------------------------------
@@ -171,31 +172,32 @@ def blank_report(arxiv_id: str = "") -> dict:
         "figures": 0,
         "figures_missing": 0,
         "references": {"cited": 0, "added": 0, "updated": 0, "unchanged": 0,
-                       "retagged": 0, "relinked": 0, "unverified": 0, "held": 0},
+                       "retagged": 0, "unverified": 0, "held": 0},
         "checks": {"unresolved": [], "duplicates": [], "missing_pages": [],
                    "residue": [], "elsewhere": {}, "dangling_refs": 0,
                    "pre_existing": 0, "ok": True},
         "collection_row": "",
-        "manifest": "",
+        "paper": "",
+        "flavor": "",
+        "rendered": 0,
         "warnings": [],
         "exception": None,
         "next_action": "none",
     }
 
 
-def chapter_entries(manifest: dict, paper_dir: Path) -> list[dict]:
-    """One entry per chapter file, with the counts `INDEX.md` shows."""
+def chapter_entries(paper: dict) -> list[dict]:
+    """One entry per chapter, with the counts `INDEX.md` shows."""
     return [
         {
-            "file": row["file"],
+            "stem": row["stem"],
             "number": row["number"],
             "title": row["title"],
             "words": row["words"],
             "named_anchors": row["named_anchors"],
-            "bytes": row["bytes"],
             "subsections": row["subsections"],
         }
-        for row in write_index.chapter_rows(manifest, paper_dir)
+        for row in write_index.chapter_rows(paper)
     ]
 
 
@@ -301,9 +303,24 @@ def fetch(arxiv_id: str, args) -> tuple[dict, str]:
         move_into_place(scratch / "paper", paper_dir)
         manifest["slug"] = slug
         manifest["paper_dir"] = str(paper_dir)
+        write_paper(paper_dir, manifest)
         return manifest, slug
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
+
+
+def write_paper(paper_dir: Path, manifest: dict) -> Path:
+    """Write `paper.json`: what the collection knows about this paper.
+
+    It is the record and not a report of one, so every later pass — the render,
+    the reference merge, the citation check — reads it rather than the text.
+    """
+    path = paper_dir / paths.PAPER_NAME
+    path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def move_into_place(source: Path, destination: Path) -> None:
@@ -315,7 +332,7 @@ def move_into_place(source: Path, destination: Path) -> None:
 
 
 def file_paper(manifest: dict, slug: str, args, report: dict) -> None:
-    """Stage B: the index, the manifest, the store, the check, the row.
+    """Stage B: the store, the check, the row, and the render.
 
     Every step here writes something the whole collection shares, so the
     pipeline runs this for one paper at a time, in the order the caller named
@@ -323,17 +340,11 @@ def file_paper(manifest: dict, slug: str, args, report: dict) -> None:
     """
     root = args.literature_root
     paper_dir = Path(manifest["paper_dir"])
-
-    index_path = write_index.write(paper_dir, manifest)
-    report["index"] = str(index_path)
-
-    manifest_path = paper_dir / MANIFEST_NAME
-    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False),
-                             encoding="utf-8")
-    report["manifest"] = str(manifest_path)
+    paper_path = paper_dir / paths.PAPER_NAME
+    report["paper"] = str(paper_path)
 
     if not args.no_references:
-        merge(manifest_path, root, report)
+        merge(paper_path, root, report)
 
     failure = check(root, slug, report)
 
@@ -344,6 +355,18 @@ def file_paper(manifest: dict, slug: str, args, report: dict) -> None:
         raise Exception2("COLLECTION_INDEX_UNREADABLE", str(error),
                          path=error.path, reason=error.reason)
 
+    # The paper is stored by now, and the citations have their records, so the
+    # render has everything it resolves a marker against. It runs in whichever
+    # flavor the collection already holds: an ingest answers what the paper is,
+    # and never what the reader wants to read it in.
+    flavor = paths.flavor(root)
+    store = reference_store.load(root)
+    written = render.render_paper(root, slug, flavor, store)
+    render.sweep(root, slug, set(written))
+    report["flavor"] = flavor
+    report["index"] = str(paths.index_path(root, slug))
+    report["rendered"] = len(written)
+
     # Raised last, so that a paper whose citations do not resolve is still a
     # paper the collection lists. The next run then repairs the citations
     # rather than meeting a directory it has no row for.
@@ -351,16 +374,16 @@ def file_paper(manifest: dict, slug: str, args, report: dict) -> None:
         raise failure
 
 
-def merge(manifest_path: Path, root: Path, report: dict) -> None:
+def merge(paper_path: Path, root: Path, report: dict) -> None:
     status, counts = update_references.run(
-        ["--manifest", str(manifest_path), "--literature-root", str(root)]
+        ["--manifest", str(paper_path), "--literature-root", str(root)]
     )
     if status != 0:
         raise Exception2("REFERENCE_CHECK_FAILED",
                          counts.get("error", "the reference merge failed"),
                          unresolved=[], duplicates=[], missing_pages=[],
                          residue=[], elsewhere={})
-    for name in ("added", "updated", "unchanged", "retagged", "relinked",
+    for name in ("added", "updated", "unchanged", "retagged",
                  "unverified", "held"):
         report["references"][name] = counts.get(name, 0)
 
@@ -431,7 +454,7 @@ def describe(manifest: dict, report: dict) -> None:
         "abs_url": manifest.get("abs_url", ""),
         "parser": manifest.get("parser", ""),
         "ingested": manifest.get("ingested", report["ingested"]),
-        "chapters": chapter_entries(manifest, paper_dir),
+        "chapters": chapter_entries(manifest),
     })
     figures = manifest.get("figures") or []
     report["figures"] = len(figures)
@@ -481,16 +504,28 @@ def ingest(arxiv_id: str, args, manifest: dict | None = None) -> dict:
 
 
 def rebuild_index(slug: str, args) -> dict:
-    """Write `INDEX.md` again from the manifest and the files on disk."""
-    paper_dir = args.literature_root / slug
-    manifest = write_index.load_manifest(paper_dir)
-    index_path = write_index.write(paper_dir, manifest)
+    """Render one paper again from what the collection stores about it.
+
+    Nothing is fetched and nothing is converted: `paper.json` and `text/` hold
+    the paper, so this writes `INDEX.md`, the chapters and `FIGURES.md` from
+    them in the collection's own flavor.
+    """
+    root = args.literature_root
+    paper_dir = root / slug
+    manifest = paths.read_paper(root, slug)
+
+    flavor = paths.flavor(root)
+    store = reference_store.load(root)
+    written = render.render_paper(root, slug, flavor, store)
+    render.sweep(root, slug, set(written))
 
     report = blank_report(manifest.get("arxiv_id", ""))
     describe(manifest, report)
     report["status"] = "ingested"
-    report["index"] = str(index_path)
-    report["manifest"] = str(paper_dir / MANIFEST_NAME)
+    report["index"] = str(paths.index_path(root, slug))
+    report["paper"] = str(paper_dir / paths.PAPER_NAME)
+    report["flavor"] = flavor
+    report["rendered"] = len(written)
 
     description = collection_index.first_sentence(manifest.get("abstract") or "")
     try:

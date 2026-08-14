@@ -12,8 +12,8 @@ The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
 set, it is `literature/` in the project. The paper is the directory named by the
 slug that you were given.
 
-1. Read its `INDEX.md`.
-2. Read each chapter in `chapters/`. Read all of them. `INDEX.md` says how
+1. Read its `paper.json`.
+2. Read each chapter in `text/`. Read all of them. `paper.json` says how
    long each chapter is and what it is called, and neither answers these
    questions, so nothing there lets you choose chapters and skip the rest.
 3. For each sub-question, find each location that bears on it.
@@ -21,14 +21,14 @@ slug that you were given.
 Report one line for each location:
 
 ```
-SQ2 | chapters/03_results.md:181 | #sec-axialff | "<quotation>" | <how it bears, in one line>
+SQ2 | text/03_results.jsonl:181 | #sec-axialff | "<quotation>" | <how it bears, in one line>
 ```
 
 | Part | What it holds |
 |---|---|
 | SQn | the sub-question. |
-| file:line | the chapter, as a path below the paper's directory, then a colon and the number of the line that starts the quotation. Write a range, `181-182`, when the quotation covers more than one line. |
-| anchor | the nearest `<a id="…"></a>` above the text, written with its `#`. Leave it empty if the chapter has none. |
+| file:line | the stored chapter, as a path below the paper's directory, then a colon and the number of the line the quotation is on. One line is one block, so a quotation from one block is one line. |
+| anchor | the `anchor` field of that block, written with its `#`. Leave it empty when the block's anchor is `""`. |
 | quotation | the words of the paper. Two sentences at most. |
 | how it bears | supports it, contradicts it, gives the number, or gives the method. |
 
@@ -63,4 +63,5 @@ Seven rules:
 
 A line number addresses the file as you read it now. A new ingest of the paper
 rewrites the chapter and moves the numbers. The line number serves the caller's
-check. A report cites the anchor.
+check. A report cites the anchor, which the paper's own label or the count of
+its paragraphs decides, and which survives a re-ingest.

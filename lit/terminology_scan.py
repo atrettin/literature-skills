@@ -55,10 +55,10 @@ import re
 import sys
 from pathlib import Path
 
-from lit import arxiv_discover, cli, paths
+from lit import arxiv_discover, blocks, cli, paths
 from lit import reference_store
 from lit import text
-from lit.text import normalize_title
+from lit.text import collapse_whitespace, normalize_title
 
 # `term_matches` decides when a word of a title is a word the topic already
 # holds. It compares two words by prefix, at `rerank.MIN_PREFIX`, thus
@@ -232,24 +232,19 @@ def terms_of(title: str, sizes: tuple[int, ...] = NGRAM_SIZES) -> set[str]:
 # a paper, as units of text
 # --------------------------------------------------------------------------
 
-HTML_TAG = re.compile(r"<[^>]+>")
-MARKDOWN_ANCHOR = re.compile(r'<a id="([^"]*)"></a>')
-MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 MATH = re.compile(r"\$[^$]*\$")
-HEADING = re.compile(r"^#{1,6}\s+(?:\d+(?:\.\d+)*\.?\s*)?(.*)$")
-CAPTION = re.compile(r"^\*\*Fig")
-def readable(text: str) -> str:
-    """One paragraph with its markup gone, on one line.
+CITE_MARKER = re.compile(r"\[(?:cite|ref):[^\]]*\]")
 
-    The target of a link goes and its words stay, because a path holds the slug
-    of another paper and those words are not terms of this one. Math goes
-    whole: `$m_{L}^{\\rm eff}$` divides into no name. Every HTML tag goes with
-    its attributes, or `<p align="center">` reports "p align" as a name of the
-    field.
+
+def readable(text: str) -> str:
+    """One passage with what is not a word gone, on one line.
+
+    Math goes whole: `$m_{L}^{\\rm eff}$` divides into no name. A citation or
+    cross-reference marker goes with it — a tag holds the surname of another
+    author and the words of another title, and neither is a term of this paper.
     """
-    text = HTML_TAG.sub(" ", text)
-    text = MARKDOWN_LINK.sub(r"\1", text)
     text = MATH.sub(" ", text)
+    text = CITE_MARKER.sub(" ", text)
     return " ".join(text.split())
 
 
@@ -258,51 +253,54 @@ def sentences_of(passage: str) -> list[str]:
     return text.sentences(passage, clauses=True)
 
 
+# Which weight a stored block counts at. A block with no words of its own —
+# maths, the raw TeX of a table, a fence — is not here and is not read.
+BLOCK_KINDS = {
+    "heading": "heading",
+    "paragraph": "body",
+    "figure": "caption",
+    "table": "caption",
+}
+
+
 def units_of(root: Path, slug: str) -> list[dict]:
     """Every unit of text of one paper, with the kind and the place of each.
 
     A unit carries `kind`, which decides its weight, and `chapter` and `anchor`,
-    which are how a reader opens it. `FIGURES.md` is not read: it repeats the
-    captions that the chapters already hold, and reading both would count one
-    caption twice.
+    which are how a reader opens it. The blocks arrive typed, so nothing here
+    has to recognise a heading or a caption by the shape of its markup.
     """
-    paper = root / slug
     units: list[dict] = []
 
-    index = paper / "INDEX.md"
-    if index.is_file():
-        lines = index.read_text(encoding="utf-8").splitlines()
-        if lines and lines[0].startswith("# "):
-            units.append({
-                "kind": "heading", "chapter": "INDEX.md", "anchor": "",
-                "text": readable(lines[0][2:]),
-            })
-        for line in lines:
-            if line.startswith("[Abstract]"):
-                for sentence in sentences_of(readable(line[len("[Abstract]"):])):
-                    units.append({
-                        "kind": "abstract", "chapter": "INDEX.md", "anchor": "",
-                        "text": sentence,
-                    })
+    paper = paths.read_paper(root, slug)
+    title = collapse_whitespace(paper.get("title") or "")
+    if title:
+        units.append({
+            "kind": "heading", "chapter": paths.PAPER_NAME, "anchor": "",
+            "text": readable(title),
+        })
+    for sentence in sentences_of(readable(paper.get("abstract") or "")):
+        units.append({
+            "kind": "abstract", "chapter": paths.PAPER_NAME, "anchor": "",
+            "text": sentence,
+        })
 
-    for path in paths.chapters_of(root, slug):
-        anchor = ""
-        for block in re.split(r"\n\s*\n", path.read_text(encoding="utf-8")):
-            found = MARKDOWN_ANCHOR.findall(block)
-            if found:
-                anchor = found[0]
-            stripped = block.strip()
-            heading = HEADING.match(stripped)
-            if heading:
+    for path in paths.text_of(root, slug):
+        for block in blocks.read(path):
+            kind = BLOCK_KINDS.get(block.get("kind", ""))
+            if not kind:
+                continue
+            words = readable(blocks.words(block))
+            anchor = block.get("anchor") or ""
+            if kind == "heading":
                 units.append({
-                    "kind": "heading", "chapter": path.name, "anchor": anchor,
-                    "text": readable(heading.group(1)),
+                    "kind": kind, "chapter": path.stem, "anchor": anchor,
+                    "text": words,
                 })
                 continue
-            kind = "caption" if CAPTION.match(stripped) else "body"
-            for sentence in sentences_of(readable(block)):
+            for sentence in sentences_of(words):
                 units.append({
-                    "kind": kind, "chapter": path.name, "anchor": anchor,
+                    "kind": kind, "chapter": path.stem, "anchor": anchor,
                     "text": sentence,
                 })
 

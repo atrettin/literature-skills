@@ -19,7 +19,7 @@ lit add-paper --auto 2307.09241 1706.03621
 | 1 | a usage error, or an unusable argument | fix the command |
 
 Two artefacts come out, and they are different sizes. The **full manifest** goes
-to `<paper-dir>/.ingest-manifest.json`. It holds every reference the paper
+to `<paper-dir>/paper.json`. It holds every reference the paper
 cites, every label it defines, and everything else the conversion learned. The
 **compact report** goes to stdout, as one JSON object on one line per paper. It
 holds the identity, the chapter table, the counts and the warnings. It holds no
@@ -74,7 +74,7 @@ names the files. The check is the one thing that scans for residue, so the drive
 scans no chapter itself: two scans are two definitions of residue, and they
 drift apart.
 
-`lit add-paper --index-only <slug>` writes `INDEX.md` again from the manifest
+`lit add-paper --index-only <slug>` renders the paper again from `paper.json`
 and the files, and refreshes the paper's row in the collection table. That is
 what brings a preprint up to date once INSPIRE reports where it was published.
 

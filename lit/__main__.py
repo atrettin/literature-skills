@@ -20,6 +20,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "citations": ("lit.inspire_citations", "the papers that cite a paper, and the works it draws on"),
     "lookup": ("lit.reference_lookup", "what the collection knows about a cited work"),
     "search": ("lit.search_literature", "find a phrase in the text of the papers"),
+    "render": ("lit.render", "write the collection a person reads, in one flavor"),
+    "render-report": ("lit.render_report", "turn the lit: markers of a report into links"),
     "terminology": ("lit.terminology_scan", "the other names the literature uses for a subject"),
     "check-report": ("lit.check_report", "check that every citation of a report resolves"),
     "inspire": ("lit.inspire_lookup", "ask INSPIRE-HEP where a paper was published"),

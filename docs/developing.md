@@ -27,7 +27,9 @@ the commands share.
 | `reference_store.py` | `.references.jsonl`: the records, their tags, and merging one into another |
 | `add_paper.py` | the ingest driver, which calls the stages below and prints the report |
 | `arxiv_fetch.py`, `convert_figures.py`, `references.py` | the conversion stages: source, chapters, figures, bibliography |
-| `write_index.py`, `collection_index.py`, `update_references.py` | what an ingest writes: `INDEX.md`, the collection table, `REFERENCES.md` and the pages |
+| `blocks.py` | the stored form of a chapter: one JSON block per line, and the parse that builds it |
+| `render.py`, `render_report.py` | what a person reads: the collection in one flavor, and the `lit:` markers of a report resolved into links |
+| `write_index.py`, `collection_index.py`, `update_references.py` | the rendered views: `INDEX.md`, the collection table, `REFERENCES.md` and the pages |
 | `arxiv_search.py`, `arxiv_discover.py`, `rerank.py`, `paper_facts.py`, `identity.py` | finding a paper on arXiv, and deciding which paper it is |
 | `inspire_lookup.py`, `inspire_citations.py`, `collection_overlap.py` | INSPIRE-HEP: where a paper was published, what cites it, what it shares with the collection |
 | `check_references.py`, `check_report.py`, `search_literature.py`, `reference_lookup.py`, `terminology_scan.py` | reading and checking what the collection holds |

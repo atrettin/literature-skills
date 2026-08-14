@@ -1,0 +1,48 @@
+{
+ "abs_url": "https://arxiv.org/abs/2307.09241",
+ "abstract": "Placeholder. The tests read the fields above and never the prose, so no abstract of a real paper is kept here.",
+ "arxiv_id": "2307.09241",
+ "authors": [
+  "Yu Seon Jeong",
+  "Mary Hall Reno"
+ ],
+ "chapters": [
+  {
+   "anchors": [
+    "sec-introduction",
+    "p1",
+    "p2",
+    "p3"
+   ],
+   "blocks": 4,
+   "bytes": 919,
+   "number": "2",
+   "stem": "02_introduction",
+   "subsections": [],
+   "title": "Introduction",
+   "words": 78
+  }
+ ],
+ "doi": "10.1103/PhysRevD.108.113010",
+ "figures": [],
+ "ingested": "2026-08-07",
+ "journal_ref": "Phys.Rev.D 108 (2023) 113010",
+ "labels": {},
+ "paper_dir": "tests/data/collection_fixture/jeong_2023_shallow_deep_inelastic",
+ "parser": "texsoup",
+ "publication": {
+  "doi": "10.1103/PhysRevD.108.113010",
+  "errata": [],
+  "inspire_url": "",
+  "journal": "Phys.Rev.D 108 (2023) 113010",
+  "published_year": 2023,
+  "source": "inspire"
+ },
+ "references": [],
+ "slug": "jeong_2023_shallow_deep_inelastic",
+ "submitted_year": 2023,
+ "title": "Neutrino Cross Sections: Interface of shallow- and deep-inelastic scattering for collider neutrinos",
+ "unresolved_refs": [],
+ "warnings": [],
+ "year": 2023
+}

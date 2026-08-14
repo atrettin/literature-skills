@@ -19,9 +19,9 @@ interchangeable to you are not thereby one term.
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
 set, it is `literature/` in the project.
 
-1. Search the chapters and the `INDEX.md` files for the term. Grep a few words
-   at most. Chapter text wraps at about 70 characters. A grep for a whole
-   sentence thus finds nothing while the sentence is there.
+1. Search `text/` and the `paper.json` files for the term. Grep a few words at
+   most. A block is one line, so a grep matches a whole block or none of it, and
+   a grep for a sentence you half-remember finds nothing while it is there.
 2. Read the passages around the hits. Prefer a passage that defines the term,
    and a passage that names the term beside the subject.
 3. Read five passages at most for one term.
@@ -32,13 +32,13 @@ one row. Fill this shape:
 ```markdown
 | Term | Where used | Same referent? | How it differs |
 |---|---|---|---|
-| <the term the caller gave you> | <slug>/chapters/<file>.md#<anchor> | <one of the five answers> | <one or two sentences about this term> |
+| <the term the caller gave you> | <slug>/<stem>#<anchor> | <one of the five answers> | <one or two sentences about this term> |
 ```
 
 | Column | What it holds |
 |---|---|
 | Term | the term, as the papers write it. |
-| Where used | the chapter, as a path below the literature root, with the nearest anchor above the passage. |
+| Where used | the paper's slug, the chapter stem and the `anchor` field of the block, which is the form a report cites. |
 | Same referent? | one of `yes`, `narrower`, `wider`, `related`, `unclear`. |
 | How it differs | one or two sentences. Required in every row. |
 
@@ -61,7 +61,7 @@ The caller gave the subject `protein` and the term `enzyme`:
 
 | Term | Where used | Same referent? | How it differs |
 |---|---|---|---|
-| enzyme | brown_2019_cell_metabolism/chapters/04_catalysis.md#sec-enzymes | narrower | The chapter says "every enzyme is a protein, and most proteins catalyse no reaction". The term names the catalytic subset. |
+| enzyme | brown_2019_cell_metabolism/04_catalysis#sec-enzymes | narrower | The chapter says "every enzyme is a protein, and most proteins catalyse no reaction". The term names the catalytic subset. |
 
 Five rules:
 

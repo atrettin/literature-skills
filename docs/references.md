@@ -147,7 +147,7 @@ alone. An agent that has just ingested a paper wants that answer. Without the
 flag, the report answers for the whole collection, which is what a person
 auditing the collection wants.
 
-`INDEX.md` records both the year the preprint went to arXiv and the journal it
+`paper.json` records both the year the preprint went to arXiv and the journal it
 was published in. arXiv cannot answer the second question — its `journal_ref`
 field is filled in by the authors and is empty for most records — so it comes
 from [INSPIRE-HEP](https://inspirehep.net/), keyed on the arXiv identifier.

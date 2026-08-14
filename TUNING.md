@@ -209,7 +209,8 @@ model costs less and reads less well.
 | `DEFAULT_AUTHORS` | `lit/reference_lookup.py` | 3 | How many authors a resolved citation names. |
 | `MAX_AUTHORS` | `lit/update_references.py` | 3 | The same, for the rendered `REFERENCES.md` table. |
 | `MAX_CITED_BY` | `lit/update_references.py` | 8 | How many citing papers one row of that table lists. |
-| `COLLECTION_TAIL_PARTS` | `lit/check_report.py` | 2 | How many parts of a broken link must name a place in the collection before the root is searched for it. A lower value finds the collection's copy of a bare file name. It can also answer `../README.md` with the README of the collection, which is a different file. A higher value leaves a link with a short path undiagnosed. The value is a judgement: a directory and a name is the shortest path that the layout writes. Nobody measured it. |
+| `DEFAULT_FLAVOR` | `lit/render.py` | `vscode` | Which flavor a collection is rendered in when nothing has recorded one and `$LITERATURE_FLAVOR` is unset. It decides what the anchors of a fresh collection look like, and so which viewer opens a citation without further work. `vscode` because a KaTeX preview needs no other program installed; a reader who keeps the collection in Obsidian sets the flavor once with `lit render --flavor obsidian`. Nobody measured it. |
+| `ALT_MAX_CHARS` | `lit/render.py` | 120 | How long the alt text of a rendered figure runs before it is cut. It repeats the caption, which sits under the image in full, so it exists for a reader who cannot see the image and not as a second copy of the text. A higher value describes a complicated figure better and makes the markup harder to read past. Nobody measured it. |
 
 ## Ingesting a paper
 
@@ -228,7 +229,7 @@ model costs less and reads less well.
 | `INDEX_SUBSECTIONS_SHOWN` | `lit/write_index.py` | 6 | How many subsection titles one chapter row lists. A higher value says more about a long chapter, and makes the table harder to read. |
 | `SLUG_TITLE_WORDS` | `lit/identity.py` | 2 | How many title words the derived slug carries. A higher value separates two papers of one author in one year more often, and gives a longer directory name. |
 | `ROW_DESCRIPTION_CHARS` | `lit/collection_index.py` | 160 | How much of the abstract the collection row carries. |
-| `ROW_AUTHORS_SHOWN` | `lit/collection_index.py` | 1 | How many authors a collection row names before `et al.`. The column is narrow, and the row is a pointer to `INDEX.md` rather than a citation. A higher value makes the table wider and says little a reader could not get by opening the paper. |
+| `ROW_AUTHORS_SHOWN` | `lit/collection_index.py` | 1 | How many authors a collection row names before `et al.`. The column is narrow, and the row is a pointer to the paper rather than a citation. A higher value makes the table wider and says little a reader could not get by opening the paper. |
 | `ABBREVIATIONS` | `lit/text.py` | 40 words | The words that end in a full stop without ending a sentence, so that `Phys. Rev. D 108` is one reference and not three sentences. A word missing from this set splits a sentence that no author ended, which cuts a quotation short and divides a clause a terminology scan reads. A word wrongly in it joins two sentences into one long quotation. Nobody measured the set; it is the journal names and the citation shorthands that these papers write. |
 | `REPORT_WARNINGS_SHOWN` | `lit/add_paper.py` | 10 | How many warnings the compact report prints. The full manifest holds them all. |
 | `CANDIDATES_SHOWN` | `lit/identity.py` | 5 | How many candidates an `AMBIGUOUS_TITLE` exception carries for an agent to choose between. A higher value describes more papers, and each one costs the agent context at the moment it has to decide. |

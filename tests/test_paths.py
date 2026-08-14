@@ -13,10 +13,14 @@ from lit import paths
 def tree(tmp_path: Path) -> Path:
     root = tmp_path / "collection"
     (root / "one_2020_paper" / "chapters").mkdir(parents=True)
+    (root / "one_2020_paper" / "text").mkdir(parents=True)
+    (root / "one_2020_paper" / "paper.json").write_text("{}", encoding="utf-8")
     (root / "one_2020_paper" / "INDEX.md").write_text("# one", encoding="utf-8")
-    (root / "one_2020_paper" / "chapters" / "01_intro.md").write_text("a", encoding="utf-8")
-    (root / "one_2020_paper" / "chapters" / "02_method.md").write_text("b", encoding="utf-8")
+    for name in ("01_intro", "02_method"):
+        (root / "one_2020_paper" / "chapters" / (name + ".md")).write_text("a", encoding="utf-8")
+        (root / "one_2020_paper" / "text" / (name + ".jsonl")).write_text("{}\n", encoding="utf-8")
     (root / "two_2021_paper").mkdir()
+    (root / "two_2021_paper" / "paper.json").write_text("{}", encoding="utf-8")
     (root / "two_2021_paper" / "INDEX.md").write_text("# two", encoding="utf-8")
     (root / paths.RECORDS_DIR).mkdir()
     (root / paths.RECORDS_DIR / "someone_2002_thing.md").write_text("page", encoding="utf-8")
@@ -25,7 +29,7 @@ def tree(tmp_path: Path) -> Path:
     return root
 
 
-def test_a_directory_with_an_index_is_a_paper(tree: Path) -> None:
+def test_a_directory_with_a_record_is_a_paper(tree: Path) -> None:
     assert paths.papers_on_disk(tree) == ["one_2020_paper", "two_2021_paper"]
 
 
@@ -61,6 +65,30 @@ def test_the_chapters_come_back_in_the_order_of_their_names(tree: Path) -> None:
         "02_method.md",
     ]
     assert paths.chapters_of(tree, "two_2021_paper") == []
+
+
+def test_the_stored_text_is_what_a_marker_lives_in(tree: Path) -> None:
+    """A `*.md` glob reaches no store, and a `*.jsonl` glob reaches no render."""
+    assert [path.name for path in paths.stored_files(tree)] == [
+        "01_intro.jsonl",
+        "02_method.jsonl",
+    ]
+    assert all(path.suffix == ".jsonl" for path in paths.stored_files(tree))
+
+
+def test_the_flavor_is_recorded_in_the_collection(tree: Path,
+                                                  monkeypatch: pytest.MonkeyPatch) -> None:
+    """A render says what it wrote, and every later pass reads that."""
+    monkeypatch.delenv("LITERATURE_FLAVOR", raising=False)
+    assert paths.flavor(tree) == "vscode"
+
+    paths.set_flavor(tree, "obsidian")
+
+    assert paths.flavor(tree) == "obsidian"
+    # The shell does not win over what is on disk: the anchors a render wrote
+    # are the anchors that are there.
+    monkeypatch.setenv("LITERATURE_FLAVOR", "vscode")
+    assert paths.flavor(tree) == "obsidian"
 
 
 def test_the_root_is_the_variable_or_the_project(monkeypatch: pytest.MonkeyPatch) -> None:

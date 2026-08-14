@@ -19,12 +19,12 @@ The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
 set, it is `literature/` in the project. The paper is the directory named by the
 slug that you were given.
 
-1. Read its `INDEX.md`.
-2. Read each chapter in `chapters/`. Read all of them. `INDEX.md` says how
+1. Read its `paper.json`.
+2. Read each chapter in `text/`. Read all of them. `paper.json` says how
    long each chapter is and what it is called, and neither says where the
    subject is named a second way.
-3. Read `figures/FIGURES.md`. A caption names the thing it shows, and it often
-   uses the short name where the text uses the long one.
+3. Read the `figures` list of `paper.json`. A caption names the thing it shows,
+   and it often uses the short name where the text uses the long one.
 
 Report one table, and nothing else. One row for each name, and at most
 `MAX_PROPOSED_TERMS` rows, which the caller gives you. Fill this shape:
@@ -32,13 +32,13 @@ Report one table, and nothing else. One row for each name, and at most
 ```markdown
 | Term | Where used | Same referent? | How it differs |
 |---|---|---|---|
-| <the name, as the paper writes it> | chapters/<file>.md:<line> #<anchor> | <one of the five answers> | <one or two sentences about this term> |
+| <the name, as the paper writes it> | text/<stem>.jsonl:<line> #<anchor> | <one of the five answers> | <one or two sentences about this term> |
 ```
 
 | Column | What it holds |
 |---|---|
 | Term | the name, as the papers write it. |
-| Where used | the chapter, as a path below the paper's directory, then a colon and the number of the line that holds the name, then the nearest `<a id="…"></a>` above it. Leave the anchor out if the chapter has none. |
+| Where used | the stored chapter, as a path below the paper's directory, then a colon and the number of the line that holds the name, then the `anchor` field of that block. Leave the anchor out when it is `""`. |
 | Same referent? | one of `yes`, `narrower`, `wider`, `related`, `unclear`. |
 | How it differs | one or two sentences. Required in every row. |
 
@@ -68,7 +68,7 @@ The caller gave the subject `protein` and the slug `brown_2019_cell_metabolism`:
 
 | Term | Where used | Same referent? | How it differs |
 |---|---|---|---|
-| enzyme | chapters/04_catalysis.md:118 #sec-enzymes | narrower | The chapter says "every enzyme is a protein, and most proteins catalyse no reaction". The term names the catalytic subset. |
+| enzyme | text/04_catalysis.jsonl:118 #sec-enzymes | narrower | The chapter says "every enzyme is a protein, and most proteins catalyse no reaction". The term names the catalytic subset. |
 
 Six rules:
 

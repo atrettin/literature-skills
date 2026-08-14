@@ -19,7 +19,7 @@ SCHEMA_FIELDS = {
     "schema", "status", "arxiv_id", "slug", "paper_dir", "index", "title",
     "authors", "authors_total", "submitted_year", "publication", "abs_url",
     "parser", "ingested", "chapters", "figures", "figures_missing",
-    "references", "checks", "collection_row", "manifest",
+    "references", "checks", "collection_row", "paper", "flavor", "rendered",
     "warnings", "exception", "next_action",
 }
 
@@ -67,7 +67,7 @@ def test_the_report_carries_no_bibliography() -> None:
 
     assert isinstance(report["references"], dict)
     assert set(report["references"]) == {
-        "cited", "added", "updated", "unchanged", "retagged", "relinked",
+        "cited", "added", "updated", "unchanged", "retagged",
         "unverified", "held",
     }
     assert all(isinstance(value, int) for value in report["references"].values())

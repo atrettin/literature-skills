@@ -1,34 +1,31 @@
 #!/usr/bin/env python3
-"""Write a paper's INDEX.md from its manifest and the files on disk.
+"""Render a paper's INDEX.md from what the collection stores about it.
 
-`INDEX.md` is what an agent reads before it decides whether to open a chapter.
-Everything in it above the chapter table is a fact the manifest already holds,
-and every column of that table is a count of the file itself. All of it is
-written here, so no agent spends context reading a paper to restate what a
-script can measure.
+`INDEX.md` is what a person reads before deciding whether to open a chapter, and
+every number in it was counted when the paper was ingested and written into
+`paper.json`. Nothing here reads a chapter to restate what is already known.
 
 Two numbers describe each chapter:
 
   * **Words** says where the substance of the paper is. A chapter of 200 words
-    is a page of definitions; one of 4000 is the argument.
+    is a page of definitions; one of 4000 is the argument. Maths and the raw TeX
+    of a table are not words; a caption is.
   * **Named anchors** counts the `sec-`, `eq-`, `fig-` and `tab-` anchors, and
-    leaves the `pN` paragraph anchors out. Ingest writes a paragraph anchor
-    above every long paragraph, so counting those would count the paragraphs and
-    rise with the word count beside it. A count of the named anchors separates a
-    chapter that labels its equations and figures from a chapter of plain prose,
-    and that is the difference a reader deciding where to cite from needs.
+    leaves the `pN` paragraph anchors out. Every long paragraph carries one, so
+    counting those would count the paragraphs and rise with the word count
+    beside it. A count of the named anchors separates a chapter that labels its
+    equations and figures from a chapter of plain prose, and that is the
+    difference a reader deciding where to cite from needs.
 """
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
 from lit import text
 from lit.text import EMPTY, collapse_whitespace, escape_cell as escape
 
-MANIFEST_NAME = ".ingest-manifest.json"
 INDEX_NAME = "INDEX.md"
 
 # How many subsection titles one chapter row lists. A higher value says more
@@ -40,7 +37,7 @@ AUTHORS_SHOWN = 3
 
 # The anchors that name something the paper labelled. `pN` is deliberately not
 # here: it addresses a paragraph, and every long paragraph has one.
-NAMED_ANCHOR = re.compile(r'<a id="((?:sec|eq|fig|tab)-[^"]*)"></a>')
+NAMED_ANCHOR = re.compile(r"\A(?:sec|eq|fig|tab)-")
 
 # A cross-reference the conversion could not resolve keeps this marker. A
 # subsection title can carry one, usually inside its own brackets, as
@@ -58,36 +55,21 @@ REF_MARKER = re.compile(r"\s*\[ref:[^\]]*\]")
 # --------------------------------------------------------------------------
 
 
-def measure(path: Path) -> dict:
-    """The counts of one chapter file. A file that is not there counts zero.
-
-    `errors="replace"` rather than a failure: a chapter holding a byte no
-    decoder answers is still a chapter, and `check_references.py` is what
-    reports it.
-    """
-    if not path.is_file():
-        return {"words": 0, "named_anchors": 0, "bytes": 0}
-    raw = path.read_bytes()
-    text = raw.decode("utf-8", errors="replace")
-    return {
-        "words": len(text.split()),
-        "named_anchors": len(NAMED_ANCHOR.findall(text)),
-        "bytes": len(raw),
-    }
-
-
-def chapter_rows(manifest: dict, paper_dir: Path) -> list[dict]:
-    """One entry per chapter: what the manifest says, plus what the file says."""
+def chapter_rows(paper: dict) -> list[dict]:
+    """One entry per chapter, all of it counted when the paper was stored."""
     rows = []
-    for chapter in manifest.get("chapters") or []:
-        entry = {
-            "file": chapter.get("file", ""),
-            "number": chapter.get("number", ""),
-            "title": chapter.get("title", ""),
-            "subsections": chapter.get("subsections") or [],
-        }
-        entry.update(measure(paper_dir / "chapters" / entry["file"]))
-        rows.append(entry)
+    for chapter in paper.get("chapters") or []:
+        anchors = chapter.get("anchors") or []
+        rows.append(
+            {
+                "stem": chapter.get("stem", ""),
+                "number": chapter.get("number", ""),
+                "title": chapter.get("title", ""),
+                "subsections": chapter.get("subsections") or [],
+                "words": chapter.get("words", 0),
+                "named_anchors": len([a for a in anchors if NAMED_ANCHOR.match(a)]),
+            }
+        )
     return rows
 
 
@@ -153,26 +135,35 @@ def identity_rows(manifest: dict) -> list[tuple[str, str]]:
     return rows
 
 
-def render(manifest: dict) -> str:
-    """The whole of `INDEX.md`, as text."""
-    paper_dir = Path(manifest.get("paper_dir") or ".")
-    rows = chapter_rows(manifest, paper_dir)
+def render(paper: dict, context=None) -> str:
+    """The whole of `INDEX.md`, as text.
 
-    lines = ["# %s" % collapse_whitespace(manifest.get("title") or manifest.get("slug") or ""), ""]
+    `context` carries the flavor and the reference store, so the abstract's own
+    citations resolve. Without one the abstract is written as it is stored,
+    which is what a caller wanting the facts and not the links gets.
+    """
+    from lit import render as render_module
+
+    rows = chapter_rows(paper)
+    abstract = collapse_whitespace(paper.get("abstract") or "")
+    if context is not None and abstract:
+        abstract = render_module.prose(abstract, context)
+
+    lines = ["# %s" % collapse_whitespace(paper.get("title") or paper.get("slug") or ""), ""]
     lines += ["| Field | Value |", "|---|---|"]
-    lines += ["| %s | %s |" % row for row in identity_rows(manifest)]
+    lines += ["| %s | %s |" % row for row in identity_rows(paper)]
     lines += ["", "## Abstract", ""]
-    lines += [collapse_whitespace(manifest.get("abstract") or "") or
-              "The source carried no abstract.", ""]
+    lines += [abstract or "The source carried no abstract.", ""]
 
     lines += ["## Chapters", ""]
     lines += ["| # | File | Words | Named anchors | Subsections |",
               "|---|---|---|---|---|"]
     for row in rows:
+        name = row["stem"] + ".md"
         lines.append("| %s | [%s](chapters/%s) | %d | %d | %s |" % (
             escape(row["number"]),
-            escape(row["file"]),
-            row["file"],
+            escape(name),
+            name,
             row["words"],
             row["named_anchors"],
             show_subsections(row["subsections"]),
@@ -183,7 +174,7 @@ def render(manifest: dict) -> str:
     ))
     lines.append("")
 
-    figures = manifest.get("figures") or []
+    figures = paper.get("figures") or []
     lines += ["## Figures", ""]
     if figures:
         lines.append("%d figures. See [figures/FIGURES.md](figures/FIGURES.md) for "
@@ -194,24 +185,9 @@ def render(manifest: dict) -> str:
     return "\n".join(lines)
 
 
-# --------------------------------------------------------------------------
-# the manifest, and the file
-# --------------------------------------------------------------------------
-
-
-def load_manifest(paper_dir: Path) -> dict:
-    path = paper_dir / MANIFEST_NAME
-    if not path.is_file():
-        raise RuntimeError(
-            "%s holds no %s. Fetch the paper again with --force."
-            % (paper_dir, MANIFEST_NAME)
-        )
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def write(paper_dir: Path, manifest: dict) -> Path:
+def write(paper_dir: Path, paper: dict, context=None) -> Path:
     """Write `INDEX.md`. Every value in it is derived, so a rebuild is safe."""
     index_path = paper_dir / INDEX_NAME
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(render(manifest), encoding="utf-8")
+    index_path.write_text(render(paper, context), encoding="utf-8")
     return index_path

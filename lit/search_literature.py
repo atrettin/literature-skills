@@ -2,16 +2,18 @@
 """Find a phrase in the text of the papers, and say where it stands.
 
 A quotation is checked against the paper it came from. `grep` cannot do that
-here. Chapter text wraps, so a line break splits a phrase and the search finds
-nothing; a file that holds a NUL byte reads as binary, and `grep` then prints
-nothing for the whole file. Both failures make text that is present look absent,
-and a reader of a report cannot see that error.
+here. A phrase is copied out of a rendered chapter, where the reader's viewer
+wrapped it, so the phrase arrives carrying a line break the paper never had; a
+file that holds a NUL byte reads as binary, and `grep` then prints nothing for
+the whole file. Both failures make text that is present look absent, and a
+reader of a report cannot see that error.
 
-This matches against a flat copy of the text: no NUL bytes, ASCII quotation
-marks, and one space for each run of whitespace. A match therefore carries
-across a line break. The answer gives the paper, the chapter, the anchor above
-the match, the line number and the sentence, so the passage can be opened and
-read.
+This matches the phrase and the stored block against each other in the same flat
+form: no control characters, ASCII quotation marks, and one space for each run
+of whitespace. The answer gives the paper, the chapter, the anchor of the block
+that matched, the line it sits on and the sentence, so the passage can be opened
+and read. `location` is what a report cites and `line_location` what a caller
+checking a quotation opens.
 
 When the full phrase matches nothing, the search drops the last word and tries
 again, down to MIN_BACKOFF_WORDS. `partial_matches` then says which shorter
@@ -38,9 +40,9 @@ import re
 import sys
 from pathlib import Path
 
-from lit import cli, paths, reference_store
+from lit import blocks, cli, paths, reference_store
 from lit import text
-from lit.check_references import ANCHOR, written_files
+from lit.paths import stored_files
 
 # The longest sentence the answer prints. Enough to see the words around the
 # match; short enough that twenty matches do not fill a context window.
@@ -63,49 +65,24 @@ QUOTES = {
 # mark. It stands inside a word, so it is dropped rather than made a space.
 # Every character that is really a space, `str.isspace` reports.
 ZERO_WIDTH = "\u200b\u200c\u200d\u2060\ufeff\u00ad"
+# Every C0 control character other than the tab. None of them belongs inside a
+# stored string, and a NUL byte stops the line being JSON at all.
+CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0a-\x1f]")
 
 
-def flatten(text: str) -> tuple[str, list[int]]:
-    """The text as one line, and the offset of each of its characters.
+def flatten(text: str) -> str:
+    """The words of a block, as a phrase copied out of it would be typed.
 
-    The offsets are what makes a match addressable: the flat text has lost the
-    line breaks, and `offsets[i]` says where character `i` stands in the file.
+    A block is already one flat string, so nothing here has to track where a
+    character came from — the block is the address. What is left is the
+    difference between what a paper prints and what a person types: a curly
+    quotation mark, a zero-width character standing inside a word, and a run of
+    whitespace that a copy across two lines turned into a newline.
     """
-    flat: list[str] = []
-    offsets: list[int] = []
-    in_space = False
-    for index, char in enumerate(text):
-        if char == "\x00" or char in ZERO_WIDTH:
-            continue
-        if char.isspace():
-            if not in_space:
-                in_space = True
-                flat.append(" ")
-                offsets.append(index)
-            continue
-        in_space = False
-        flat.append(QUOTES.get(char, char))
-        offsets.append(index)
-    return "".join(flat), offsets
-
-
-def line_of(text: str, offset: int) -> int:
-    """The 1-based line of the file that holds this offset."""
-    return text.count("\n", 0, offset) + 1
-
-
-def anchor_above(text: str, offset: int) -> str | None:
-    """The id of the last `<a id="…"></a>` at or before this offset.
-
-    The anchor is what a citation can point at, and it outlives an edit that
-    moves the line. A match above the first anchor of the file has none.
-    """
-    found = None
-    for match in ANCHOR.finditer(text):
-        if match.start() > offset:
-            break
-        found = match.group(1)
-    return found
+    kept = (
+        char for char in text if char != "\x00" and char not in ZERO_WIDTH
+    )
+    return " ".join("".join(QUOTES.get(char, char) for char in kept).split())
 
 
 def clip(sentence: str, start: int, end: int) -> str:
@@ -133,40 +110,59 @@ def sentence_around(flat: str, start: int, end: int) -> str:
 def search_file(
     path: Path, pattern: re.Pattern[str], root: Path
 ) -> tuple[list[dict], bool]:
-    """Every match in one file, and whether the file held a NUL byte.
+    """Every match in one stored chapter, and whether it held a NUL byte.
 
-    The byte is dropped from the copy this matches against, and reported: a
+    A match is reported against the block that holds it: the anchor of that
+    block is what a report cites, and the line the block sits on is what a
+    caller checking a quotation opens. One block is one line, so the two say the
+    same thing in the two forms each is used in.
+
+    The NUL byte is dropped from the copy this matches against, and reported: a
     defect in the collection must stay visible.
     """
-    text = path.read_text(encoding="utf-8", errors="replace")
-    flat, offsets = flatten(text)
+    raw = path.read_text(encoding="utf-8", errors="replace")
     where = str(path.relative_to(root))
     slug = path.relative_to(root).parts[0]
+    stem = path.stem
 
     results = []
-    for match in pattern.finditer(flat):
-        offset = offsets[match.start()] if match.start() < len(offsets) else len(text)
-        anchor = anchor_above(text, offset)
-        line = line_of(text, offset)
-        results.append({
-            "paper": slug,
-            "file": where,
-            "anchor": anchor,
-            "location": where + ("#" + anchor if anchor else ""),
-            "line": line,
-            # A scout reports `chapters/03_results.md:181`. The same form here
-            # lets a caller compare the two answers without building a string.
-            "line_location": "%s:%d" % (where, line),
-            "sentence": sentence_around(flat, match.start(), match.end()),
-        })
-    return results, "\x00" in text
+    for line, stored in enumerate(raw.splitlines(), 1):
+        if not stored.strip():
+            continue
+        # The control characters go before the parse, not after it. A NUL byte
+        # inside a stored string is not JSON, and a file carrying one would
+        # otherwise refuse to be searched at all — which is the failure this
+        # command exists to prevent, arriving by another route.
+        block = json.loads(CONTROL_CHARACTERS.sub("", stored))
+        flat = flatten(blocks.words(block))
+        if not flat:
+            continue
+        anchor = block.get("anchor") or None
+        for match in pattern.finditer(flat):
+            results.append({
+                "paper": slug,
+                "file": where,
+                "chapter": stem,
+                "anchor": anchor,
+                # What a report cites: the chapter and the anchor, with no
+                # extension, so it names the paper and not one rendering of it.
+                "location": "%s/%s%s" % (slug, stem, "#" + anchor if anchor else ""),
+                "line": line,
+                # A scout reports `text/03_results.jsonl:181`. The same form
+                # here lets a caller compare the two answers without building a
+                # string.
+                "line_location": "%s:%d" % (where, line),
+                "kind": block.get("kind", ""),
+                "sentence": sentence_around(flat, match.start(), match.end()),
+            })
+    return results, "\x00" in raw
 
 
 def build_pattern(phrase: str, as_regex: bool, case_sensitive: bool) -> re.Pattern[str]:
     """The phrase as a pattern over the flat text.
 
-    A literal phrase is flattened the same way the text is, so a phrase copied
-    out of a wrapped chapter matches the chapter it was copied from.
+    A literal phrase is flattened the same way a block is, so a phrase copied
+    out of a rendered chapter matches the block it was rendered from.
     """
     flags = 0 if case_sensitive else re.IGNORECASE
     if as_regex:
@@ -205,7 +201,7 @@ def search(
     case_sensitive: bool = False,
 ) -> dict:
     """The whole answer, for one phrase over the papers in scope."""
-    files = written_files(root)
+    files = stored_files(root)
     slugs = sorted({path.relative_to(root).parts[0] for path in files})
     if papers:
         wanted = set(papers)
@@ -262,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     if not root.is_dir():
         return cli.fail("%s does not exist" % root, cli.JUDGEMENT)
 
-    held = {paths.slug_of(root, path) for path in written_files(root)}
+    held = set(paths.papers_on_disk(root))
     unknown = sorted(slug for slug in args.paper if slug not in held)
     if unknown:
         # Never ABSENT. That status says the phrase is absent, and this phrase

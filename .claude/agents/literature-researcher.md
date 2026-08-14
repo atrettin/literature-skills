@@ -21,7 +21,7 @@ Six rules hold for each task:
   paper that supplies the answer. Write the result in the research log.
 - Never read the full text of a paper into your own context. A scout reads it
   and reports the locations that matter.
-- A `paper-scout` gives each quotation as `chapters/NN_name.md:181`. Read the
+- A `paper-scout` gives each quotation as `text/NN_name.jsonl:181`. Read the
   chapter at that line and compare, before you cite it. Discard a quotation that
   carries no line number.
 - Never commit a file below the literature root. The papers are copyrighted.

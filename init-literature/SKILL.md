@@ -82,25 +82,32 @@ Create the collection's directory and write its `README.md`:
 ~~~markdown
 # Literature
 
-<One sentence on what this collection covers, from step 2.> Papers are stored as
-plain text for humans and agents to read. Each paper has its own directory:
+<One sentence on what this collection covers, from step 2.> A paper is **stored**
+once and **rendered** for a person to read. Each paper has its own directory:
 
 ```
 <first-author-surname>_<year>_<keyword>/
-  INDEX.md            metadata, abstract, and one row for each chapter
-  chapters/           the text of the paper, one file for each section
+  paper.json          what the paper is: metadata, and one entry per chapter
+  text/               the words, one JSON block per line, one file per section
   figures/            the figures, cropped, one PNG each
-  figures/FIGURES.md  the caption of each figure
   figures_raw/        the files as the paper shipped them
+  INDEX.md            rendered: metadata, abstract, one row for each chapter
+  chapters/           rendered: the same words, for a person to read
+  figures/FIGURES.md  rendered: the caption of each figure
 ```
 
 Start at `INDEX.md` of a paper. Read only the chapters that you need.
 
-A citation in a chapter reads `(Lipari, 2002)` and opens that work's page under
-`references/`, which is named after the work's tag. Agents resolve that tag with
-`lit lookup`, which reads `.references.jsonl` and answers with the title,
-authors, journal, DOI and arXiv identifier. That is
-how a claim a paper borrowed gets traced back to whoever established it.
+Everything rendered is written from what is stored, in one flavor at a time —
+`vscode` or `obsidian` — recorded in `.collection.json`. `lit render --flavor
+<name>` writes the collection again in the other one. Nothing is lost: the store
+is untouched. Never edit a rendered file; the next render overwrites it.
+
+A citation is stored as `[cite: <tag>]` and rendered as `(Lipari, 2002)`, which
+opens that work's page under `references/`, named after the work's tag. Agents
+resolve that tag with `lit lookup`, which reads `.references.jsonl` and answers
+with the title, authors, journal, DOI and arXiv identifier. That is how a claim
+a paper borrowed gets traced back to whoever established it.
 
 [REFERENCES.md](REFERENCES.md) is the same data as one table, most-cited first:
 what these papers are built on, and which of it is already held here. It and
