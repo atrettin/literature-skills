@@ -408,6 +408,20 @@ def inline_inputs(text: str, base_dir: Path, source_dir: Path, depth: int = 0) -
 # structure: split the body into sections
 # ==========================================================================
 
+# Commands this conversion reads itself. A paper is free to redefine any of
+# them — `\let\Oldsection\section` followed by
+# `\renewcommand{\section}[1]{\Oldsection{\bf #1}}` is a common way to make
+# headings bold — and the definition says nothing about the structure of the
+# paper. Expanded, it renames every heading to a command no scan knows, and the
+# paper arrives as one chapter of undivided text. So the name keeps its LaTeX
+# meaning, and the redefinition is dropped.
+STRUCTURAL_COMMANDS = frozenset({
+    "part", "chapter", "section", "subsection", "subsubsection",
+    "paragraph", "subparagraph", "appendix", "abstract",
+    "caption", "label", "ref", "cite", "bibitem",
+    "includegraphics", "input", "include", "begin", "end",
+})
+
 
 def collect_macros(preamble: str) -> dict:
     """Collect \\newcommand / \\def shorthands from the preamble.
@@ -425,6 +439,9 @@ def collect_macros(preamble: str) -> dict:
     argument (`\\newcommand{\\x}[2][default]{...}`) or with delimiter tokens in
     its `\\def` parameter text is skipped: expanding those needs a real TeX
     engine, and getting them wrong is worse than leaving them alone.
+
+    A redefinition of a command this conversion reads is skipped too — see
+    `STRUCTURAL_COMMANDS`.
     """
     macros = {}
     pattern = re.compile(r"\\(?:newcommand|renewcommand|providecommand)\*?\s*")
@@ -463,8 +480,10 @@ def collect_macros(preamble: str) -> dict:
         if after >= len(preamble) or preamble[after] != "{":
             continue
         end = match_brace(preamble, after)
-        macros[name[1:]] = (arity, preamble[after + 1 : end - 1])
         cursor = end
+        if name[1:] in STRUCTURAL_COMMANDS:
+            continue
+        macros[name[1:]] = (arity, preamble[after + 1 : end - 1])
 
     for match in re.finditer(r"\\def\s*\\([a-zA-Z]+)\s*((?:#\d)*)\s*\{", preamble):
         params = match.group(2)
@@ -472,11 +491,69 @@ def collect_macros(preamble: str) -> dict:
         # parameter text, which this expander cannot honour.
         if params and not re.fullmatch(r"(?:#\d)+", params):
             continue
+        if match.group(1) in STRUCTURAL_COMMANDS:
+            continue
         end = match_brace(preamble, match.end() - 1)
         macros.setdefault(
             match.group(1), (len(params) // 2, preamble[match.end() : end - 1])
         )
     return macros
+
+
+DEFINITION_COMMAND = re.compile(
+    r"\\(newcommand|renewcommand|providecommand|DeclareRobustCommand)\*?\s*"
+    r"|\\def\s*(?=\\[a-zA-Z]+)"
+    r"|\\let\s*\\[a-zA-Z]+\s*=?\s*(?:\\[a-zA-Z]+|.)"
+)
+
+
+def drop_definitions(text: str) -> str:
+    """Take the macro definitions out of the text they sit in.
+
+    LaTeX lets a definition stand anywhere, and a paper that writes its
+    `\\newcommand` block after `\\begin{document}` puts it in the body. Left
+    there, the block reaches the reader as prose, and a bare `\\section` inside
+    a `\\let` line is read as a heading, which opens a chapter holding nothing
+    but definitions.
+
+    The definitions are read before this runs — see `collect_macros`. Only the
+    text of them goes.
+    """
+    pieces = []
+    cursor = 0
+    while True:
+        match = DEFINITION_COMMAND.search(text, cursor)
+        if not match:
+            break
+        index = match.end()
+        if match.group(1) or match.group(0).startswith("\\def"):
+            # The name, as `{\x}` or as `\x`, then the argument count, then the
+            # body. A group this cannot read is one to leave in place: a half
+            # cut definition is worse than a whole one.
+            if index < len(text) and text[index] == "{":
+                index = match_brace(text, index)
+            else:
+                name = re.match(r"\\[a-zA-Z]+|\\.", text[index:])
+                if not name:
+                    cursor = match.end()
+                    continue
+                index += name.end()
+            index = skip_spaces(text, index)
+            parameters = re.match(r"(?:#\d)*", text[index:])
+            index += parameters.end() if parameters else 0
+            while index < len(text) and text[index] == "[":
+                closing = text.find("]", index)
+                if closing < 0:
+                    break
+                index = skip_spaces(text, closing + 1)
+            if index >= len(text) or text[index] != "{":
+                cursor = match.end()
+                continue
+            index = match_brace(text, index)
+        pieces.append(text[cursor : match.start()])
+        cursor = index
+    pieces.append(text[cursor:])
+    return "".join(pieces)
 
 
 def substitute_parameters(body: str, args: list[str]) -> str:
@@ -1733,9 +1810,12 @@ def convert(args) -> dict:
 
         main_tex = find_main_tex(source_dir)
         raw = inline_inputs(strip_comments(read_text(main_tex)), main_tex.parent, source_dir)
-        begin_document = raw.find("\\begin{document}")
-        macros = collect_macros(raw[: begin_document if begin_document > 0 else 0])
-        body = expand_macros(extract_body(raw), macros)
+        # The whole file, and not the preamble alone: LaTeX lets a definition
+        # sit after \begin{document}, and papers use that. A paper that defines
+        # \beq there arrives with every display equation left in the prose,
+        # stripped down to the letters of its symbols.
+        macros = collect_macros(raw)
+        body = expand_macros(drop_definitions(extract_body(raw)), macros)
 
         # The bibliography is read before the body is cut down to its sections,
         # since a paper that types its references out sits them after the last

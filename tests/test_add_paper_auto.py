@@ -297,3 +297,122 @@ def test_index_only_rebuilds_the_counts(collection: Path, small_paper: dict,
     assert status == 0
     assert "| # | File | Words |" in index.read_text(encoding="utf-8")
     assert reports[0]["collection_row"] == "present"
+
+
+def test_a_macro_defined_after_begin_document_is_expanded(
+    collection: Path, small_paper: dict, inspire_silent: FakeInspire,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LaTeX lets a definition sit in the body, and papers put \\beq there.
+
+    Collected from the preamble alone, such a paper arrives with every display
+    equation left in the prose and stripped down to the letters of its symbols.
+    """
+    from lit import arxiv_fetch
+    from lit import blocks
+
+    def defines_late(arxiv_id: str, work_dir: Path) -> Path:
+        source_dir = work_dir / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "main.tex").write_text(
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\newcommand{\\beq}{\\begin{equation}}\n"
+            "\\newcommand{\\eeq}{\\end{equation}}\n"
+            "\\section{Method}\n"
+            "The rate follows from\n"
+            "\\beq R = n \\sigma v \\label{eq:rate} \\eeq\n"
+            "with the symbols as usual.\n"
+            "\\end{document}\n",
+            encoding="utf-8",
+        )
+        return source_dir
+
+    monkeypatch.setattr(arxiv_fetch, "download_source", defines_late)
+    status, _ = run(collection, "--auto", ARXIV_ID)
+
+    assert status == 0
+    stored = list((collection / SLUG / paths.TEXT_DIR).glob("*.jsonl"))
+    kinds = [block for path in stored for block in blocks.read(path)]
+    maths = [block for block in kinds if block["kind"] == "math"]
+    assert [block["tex"].strip() for block in maths] == [
+        "R = n \\sigma v \\label{eq:rate}"
+    ]
+    assert not any("sigma v" in block.get("text", "") for block in kinds)
+
+
+def test_a_redefinition_of_section_does_not_hide_the_headings(
+    collection: Path, small_paper: dict, inspire_silent: FakeInspire,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`\\let\\Oldsection\\section` and a bold wrapper is a common preamble.
+
+    Expanded, every heading becomes a command no scan knows, and the paper
+    arrives as one undivided chapter cut at arbitrary paragraphs.
+    """
+    from lit import arxiv_fetch
+
+    def bold_headings(arxiv_id: str, work_dir: Path) -> Path:
+        source_dir = work_dir / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "main.tex").write_text(
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\let\\Oldsection\\section\n"
+            "\\renewcommand{\\section}[1]{\\Oldsection{\\bf #1}}\n"
+            "\\section{Method}\n"
+            "How the measurement was made.\n"
+            "\\section{Results}\n"
+            "What the measurement gave.\n"
+            "\\end{document}\n",
+            encoding="utf-8",
+        )
+        return source_dir
+
+    monkeypatch.setattr(arxiv_fetch, "download_source", bold_headings)
+    status, reports = run(collection, "--auto", ARXIV_ID)
+
+    assert status == 0
+    record = json.loads(
+        (collection / SLUG / paths.PAPER_NAME).read_text(encoding="utf-8")
+    )
+    titles = [chapter["title"] for chapter in record["chapters"]]
+    assert "Method" in titles and "Results" in titles
+
+
+def test_a_definition_block_in_the_body_opens_no_chapter(
+    collection: Path, small_paper: dict, inspire_silent: FakeInspire,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bare `\\section` inside a `\\let` line is not a heading."""
+    from lit import arxiv_fetch
+
+    def defines_in_body(arxiv_id: str, work_dir: Path) -> Path:
+        source_dir = work_dir / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "main.tex").write_text(
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\let\\Oldsection\\section\n"
+            "\\renewcommand{\\section}[1]{\\Oldsection{\\bf #1}}\n"
+            "\\newcommand{\\keV}{\\text{keV}}\n"
+            "\\section{Method}\n"
+            "A source at $3\\,\\keV$.\n"
+            "\\end{document}\n",
+            encoding="utf-8",
+        )
+        return source_dir
+
+    monkeypatch.setattr(arxiv_fetch, "download_source", defines_in_body)
+    status, _ = run(collection, "--auto", ARXIV_ID)
+
+    assert status == 0
+    record = json.loads(
+        (collection / SLUG / paths.PAPER_NAME).read_text(encoding="utf-8")
+    )
+    assert [chapter["title"] for chapter in record["chapters"]] == ["Method"]
+    stored = (collection / SLUG / paths.TEXT_DIR / "01_method.jsonl").read_text(
+        encoding="utf-8"
+    )
+    assert "newcommand" not in stored
+    assert "\\text{keV}" in stored
