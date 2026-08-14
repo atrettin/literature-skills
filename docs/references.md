@@ -32,10 +32,10 @@ paragraph. A link to a file lands where it says, in every renderer, with nothing
 to resolve.
 
 The tag has not gone anywhere — it names the file, which is what an agent greps
-for and what it passes to `lit lookup`:
+for and what it passes to `litdb lookup`:
 
 ```console
-$ lit lookup lipari_2002_neutrino_oscillation_neutrino_cross
+$ litdb lookup lipari_2002_neutrino_oscillation_neutrino_cross
 {
   "found": 1,
   "references": [
@@ -107,7 +107,7 @@ top of it, and none is where the data lives:
 
 | | For | Answers |
 |---|---|---|
-| `lit lookup` | an agent resolving a citation | a tag, a DOI, an arXiv id, a search, or everything one paper cites |
+| `litdb lookup` | an agent resolving a citation | a tag, a DOI, an arXiv id, a search, or everything one paper cites |
 | `REFERENCES.md` | a person browsing | one row per cited work, most-cited first, linked where the collection holds it |
 | `references/<tag>.md` | a person following a citation | that one work, on a page of its own |
 
@@ -151,9 +151,9 @@ auditing the collection wants.
 was published in. arXiv cannot answer the second question — its `journal_ref`
 field is filled in by the authors and is empty for most records — so it comes
 from [INSPIRE-HEP](https://inspirehep.net/), keyed on the arXiv identifier.
-`lit inspire` also runs on its own, to refresh a paper that has been published
+`litdb inspire` also runs on its own, to refresh a paper that has been published
 since it was ingested:
 
 ```bash
-lit inspire 2307.09241
+litdb inspire 2307.09241
 ```

@@ -99,13 +99,13 @@ once and **rendered** for a person to read. Each paper has its own directory:
 Start at `INDEX.md` of a paper. Read only the chapters that you need.
 
 Everything rendered is written from what is stored, in one flavor at a time —
-`vscode` or `obsidian` — recorded in `.collection.json`. `lit render --flavor
+`vscode` or `obsidian` — recorded in `.collection.json`. `litdb render --flavor
 <name>` writes the collection again in the other one. Nothing is lost: the store
 is untouched. Never edit a rendered file; the next render overwrites it.
 
 A citation is stored as `[cite: <tag>]` and rendered as `(Lipari, 2002)`, which
 opens that work's page under `references/`, named after the work's tag. Agents
-resolve that tag with `lit lookup`, which reads `.references.jsonl` and answers
+resolve that tag with `litdb lookup`, which reads `.references.jsonl` and answers
 with the title, authors, journal, DOI and arXiv identifier. That is how a claim
 a paper borrowed gets traced back to whoever established it.
 
@@ -134,13 +134,13 @@ same one the directory name uses. Journal is where the paper was published, and
 Then write the empty reference index, so the collection has one from the start:
 
 ```bash
-lit references --render-only
+litdb references --render-only
 ```
 
 That creates `REFERENCES.md` and an empty `references/` in the collection from
 an empty store. Give `--literature-root` when `$LITERATURE_ROOT` is not set and
-the collection is not `literature/` in the project. Skip this step when `lit` is not
-installed: `lit add-paper` writes both itself the first time it files a
+the collection is not `literature/` in the project. Skip this step when `litdb` is not
+installed: `litdb add-paper` writes both itself the first time it files a
 paper's references.
 
 ## Step 5. Say what comes next

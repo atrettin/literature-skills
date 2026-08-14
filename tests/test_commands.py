@@ -1,4 +1,4 @@
-"""The `lit` command, and that every subcommand behind it is reachable.
+"""The `litdb` command, and that every subcommand behind it is reachable.
 
 Cheap, and it catches the failure that no other test does: a command whose
 parser or whose module-level code is broken only shows it when somebody runs
@@ -32,7 +32,7 @@ def test_every_subcommand_answers_help(name: str, capsys: pytest.CaptureFixture)
         dispatcher.main([name, "--help"])
 
     assert exit_status.value.code == 0
-    assert capsys.readouterr().out.startswith("usage: lit %s" % name)
+    assert capsys.readouterr().out.startswith("usage: litdb %s" % name)
 
 
 def test_the_bare_command_lists_what_there_is(capsys: pytest.CaptureFixture) -> None:

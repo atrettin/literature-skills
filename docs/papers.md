@@ -78,7 +78,7 @@ anchors, and an HTML page would disagree with both — and the words do not. So
 the store keeps the marker and the renderer resolves it.
 
 That is also why a marker is what a defect is reported against.
-`lit check-references` reads the store, so a tag no record answers is found
+`litdb check-references` reads the store, so a tag no record answers is found
 once, for the collection, rather than once per rendering of it.
 
 Maths is stored as the paper wrote it. A `math` block keeps the environment the
@@ -114,10 +114,10 @@ after the cut, so `p1` is the first paragraph of the file that holds it.
 
 ## Finding a phrase
 
-`lit search` is what turns a phrase into an address. It exists because `grep`
+`litdb search` is what turns a phrase into an address. It exists because `grep`
 cannot: a phrase copied out of a rendered chapter carries the line break the
 reader's viewer put in it, and a file holding a NUL byte reads to `grep` as
 binary, so it prints nothing for the whole file. Both make text that is present
-look absent. `lit search` matches the phrase and the stored block against each
+look absent. `litdb search` matches the phrase and the stored block against each
 other in the same flat form, and answers with the block's anchor, the file and
 the line.

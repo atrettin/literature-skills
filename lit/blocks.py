@@ -2,7 +2,7 @@
 """The stored form of a paper's text: one JSON object per line, one per block.
 
 A paper is stored, not presented. `<slug>/text/NN_title.jsonl` holds the words,
-and `lit render` writes the Markdown a person reads. The store carries markers
+and `litdb render` writes the Markdown a person reads. The store carries markers
 rather than links — `[cite: tag]` for a citation and `[ref: label]` for the
 paper's reference to itself — because what a link looks like depends on the
 flavor being rendered, and the words do not.

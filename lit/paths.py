@@ -115,7 +115,7 @@ def flavor(root: Path) -> str:
     It is a property of the files on disk and not of the shell that reads them:
     the anchors a render writes differ per flavor, so a report written against
     the wrong one names anchors that are not there. `$LITERATURE_FLAVOR` answers
-    for a collection that has never been rendered, and `lit render --flavor`
+    for a collection that has never been rendered, and `litdb render --flavor`
     records the answer from then on.
     """
     path = state_path(root)

@@ -9,7 +9,7 @@ references. A reader finds out by clicking. This finds out first.
 
 It checks the report **source**, the file holding the markers, against the
 store — the paper, the chapter and the anchor a marker names. The rendered
-report is written from a checked source by `lit render-report`, so its links
+report is written from a checked source by `litdb render-report`, so its links
 resolve by construction, and checking the store rather than a rendered file
 means one check answers for every flavor the collection is ever rendered in.
 

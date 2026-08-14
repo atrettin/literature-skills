@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Install the literature skills: the `lit` command, the six skills and the
+# Install the literature skills: the `litdb` command, the six skills and the
 # five agents.
 #
 #     ./install.sh
 #
 # The skills and the agents are symlinked rather than copied, so a `git pull`
-# here updates what Claude Code loads. `lit` is installed in editable mode for
+# here updates what Claude Code loads. `litdb` is installed in editable mode for
 # the same reason.
 
 set -euo pipefail
@@ -20,7 +20,7 @@ agents=(paper-ingestor paper-scout terminology-prospector terminology-scout)
 echo "installing literature-skills from $repo"
 
 # --- the command ----------------------------------------------------------
-echo "  the lit command, with $($python --version)"
+echo "  the litdb command, with $($python --version)"
 "$python" -m pip install --quiet --disable-pip-version-check --editable "$repo[rerank]"
 
 # --- the skills and the agents --------------------------------------------
@@ -37,15 +37,15 @@ done
 echo "  ${#agents[@]} agents  -> ~/.claude/agents/"
 
 # --- say whether it can be run --------------------------------------------
-if command -v lit >/dev/null 2>&1; then
+if command -v litdb >/dev/null 2>&1; then
     echo
-    echo "done. lit is $(command -v lit)"
+    echo "done. litdb is $(command -v litdb)"
 else
     # pip put the script somewhere that PATH does not reach. Say where, rather
     # than leaving a command that reports "not found" for no visible reason.
     bindir="$("$python" -c 'import sysconfig; print(sysconfig.get_path("scripts"))')"
     echo
-    echo "done, but lit is not on your PATH. It was installed in:"
+    echo "done, but litdb is not on your PATH. It was installed in:"
     echo "    $bindir"
     echo "Add that directory to PATH, for example in ~/.zshrc:"
     echo "    export PATH=\"$bindir:\$PATH\""

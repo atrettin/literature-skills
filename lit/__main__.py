@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""The `lit` command: one name in front of every command the skills run.
+"""The `litdb` command: one name in front of every command the skills run.
 
 Each subcommand is a module with its own parser, and the module is imported
-only when its name is given. `lit search` therefore starts without loading
+only when its name is given. `litdb search` therefore starts without loading
 TexSoup, which only the ingest needs.
 """
 
@@ -31,9 +31,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
 
 def usage() -> str:
     width = max(len(name) for name in COMMANDS)
-    lines = ["usage: lit <command> [options]", "", "commands:"]
+    lines = ["usage: litdb <command> [options]", "", "commands:"]
     lines += ["  %-*s  %s" % (width, name, what) for name, (_, what) in COMMANDS.items()]
-    lines += ["", "Run `lit <command> --help` for the options of one command."]
+    lines += ["", "Run `litdb <command> --help` for the options of one command."]
     return "\n".join(lines)
 
 
@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Set before the command builds its parser, so its usage line names the
     # subcommand a reader would type rather than the module behind it.
-    cli.PROGRAM = "lit %s" % name
+    cli.PROGRAM = "litdb %s" % name
     module = importlib.import_module(COMMANDS[name][0])
     return module.main(argv[1:])
 

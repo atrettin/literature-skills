@@ -1,13 +1,13 @@
 # Ingesting without an agent
 
-`lit add-paper --auto` does an ingest end to end. By default, this step is purely mechanical.
+`litdb add-paper --auto` does an ingest end to end. By default, this step is purely mechanical.
 An agent may be called to resolve ambiguities in the paper's metadata if they arise.
 The ingested paper is added to the common library in 
 markdown format, broken down by chapters. Work cited by the ingested papers
 is catalogued in the common reference store.
 
 ```bash
-lit add-paper --auto 2307.09241 1706.03621
+litdb add-paper --auto 2307.09241 1706.03621
 ```
 
 **The exit code says who acts.**
@@ -74,7 +74,7 @@ names the files. The check is the one thing that scans for residue, so the drive
 scans no chapter itself: two scans are two definitions of residue, and they
 drift apart.
 
-`lit add-paper --index-only <slug>` renders the paper again from `paper.json`
+`litdb add-paper --index-only <slug>` renders the paper again from `paper.json`
 and the files, and refreshes the paper's row in the collection table. That is
 what brings a preprint up to date once INSPIRE reports where it was published.
 

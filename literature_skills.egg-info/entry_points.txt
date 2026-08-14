@@ -1,2 +1,2 @@
 [console_scripts]
-lit = lit.__main__:main
+litdb = lit.__main__:main

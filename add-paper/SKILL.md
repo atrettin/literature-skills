@@ -8,33 +8,33 @@ description: Adds a paper from arXiv to the local literature database in literat
 The literature database holds papers as plain text, split into chapters. Agents
 read it with the `use-literature` skill. This skill puts a new paper into it.
 
-`lit add-paper` does the ingest. You handle its exceptions. Never read a
+`litdb add-paper` does the ingest. You handle its exceptions. Never read a
 chapter: the command measures every number that `paper.json` holds.
 
 The paper comes from arXiv, because arXiv is the only source that carries the
 TeX. arXiv does not say where the paper was published — its `journal_ref` field
 is written by the authors and is empty for most records. INSPIRE-HEP does say,
-and `lit add-paper` asks it.
+and `litdb add-paper` asks it.
 
 ## Before you start
 
 Run every command from the root of the project, so that `literature/` resolves.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project. `lit` reads the variable itself, thus
+set, it is `literature/` in the project. `litdb` reads the variable itself, thus
 you do not give `--literature-root`.
 
 ## Step 1. Run the ingest
 
 ```bash
-lit add-paper --auto <arxiv-id> [<arxiv-id> …]
+litdb add-paper --auto <arxiv-id> [<arxiv-id> …]
 ```
 
 Give the identifiers of every paper the user asked for, in one command. Give a
 title instead when the user has no identifier:
 
 ```bash
-lit add-paper --auto \
+litdb add-paper --auto \
     --title "<title>" --author "<author>" --year <year>
 ```
 
@@ -88,8 +88,8 @@ paper. When the DOI disagrees, no title similarity makes it the right paper.
 Cross-check against INSPIRE-HEP when the arXiv record alone does not settle it:
 
 ```bash
-lit inspire <arxiv_id>
-lit inspire --doi <doi>
+litdb inspire <arxiv_id>
+litdb inspire --doi <doi>
 ```
 
 `"found": false` for a candidate you found on arXiv usually means a paper
@@ -146,7 +146,7 @@ collection.
 - `unresolved` — a chapter cites a tag no record answers. Say so. The claim that
   citation supports cannot be traced until it resolves.
 - `missing_pages` — the record is there and the page its citation opens is not.
-  Run `lit references --render-only`, which writes them.
+  Run `litdb references --render-only`, which writes them.
 - `duplicates` — one work holds two records, so its citations are split.
 - `residue` — a chapter holds a `PH<number>` where the paper wrote something
   else, or a control character. Nothing repairs the text in place. Re-run the
@@ -179,7 +179,7 @@ it and try again later. This is not a fault of the paper.
 
 The ingest stores the paper and then renders it, in whichever flavor
 `literature/.collection.json` records. The rendered files can be thrown away and
-written again with `lit render`; the stored ones cannot.
+written again with `litdb render`; the stored ones cannot.
 
 The identity table of `INDEX.md` holds `Authors`, `Submitted`, `Published`,
 `Journal`, `DOI`, `arXiv`, `Ingested` and `Parser`, and an `Erratum` row under
@@ -238,10 +238,10 @@ The `references` block of the report counts what happened:
 Tell the user the count of unverified references. Those rows are marked ⚠: their
 fields come from a citing paper's own bibliography, and may be wrong.
 
-Resolve a tag with `lit lookup`, and never by reading `REFERENCES.md`:
+Resolve a tag with `litdb lookup`, and never by reading `REFERENCES.md`:
 
 ```bash
-lit lookup <tag>
+litdb lookup <tag>
 ```
 
 ## Refresh a paper that is already there
@@ -249,11 +249,11 @@ lit lookup <tag>
 A preprint gets published later. Look it up again:
 
 ```bash
-lit inspire <arxiv_id>
+litdb inspire <arxiv_id>
 ```
 
 Then edit the `publication` block of the paper's `paper.json`, and re-run
-`lit add-paper --index-only <slug>`. That renders the paper again — `INDEX.md`,
+`litdb add-paper --index-only <slug>`. That renders the paper again — `INDEX.md`,
 the chapters and `FIGURES.md` — and writes the Journal cell of its row in
 `literature/README.md`. Nothing else changes: do not re-fetch, do not pass
 `--force`, and never edit a rendered file. The text of the paper did not change.
@@ -264,7 +264,7 @@ Only what is known about it did.
 - The papers are copyrighted. Never commit a file under `literature/`.
 - Never copy a long passage from a chapter into `docs/` or another tracked file.
 - Report each warning of the report to the user.
-- **`lit` sends one request at a time.** Its request gate holds every command
+- **`litdb` sends one request at a time.** Its request gate holds every command
   to the pace each API asks for, and it does so across processes. One command
   therefore ingests a whole queue of papers. Pass every identifier to that one
   command. Do not call these APIs from two agents at once.

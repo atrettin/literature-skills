@@ -6,7 +6,7 @@ Writes, under `<literature-root>/<slug>/`:
     text/NN_<title>.jsonl         one file per \\section, long ones split further
     figures/<figure files>        every figure the paper includes
 
-It writes what is **stored** and nothing that is rendered. `lit render` turns
+It writes what is **stored** and nothing that is rendered. `litdb render` turns
 the stored blocks into the Markdown a person reads, in whichever flavor the
 collection holds, and `paper.json` is written by the caller: the slug is derived
 from the metadata this fetch brings, so the paper is converted into a scratch
@@ -621,7 +621,7 @@ def apply_cite_tags(text: str, key_tags: dict[str, list[str]]) -> str:
     REFERENCES.md. One key can stand for several works, when the bibliography
     packed several into one \\bibitem, so it can expand to several tags.
 
-    The marker is what is stored. `lit render` turns it into the link a reader
+    The marker is what is stored. `litdb render` turns it into the link a reader
     follows, once the store has the author and year to label it with — see
     `render.resolve_citations`.
 

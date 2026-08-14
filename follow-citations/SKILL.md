@@ -18,14 +18,14 @@ answer is frequently one step along the graph.
 Run every command from the root of the project, so that `literature/` resolves.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project. `lit` reads the variable itself, thus
+set, it is `literature/` in the project. `litdb` reads the variable itself, thus
 you do not give `--literature-root`.
 
 ## Step 1. Choose the direction
 
 | What you need | The direction |
 |---|---|
-| The source of a claim that a paper you read borrowed | `--direction cited`. Try `lit lookup <tag>` first: for a paper the collection holds, that is the same answer and it costs no request. |
+| The source of a claim that a paper you read borrowed | `--direction cited`. Try `litdb lookup <tag>` first: for a paper the collection holds, that is the same answer and it costs no request. |
 | The work that came after an old paper | `--direction citing --sort mostrecent` |
 | The accepted treatment of the subject of a key paper | `--direction citing --sort mostcited` |
 | Both lists at one time | `--direction both` |
@@ -33,7 +33,7 @@ you do not give `--literature-root`.
 ## Step 2. Run it
 
 ```bash
-lit citations 1706.03621 --direction citing --sort mostcited
+litdb citations 1706.03621 --direction citing --sort mostcited
 ```
 
 | Option | What it does |
@@ -80,7 +80,7 @@ you asked for.
 | The result | What you do |
 |---|---|
 | `held_as` holds a directory name | The collection holds the paper. Read it with `use-literature`. |
-| `known_as` holds a tag, `held_as` is `null` | A paper here cites this work. Run `lit lookup <tag>` for the record. Ingest it with `add-paper` when the question needs the work itself. |
+| `known_as` holds a tag, `held_as` is `null` | A paper here cites this work. Run `litdb lookup <tag>` for the record. Ingest it with `add-paper` when the question needs the work itself. |
 | both are `null` | The collection does not know this paper. Report it, and offer `add-paper` with the arXiv identifier. |
 
 ## Rules

@@ -18,7 +18,7 @@ the commands share.
 
 | Module | Holds |
 |---|---|
-| `__main__.py` | the `lit` command: the subcommand table, and a lazy import of the module behind the name given |
+| `__main__.py` | the `litdb` command: the subcommand table, and a lazy import of the module behind the name given |
 | `cli.py` | the parser, `--literature-root`, the JSON printer, the exit codes |
 | `text.py` | normalising a title, a name on disk, a table cell, an author list, a sentence |
 | `paths.py` | where things are in a collection, and which files a citation can be in |

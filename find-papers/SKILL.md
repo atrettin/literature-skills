@@ -22,19 +22,19 @@ new and what is on disk already.
 Run every command from the root of the project, so that `literature/` resolves.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project. `lit` reads the variable itself, thus
+set, it is `literature/` in the project. `litdb` reads the variable itself, thus
 you do not give `--literature-root`.
 
-`lit find` orders its results with a cross-encoder when one is installed. Step 2
+`litdb find` orders its results with a cross-encoder when one is installed. Step 2
 tells you how to read which order you got.
 
 ## Step 1. Turn the question into a topic
 
 ```bash
-lit find --topic "how meson exchange currents change the quasielastic neutrino cross section"
+litdb find --topic "how meson exchange currents change the quasielastic neutrino cross section"
 ```
 
-**Write the question as a full phrase.** `lit find` reads `--topic` two times,
+**Write the question as a full phrase.** `litdb find` reads `--topic` two times,
 and each read uses a different part of it:
 
 1. It removes the common words. It searches arXiv for the terms that remain.
@@ -160,18 +160,18 @@ paper from it.
 |---|---|
 | `held_as` holds a directory name | The collection holds this paper in full. Read it with `use-literature`. Do not ingest it again. |
 | `held_as` holds a directory name, and your task did not put it there | Read the paper. Add it to the working set of your task when its text bears on a sub-question. `research-report/SKILL.md` defines the working set. |
-| `known_as` holds a tag, `held_as` is `null` | A paper in the collection cites this work. Run `lit lookup <tag>` for the full record. Ingest it with `add-paper` when the question needs the work itself. |
+| `known_as` holds a tag, `held_as` is `null` | A paper in the collection cites this work. Run `litdb lookup <tag>` for the full record. Ingest it with `add-paper` when the question needs the work itself. |
 | both are `null` | The collection does not know this paper. Report it, and offer the `add-paper` skill with the arXiv identifier. |
 
 ## Step 4. Weigh a candidate against the papers of your question
 
 A rank says how well a candidate's abstract answers your question. It does not
 say whether the candidate builds on the same works as the papers you hold for
-that question. `lit overlap` answers that from the reference store, which already
+that question. `litdb overlap` answers that from the reference store, which already
 holds every work that every held paper cites.
 
 ```bash
-lit overlap <arxiv-id> --scope <slug> --scope <slug>
+litdb overlap <arxiv-id> --scope <slug> --scope <slug>
 ```
 
 That command is an example. Replace each `<slug>` with a paper of your own

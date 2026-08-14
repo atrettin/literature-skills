@@ -22,13 +22,13 @@ division is about context rather than speed:
 
 | Agent | Reads | Why it is separate |
 |---|---|---|
-| `paper-ingestor` | one report, and no chapter | it handles an exception of the ingest — an ambiguous title, a name two works want. `lit add-paper` does the rest, and it reads no paper into any context. |
+| `paper-ingestor` | one report, and no chapter | it handles an exception of the ingest — an ambiguous title, a name two works want. `litdb add-paper` does the rest, and it reads no paper into any context. |
 | `paper-scout` | the whole paper, against the open sub-questions | `paper.json` says how long each chapter is and what it is called, and neither was written against these questions, so the record cannot say which chapter answers one. |
 | `terminology-scout` | the chapters that use one term | a term the query lacks is a question about the words of the field. The answer must differentiate the two names, and it must never equate them: "myocardial infarction" names the tissue death, and "heart attack" is also said of the event that causes it. |
 | `terminology-prospector` | the whole paper, for the names it gives the subject | a name can carry no string that a scan can match — an acronym a paper defines once, a symbol, or a name that no sentence joins to the subject. Only a reader of the whole paper finds those. It reads the paper for its vocabulary, which is a different question from the one a `paper-scout` reads it for, and a gate in the research loop decides when that second read is worth its tokens. |
 
 The request gate holds every command to one request at a time, at the pace each
-API asks for, across processes. So one `lit add-paper --auto` command ingests a whole
+API asks for, across processes. So one `litdb add-paper --auto` command ingests a whole
 queue of papers, and no agent has to serialise them. A scout reads local files,
 so several run together. They read the papers of the last command while the next
 command runs. The constraint is one request at a time, not one agent at a
@@ -42,7 +42,7 @@ addresses the file on disk. The report cites the anchor, which a new ingest keep
 The report goes to `reports/<task-slug>.source.md` in the project, beside
 `reports/<task-slug>.research-log.source.md`, which records each iteration: what
 was searched, what was read, what was found, and what stayed open. Both are the
-agent's own words and can be committed. `lit render-report` writes the two a
+agent's own words and can be committed. `litdb render-report` writes the two a
 person reads, `reports/<task-slug>.md` and its log, with every `lit:` marker
 resolved into a link for the collection's flavor — see
 [rendering.md](rendering.md).
@@ -55,7 +55,7 @@ anchor of the section the claim came from:
 [§2](lit:jeong_2023_shallow_deep_inelastic/02_introduction#sec-introduction))
 ```
 
-`lit check-report` then checks the report source the way the reference check
+`litdb check-report` then checks the report source the way the reference check
 checks the collection: every marker names a paper the collection holds, every
 chapter and anchor is one that paper has, every tag has a record, the body and
 the references name the same works (`cited_but_not_listed` names a work the body

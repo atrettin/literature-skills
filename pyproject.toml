@@ -29,7 +29,7 @@ rerank = ["flashrank>=0.2.9"]
 dev = ["pytest>=8.0", "pyright>=1.1.390"]
 
 [project.scripts]
-lit = "lit.__main__:main"
+litdb = "lit.__main__:main"
 
 [tool.setuptools]
 packages = ["lit"]

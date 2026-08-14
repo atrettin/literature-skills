@@ -36,7 +36,7 @@ file below the literature root.
 Run every command from the root of the project, so that `literature/` resolves.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project. `lit` reads the variable itself, thus
+set, it is `literature/` in the project. `litdb` reads the variable itself, thus
 you do not give `--literature-root`.
 
 **Find the collection first.** It is at `$LITERATURE_ROOT` when that variable is
@@ -99,9 +99,9 @@ set is that scope:
 
 | Tool | How you pass the set |
 |---|---|
-| `lit search` | `--paper <slug>` for each paper of the set, when you verify a claim of this task |
-| `lit terminology` | `--in-text <slug>` and `--cited-by <slug>` for each paper of the set, when you look for the other names of your subject |
-| `lit overlap` | `--scope <slug>` for each paper of the set, when you weigh a candidate against what you hold |
+| `litdb search` | `--paper <slug>` for each paper of the set, when you verify a claim of this task |
+| `litdb terminology` | `--in-text <slug>` and `--cited-by <slug>` for each paper of the set, when you look for the other names of your subject |
+| `litdb overlap` | `--scope <slug>` for each paper of the set, when you weigh a candidate against what you hold |
 
 A tool that you run over the whole collection answers a question about the
 collection. It does not answer a question about your task.
@@ -145,7 +145,7 @@ needs no ingest, and it counts against no limit. Pass a queue of identifiers to
 one command:
 
 ```bash
-lit add-paper --auto <arxiv-id> [<arxiv-id> …]
+litdb add-paper --auto <arxiv-id> [<arxiv-id> …]
 ```
 
 It sends one request at a time by itself, thus one command ingests the
@@ -161,7 +161,7 @@ weigh them against what you already hold.** A rank says how well an abstract
 answers the question. It does not say whether the candidate builds on the same
 works as the papers of your working set, and the reference store does say that.
 
-1. Run `lit overlap <arxiv-id> --scope <slug> …` on each candidate. Run one
+1. Run `litdb overlap <arxiv-id> --scope <slug> …` on each candidate. Run one
    check at a time: it asks INSPIRE, and INSPIRE limits its rate. Give
    `--scope <slug>` for each paper of your working set, out of the `## Working
    set` table of the log. Never `--all-papers`: the collection serves other
@@ -196,12 +196,12 @@ reading opens files on disk. Neither one sends a request.
 |---|---|
 | a `paper-scout`, or a `terminology-prospector`, on a paper that is on disk | yes |
 | your own read of a chapter | yes |
-| `lit lookup <tag>`, which reads the local store | yes |
-| `lit search "<phrase>"`, which reads the chapters on disk | yes |
-| a second `lit add-paper --auto` command, or a `paper-ingestor` | **no** |
+| `litdb lookup <tag>`, which reads the local store | yes |
+| `litdb search "<phrase>"`, which reads the chapters on disk | yes |
+| a second `litdb add-paper --auto` command, or a `paper-ingestor` | **no** |
 | a `find-papers` search | **no** |
-| `lit citations …`, which asks INSPIRE | **no** |
-| `lit overlap …`, which asks INSPIRE | **no** |
+| `litdb citations …`, which asks INSPIRE | **no** |
+| `litdb overlap …`, which asks INSPIRE | **no** |
 
 **Read a paper only after the command that ingests it reports.** The chapters
 are incomplete until then, and a scout that starts early reads a part of the
@@ -231,7 +231,7 @@ When the words are not at that line, do not conclude that the scout invented
 them. Find them instead:
 
 ```bash
-lit search "<the words the scout quoted>" --paper <slug>
+litdb search "<the words the scout quoted>" --paper <slug>
 ```
 
 **Never search for a quotation with `grep`.** A phrase copied out of a rendered
@@ -278,7 +278,7 @@ Name the paper that supplies the answer. Remove that paper's text, and the
 answer goes with it. Ask INSPIRE which papers cite that paper, newest first:
 
 ```bash
-lit citations <arxiv-id> --direction citing --sort mostrecent
+litdb citations <arxiv-id> --direction citing --sort mostrecent
 ```
 
 Read the titles and the summaries, and act:
@@ -319,14 +319,14 @@ the papers that your query lacks.
 each paper in your working set, and no more:
 
 ```bash
-lit terminology --topic "<your topic phrase>" \
+litdb terminology --topic "<your topic phrase>" \
           --in-text <slug> --cited-by <slug> \
           --in-text <slug> --cited-by <slug>
 ```
 
 The collection is persistent. It holds the papers of tasks that came before
 yours, and their words carry the vocabulary of other subjects. A scan of the
-whole store thus offers you the other names of somebody else's question. `lit
+whole store thus offers you the other names of somebody else's question. `litdb
 terminology` refuses to run without a scope for that reason. Never use `--all-papers`
 here: it answers a question about the collection, and not about your task.
 
@@ -405,7 +405,7 @@ reported, so that it does not hand you those back.
 A prospector calls no API, thus several run at the same time.
 
 **A term it proposes is a lead, and not a citation.** Open the line it gave you
-with `lit search` before any part of your report rests on it, exactly as you do for
+with `litdb search` before any part of your report rests on it, exactly as you do for
 a `paper-scout`. Discard a row whose line does not hold the words.
 
 Write the table in the log under `### Terminology`, **and the reason the gate
@@ -431,9 +431,9 @@ reader must know which one stopped you.
 |---|---|
 | The papers use a term that your query did not have | Search again with the words of the papers. Your first query used the words of the person who asked. |
 | The scan found a term that names your subject, and your query did not have it | Search again with that term in the topic phrase. |
-| A paper you read cites the claim that a sub-question needs | Backward: `lit lookup <tag>`. It costs nothing. Ingest the source only when the claim must be read at the source. |
-| The best paper is old, or the sub-question asks for the state of the art | Forward: `lit citations <arxiv-id> --direction citing --sort mostrecent` |
-| The sub-question needs the accepted treatment | Forward: `lit citations <arxiv-id> --direction citing --sort mostcited` |
+| A paper you read cites the claim that a sub-question needs | Backward: `litdb lookup <tag>`. It costs nothing. Ingest the source only when the claim must be read at the source. |
+| The best paper is old, or the sub-question asks for the state of the art | Forward: `litdb citations <arxiv-id> --direction citing --sort mostrecent` |
+| The sub-question needs the accepted treatment | Forward: `litdb citations <arxiv-id> --direction citing --sort mostcited` |
 | A sub-question is about a subject that no paper you read reaches | A new search, with a narrower phrase. This is the one case where a search beats the citation graph. |
 | Each result is broad and shallow | Divide the sub-question in two. Work on the halves. |
 
@@ -533,7 +533,7 @@ failure that this whole skill exists to prevent.
 ## How to cite
 
 **You write a marker, never a path.** A citation names the paper with a `lit:`
-marker, and `lit render-report` turns every marker into the link that opens the
+marker, and `litdb render-report` turns every marker into the link that opens the
 collection in whatever flavor it is rendered in. You therefore never compute a
 relative path, and never learn the flavor.
 
@@ -583,7 +583,7 @@ that says what that means.
 ## Step 6. Audit the report, then render it
 
 ```bash
-lit check-report reports/<task-slug>.source.md
+litdb check-report reports/<task-slug>.source.md
 ```
 
 It checks five things, against the store rather than against any rendered file:
@@ -601,7 +601,7 @@ It checks five things, against the store rather than against any rendered file:
 run it again. Then write the report a person reads:
 
 ```bash
-lit render-report reports/<task-slug>.source.md
+litdb render-report reports/<task-slug>.source.md
 ```
 
 That writes `reports/<task-slug>.md`, with every marker resolved into a link for
@@ -618,8 +618,8 @@ Then tell the user:
 ## Rules
 
 - **One request at a time reaches arXiv and INSPIRE.** The request gate holds
-  every command to that, across processes, so one `lit add-paper --auto` command
-  ingests a whole queue. Do not start a search, a `lit citations` lookup or a second
+  every command to that, across processes, so one `litdb add-paper --auto` command
+  ingests a whole queue. Do not start a search, a `litdb citations` lookup or a second
   ingest beside a running ingest. A scout and your own reading call no API, thus
   they run beside an ingest.
 - **Check for later work before you call a sub-question answered.** Step 4 says

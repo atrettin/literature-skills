@@ -127,7 +127,7 @@ def resolve_citations(text: str, context: Context) -> str:
 
     A group of tags becomes one pair of parentheses. A tag no record answers
     leaves the whole marker standing: half-linking it would hide the one thing
-    `lit check-references` has to report.
+    `litdb check-references` has to report.
     """
 
     def replace(match: re.Match) -> str:

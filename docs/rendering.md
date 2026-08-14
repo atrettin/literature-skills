@@ -1,6 +1,6 @@
 # Rendering the collection
 
-The store is the paper. What a person opens is a render of it, and `lit render`
+The store is the paper. What a person opens is a render of it, and `litdb render`
 writes that. Rendering is not optional — a report has to link to something a
 reader can open — but the flavor is a decision that one command changes.
 
@@ -34,23 +34,23 @@ not allowed on a heading, so a heading has no other address.
 
 It is a property of the files on disk, not of the shell that reads them. The
 anchors a render wrote are the anchors that are there, so a report written
-against a different flavor names anchors that are not. `lit render --flavor
+against a different flavor names anchors that are not. `litdb render --flavor
 <name>` records the answer; `$LITERATURE_FLAVOR` answers only for a collection
 that has never been rendered.
 
-`lit add-paper` renders each paper it ingests in the recorded flavor, so a
+`litdb add-paper` renders each paper it ingests in the recorded flavor, so a
 collection is never half one thing and half another.
 
 ## The commands
 
 ```bash
-lit render                          # again, in the recorded flavor
-lit render --flavor obsidian        # change the flavor, and record it
-lit render --flavor obsidian --out ~/vault/lit   # elsewhere; records nothing
-lit render-report reports/x.source.md
+litdb render                          # again, in the recorded flavor
+litdb render --flavor obsidian        # change the flavor, and record it
+litdb render --flavor obsidian --out ~/vault/lit   # elsewhere; records nothing
+litdb render-report reports/x.source.md
 ```
 
-`lit render` writes every paper's `INDEX.md`, chapters and `FIGURES.md`, the
+`litdb render` writes every paper's `INDEX.md`, chapters and `FIGURES.md`, the
 reference views, and the collection index. It then **sweeps**: a rendered file
 under a paper's directory that this render did not write is deleted, so a
 chapter the store no longer holds cannot outlive it. Only rendered files are
@@ -68,7 +68,7 @@ A report is written twice.
 
 ```
 reports/<task>.source.md   the agent writes this, with lit: markers
-reports/<task>.md          lit render-report writes this, with real links
+reports/<task>.md          litdb render-report writes this, with real links
 ```
 
 The source is the master. The agent that writes it never learns the flavor, and
@@ -84,9 +84,9 @@ A `lit:` target cannot be mistaken for a path, which is the point: an agent that
 writes a relative path instead has written something the checker can see is
 wrong. A marker that names nothing the collection holds is left standing rather
 than turned into a link — a dead citation that looks live is worse than one that
-looks dead — and `lit check-report` reports it.
+looks dead — and `litdb check-report` reports it.
 
-`lit check-report` reads the **source**, and checks it against the store: the
+`litdb check-report` reads the **source**, and checks it against the store: the
 paper, the chapter, the anchor, the tag. The rendered report is written from a
 checked source, so its links resolve by construction, and one check answers for
 every flavor the collection is ever rendered in.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What every command of `lit` does the same way.
+"""What every command of `litdb` does the same way.
 
 A command builds a parser here, parses through `parse` so the request gate
 locks the collection the caller named, and prints one JSON object. The exit
@@ -27,7 +27,7 @@ JUDGEMENT = 2
 
 
 # What the usage line calls this program. `lit/__main__.py` sets it to the
-# subcommand it is about to run, so `lit search --help` says `lit search` and
+# subcommand it is about to run, so `litdb search --help` says `litdb search` and
 # not the path of a module.
 PROGRAM: str | None = None
 

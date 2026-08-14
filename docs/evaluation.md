@@ -14,7 +14,7 @@ that a script can give.
 
 | Question | How it is answered |
 |---|---|
-| Does each citation open the text it names? | `lit check-report`. Measured. |
+| Does each citation open the text it names? | `litdb check-report`. Measured. |
 | Does the report cite the papers that the task needs? | Compare against a set of papers that a person chose. Measured, against a judgement. |
 | Does the cited text support the claim beside it? | A person or a model reads both. Judged. |
 | Is the report honest about what the literature does not settle? | A person or a model reads it. Judged. |
@@ -52,7 +52,7 @@ Run one task at a time. arXiv and INSPIRE limit their rate.
 
 | Number | Where it comes from | Kind |
 |---|---|---|
-| Audit | `lit check-report` on the report. Record whether it passed at the first try, and what failed if it did not. | measured |
+| Audit | `litdb check-report` on the report. Record whether it passed at the first try, and what failed if it did not. | measured |
 | Must-cite recall | the share of the must-cite papers that the references of the report name. Match by DOI and arXiv identifier. | measured |
 | Extra papers | how many papers the report cites that the must-cite set does not name. A high number is not a failure. Read them: they are either a wider answer or a wandering search. | measured |
 | Iterations, ingests, API calls | the research log. This is why the log is written as the work runs, and never edited. | measured |

@@ -1,6 +1,6 @@
 """Fixtures shared by the tests.
 
-`pytest.ini` puts the repository root on the path, so `lit` imports here from
+`pytest.ini` puts the repository root on the path, so `litdb` imports here from
 the working tree rather than from wherever it happens to be installed.
 """
 

@@ -18,7 +18,7 @@ Three forms of marker, matching the three things a report cites:
     lit:ref/<tag>                     a work the collection knows but does not hold
 
 A marker that names nothing the collection holds is left as it stands, and
-`lit check-report` is what reports it. Rewriting it into a link would turn a
+`litdb check-report` is what reports it. Rewriting it into a link would turn a
 citation that leads nowhere into one that merely looks as if it does.
 
 Usage:

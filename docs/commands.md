@@ -1,6 +1,6 @@
 # The commands
 
-`lit` is one command in front of ten. Each takes `--help`, and each expects to
+`litdb` is one command in front of ten. Each takes `--help`, and each expects to
 run from the root of the project that holds `literature/` — or with
 `LITERATURE_ROOT` set, from anywhere. Each prints one JSON object, and its exit
 status says who acts: `0` it answered, `1` what was asked for is absent or
@@ -8,21 +8,21 @@ unreadable, `2` a bad argument or a judgement for the caller to make.
 
 | Command | Answers |
 |---|---|
-| `lit add-paper --auto <arxiv-id> …` | **the entry point.** Ingests each paper end to end, and prints one report per paper |
-| `lit find --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, describes each hit with its length and its citation count, and marks the ones the collection holds |
-| `lit overlap <arxiv-id> --scope <slug>` | says how much of what a candidate paper cites the collection already knows |
-| `lit citations <arxiv-id>` | finds the papers that cite one paper, and the works it draws on |
-| `lit lookup <tag>` | resolves one citation, or searches the reference store |
-| `lit search "<phrase>"` | finds a phrase in the text of the papers, and gives the chapter, the anchor and the line |
-| `lit terminology --topic "…" --in-text <slug> --cited-by <slug>` | weighs the multiword terms of the named papers and of the titles they cite, and reports the ones the topic does not hold, with the passages that state an alias |
-| `lit render` | writes the collection a person reads, from the store, in one flavor |
-| `lit render-report <report.source.md>` | turns the `lit:` markers of a report into the links of that flavor |
-| `lit check-report <report.source.md>` | asserts that every citation of a report names text the collection holds |
-| `lit inspire <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
-| `lit references --render-only` | renders `REFERENCES.md` and the pages under `references/` from the store |
+| `litdb add-paper --auto <arxiv-id> …` | **the entry point.** Ingests each paper end to end, and prints one report per paper |
+| `litdb find --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, describes each hit with its length and its citation count, and marks the ones the collection holds |
+| `litdb overlap <arxiv-id> --scope <slug>` | says how much of what a candidate paper cites the collection already knows |
+| `litdb citations <arxiv-id>` | finds the papers that cite one paper, and the works it draws on |
+| `litdb lookup <tag>` | resolves one citation, or searches the reference store |
+| `litdb search "<phrase>"` | finds a phrase in the text of the papers, and gives the chapter, the anchor and the line |
+| `litdb terminology --topic "…" --in-text <slug> --cited-by <slug>` | weighs the multiword terms of the named papers and of the titles they cite, and reports the ones the topic does not hold, with the passages that state an alias |
+| `litdb render` | writes the collection a person reads, from the store, in one flavor |
+| `litdb render-report <report.source.md>` | turns the `lit:` markers of a report into the links of that flavor |
+| `litdb check-report <report.source.md>` | asserts that every citation of a report names text the collection holds |
+| `litdb inspire <arxiv-id>` | asks INSPIRE-HEP where a paper was published |
+| `litdb references --render-only` | renders `REFERENCES.md` and the pages under `references/` from the store |
 
 
-`lit find` climbs three rungs, and stops at the first that answers: every term
+`litdb find` climbs three rungs, and stops at the first that answers: every term
 scoped to the abstract, then the topic quoted as the title of a paper, then any
 term anywhere in the record. The title rung is what answers a caller who names
 a paper rather than a subject; it runs only for a topic short enough to be a
@@ -35,7 +35,7 @@ everything. `query.term_weights` reports what each term was worth, so a reader
 can account for the order. `missing_terms` stays the plain list of terms a
 paper lacks.
 
-`lit find` sends one INSPIRE request for its shortlist, after its arXiv
+`litdb find` sends one INSPIRE request for its shortlist, after its arXiv
 requests. That request gives the citation count, the document type and the page
 count of each candidate. A candidate INSPIRE does not hold keeps `null` in those
 fields, and its length then comes from the arXiv comment. `--kind review` keeps
@@ -43,7 +43,7 @@ the papers whose venue or INSPIRE document type names them a review, and
 `--sort {relevance,recent,cited}` re-orders the shortlist without changing which
 papers are on it.
 
-`lit terminology` finds new search terms that are related to the topic in
+`litdb terminology` finds new search terms that are related to the topic in
 one of two different corpora. Calling it with `--in-text <slug>` reads the
 papers themselves: the title, the abstract, the headings, the figure captions
 and the paragraphs. `--cited-by <slug>` reads the titles of the works those
@@ -85,7 +85,7 @@ iteration.
 
 ### Weighing a candidate against what you hold
 
-`lit overlap` compares the works a candidate paper cites with the works
+`litdb overlap` compares the works a candidate paper cites with the works
 the papers in scope cite. Both sides are sets of *works*, resolved by the store's
 own rule of identity — a DOI, an arXiv identifier, an INSPIRE record number, or a
 journal with a volume and a page — and never sets of tags or titles. The signal
@@ -93,7 +93,7 @@ is the Szymkiewicz-Simpson coefficient, `|C ∩ R| / min(|C|, |R|)`, whose `min`
 denominator keeps a 30-reference letter comparable with a 500-reference review.
 
 The scope is required, and it takes the same shape as the scope of
-`lit terminology`: `--scope <slug>` for each paper of one task, or
+`litdb terminology`: `--scope <slug>` for each paper of one task, or
 `--all-papers`. A held paper outside the scope is reported under `outside_scope`,
 with its coefficient and no band. It is on disk already, so reading it costs no
 ingest — and because an earlier task chose it for another subject, it must not
@@ -112,7 +112,7 @@ question best is often the one that works on the same material.
 
 ## Rendering
 
-`lit render` writes the collection a person reads, from the store, in one flavor
+`litdb render` writes the collection a person reads, from the store, in one flavor
 — `vscode` or `obsidian`. Without `--flavor` it renders again in the flavor
 `literature/.collection.json` records; with one it renders in that flavor and
 records it. `--out <dir>` writes elsewhere, recording nothing and deleting
@@ -120,7 +120,7 @@ nothing. It sweeps each paper of rendered files this render did not write, and
 re-renders every report under `reports/`, so a flavor change never leaves a
 report citing anchors that moved.
 
-`lit render-report <path>` turns the `lit:` markers of a report source into the
+`litdb render-report <path>` turns the `lit:` markers of a report source into the
 links of the recorded flavor, writing `<task>.md` beside `<task>.source.md`.
 [rendering.md](rendering.md) has the three marker forms and what each resolves
 to.

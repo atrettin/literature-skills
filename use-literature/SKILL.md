@@ -18,7 +18,7 @@ skill starts one.
 Run every command from the root of the project, so that `literature/` resolves.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project. `lit` reads the variable itself, thus
+set, it is `literature/` in the project. `litdb` reads the variable itself, thus
 you do not give `--literature-root`. Read and write the collection's files at
 that path.
 
@@ -43,9 +43,9 @@ literature/
 ```
 
 **Read what is stored.** The rendered files are written from the store for a
-person, in whichever flavor `lit render` last wrote — one of `vscode` or
+person, in whichever flavor `litdb render` last wrote — one of `vscode` or
 `obsidian`, and the links and anchors in them differ accordingly. The store says
-the same thing in one form, and it is the form every `lit` command answers in.
+the same thing in one form, and it is the form every `litdb` command answers in.
 
 The slug is `<first-author-surname>_<year>_<keyword>`. The year in it is the
 year the preprint went to arXiv, which is not always the year of publication.
@@ -82,7 +82,7 @@ now, and a re-ingest moves it.
 
 A citation is stored as `[cite: <tag>]` and a reference the paper makes to
 itself as `[ref: <label>]`. Both are markers and neither is a link: what a link
-looks like belongs to the flavor the collection is rendered in. `lit lookup`
+looks like belongs to the flavor the collection is rendered in. `litdb lookup`
 turns a tag into the publication it names — see below. A `[ref: label]` is the
 paper saying "see elsewhere in this paper"; `paper.json` has a `labels` entry
 saying which chapter and anchor it resolves to.
@@ -91,7 +91,7 @@ Maths is stored as the paper wrote it, and never as a rendered `$$…$$`. A bloc
 of `kind` `math` is one display equation, with the environment the paper used
 and the numbers it carries; `$…$` inside a paragraph is inline maths.
 
-You do not have to find an anchor yourself: `lit search` gives the anchor of
+You do not have to find an anchor yourself: `litdb search` gives the anchor of
 every block it matches, and `location` in its answer is the citation form.
 
 Read `figures/` for a figure. `figures_raw/` exists only so the conversion can
@@ -106,7 +106,7 @@ be redone; never read it, and never delete it.
    subsection titles beside it and the word count. A title names the subject,
    and the word count says which chapter carries the argument rather than a
    page of definitions.
-5. Run `lit search` for a phrase of the question when the titles leave the choice
+5. Run `litdb search` for a phrase of the question when the titles leave the choice
    open. It answers with the chapter, the anchor and the line, so it selects the
    chapter and finds the passage in one step.
 6. Read `text/<stem>.jsonl` for the chapters that steps 4 and 5 name, and one
@@ -123,13 +123,13 @@ A paper states plenty it did not establish itself. Where it says so, it cites:
 
 The marker carries the tag, here `bodek_2008_axial_mass_quasielastic`.
 **Do not open `references/<tag>.md`.** That page and `REFERENCES.md` are both
-rendered for a person to read; `lit lookup` is the one way you resolve a
+rendered for a person to read; `litdb lookup` is the one way you resolve a
 citation, and it answers with more, from the store the two are rendered from.
 Look the tag up before you repeat the claim as though the paper you are reading
 had shown it:
 
 ```bash
-lit lookup bodek_2008_axial_mass_quasielastic
+litdb lookup bodek_2008_axial_mass_quasielastic
 ```
 
 It answers in JSON with the title, authors, year, journal, DOI and arXiv
@@ -156,10 +156,10 @@ What the answer can tell you:
 The same tool searches, when you have no tag in hand:
 
 ```bash
-lit lookup --search "quasielastic neutrino"   # title, author, journal
-lit lookup --doi 10.1103/physrevc.48.1246
-lit lookup --arxiv 1611.07770
-lit lookup --cited-by <slug>                  # everything a paper draws on
+litdb lookup --search "quasielastic neutrino"   # title, author, journal
+litdb lookup --doi 10.1103/physrevc.48.1246
+litdb lookup --arxiv 1611.07770
+litdb lookup --cited-by <slug>                  # everything a paper draws on
 ```
 
 `literature/REFERENCES.md` is a view of the same data, sorted most-cited first,
@@ -175,14 +175,14 @@ Before you write a quotation into a report, find it in the paper it is said to
 come from:
 
 ```bash
-lit search "<the words>" --paper <slug>
+litdb search "<the words>" --paper <slug>
 ```
 
 **Do not use `grep` for this.** A phrase copied out of a rendered chapter
 carries the line break the reader's viewer put in it, and `grep` then gives no
 match. Some files hold a NUL byte, and `grep` prints nothing for the whole file
 — no error, and no "binary file matches". Both failures make text that is
-present look absent. `lit search` matches the phrase and the stored block
+present look absent. `litdb search` matches the phrase and the stored block
 against each other in the same flat form, so neither can hide the other.
 
 The answer gives `location`, which is what a report cites, and `line_location`,
@@ -201,9 +201,9 @@ serves more than one question, and it keeps the papers of each. Such a hit is
 evidence about that paper. It is not evidence about yours. Read it, and decide.
 
 ```bash
-lit search "axial mass" --paper <slug> --paper <slug>   # your working set
-lit search "axial mass"                                 # the whole collection
-lit search "M_A\s*=\s*1.03" --regex
+litdb search "axial mass" --paper <slug> --paper <slug>   # your working set
+litdb search "axial mass"                                 # the whole collection
+litdb search "M_A\s*=\s*1.03" --regex
 ```
 
 ## To find a figure
@@ -222,13 +222,13 @@ paper drew it as panels.
 
 ## To find a paper that is not there
 
-1. Search the references first: `lit lookup --search "<author or title word>"`.
+1. Search the references first: `litdb lookup --search "<author or title word>"`.
    A paper the collection does not hold may still be cited by one that it does,
    and the answer gives you the arXiv identifier to fetch it by.
 2. Search arXiv with the `find-papers` skill. It searches abstracts rather than
    titles, so it finds a paper on the subject of the question, and it marks the
    results the collection already holds. Use it when the question names a
-   subject; `lit lookup` above answers when you have a name or a title.
+   subject; `litdb lookup` above answers when you have a name or a title.
 3. Otherwise tell the user that the database has no paper on the subject.
 4. Offer the `add-paper` skill.
 
@@ -255,23 +255,23 @@ the slug. Say that you did it and why.
   year in a citation is `publication.published_year` for a published paper and
   `submitted_year` for a preprint.
 - Attribute a claim to the work that made it. When a paper you read cites
-  someone else for a fact, resolve the tag with `lit lookup` and cite that work.
+  someone else for a fact, resolve the tag with `litdb lookup` and cite that work.
   Citing the paper you happened to read for a result it borrowed puts a wrong
   attribution into the project's documentation.
 - Never edit a rendered file — `README.md`, `REFERENCES.md`, `references/`,
   `INDEX.md` or anything under `chapters/`. Every one of them is written again
-  from the store whenever a paper is added or `lit render` runs, so an edit
+  from the store whenever a paper is added or `litdb render` runs, so an edit
   there is lost. Never edit `.references.jsonl` or `text/` either; both belong
   to `add-paper`.
 - A claim that a paper does not hold something needs a search method that you
   can state. A `grep` that found nothing is not such a method: it fails silently
-  on wrapped text and on a file with a NUL byte. Search with `lit search`, and say
+  on wrapped text and on a file with a NUL byte. Search with `litdb search`, and say
   which phrases you searched for.
-- Give `lit search` a scope. The collection serves more than one task and keeps the
+- Give `litdb search` a scope. The collection serves more than one task and keeps the
   papers of each, so name the papers with `--paper` when the question is about
   your task. Leave `--paper` out when the question is about the collection
   itself. Read the `scope` block of the answer, and check that it holds the
   papers that you meant.
 - Never answer from a citation alone. Its text and its tag both carry an author
   and a year, which is enough to look convincing and not enough to be right —
-  they are identifiers, not citations. Resolve the tag with `lit lookup`.
+  they are identifiers, not citations. Resolve the tag with `litdb lookup`.

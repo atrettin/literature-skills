@@ -61,7 +61,7 @@ you could not verify, and keep it visible.
   rate limit of an API. Put those in the last section of that file.
 - The arXiv API and the INSPIRE-HEP API both limit their rate. `lit/rate_gate.py`
   holds every command to one request at a time, at the pace each API asks for,
-  and it does so across processes. One `lit add-paper --auto` command therefore
+  and it does so across processes. One `litdb add-paper --auto` command therefore
   ingests a whole queue of papers. Do not call these APIs beside a running
   ingest, and do not spawn sub-agents that call them in parallel. A rate limit
   that you hit costs more time than the work that you tried to make parallel.

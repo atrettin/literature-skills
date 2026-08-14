@@ -8,11 +8,11 @@ model: sonnet
 Run the ingest for the paper that you were given:
 
 ```bash
-lit add-paper --auto <arxiv-id>
+litdb add-paper --auto <arxiv-id>
 ```
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project. `lit` reads the variable itself.
+set, it is `literature/` in the project. `litdb` reads the variable itself.
 
 It prints one JSON report. Its exit code says what you do next.
 

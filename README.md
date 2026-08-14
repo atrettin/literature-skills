@@ -25,7 +25,7 @@ cd ~/work/software/literature-skills
 ./install.sh
 ```
 
-That installs the `lit` command and symlinks the six skills into
+That installs the `litdb` command and symlinks the six skills into
 `~/.claude/skills/` and the four agents into `~/.claude/agents/`. Because they
 are symlinks, `git pull` in the clone updates every project at once.
 
@@ -35,7 +35,7 @@ It installs into whichever Python runs it. To choose one:
 PYTHON=~/.venvs/tools/bin/python ./install.sh
 ```
 
-The installer says where `lit` landed, and what to add to `PATH` if that
+The installer says where `litdb` landed, and what to add to `PATH` if that
 directory is not on it.
 
 Two external programs convert some figures, and pip does not install them. A
@@ -59,13 +59,13 @@ Ask Claude Code for what you want, in a project. The skills load themselves:
 The same work by hand:
 
 ```bash
-lit --help                          # the ten commands
-lit add-paper --auto 2307.09241     # ingest a paper
-lit search "axial mass"             # find a phrase in what you hold
-lit lookup bodek_2008_axial_mass_quasielastic   # resolve a citation
+litdb --help                          # the ten commands
+litdb add-paper --auto 2307.09241     # ingest a paper
+litdb search "axial mass"             # find a phrase in what you hold
+litdb lookup bodek_2008_axial_mass_quasielastic   # resolve a citation
 ```
 
-Run `lit` from the root of a project, so that `literature/` resolves.
+Run `litdb` from the root of a project, so that `literature/` resolves.
 
 ## A collection shared between projects
 
@@ -102,11 +102,11 @@ produced it, so a reader always knows which of the two they have.
 
 | Document | What is in it |
 |---|---|
-| [docs/commands.md](docs/commands.md) | Every `lit` command, and what each one answers |
+| [docs/commands.md](docs/commands.md) | Every `litdb` command, and what each one answers |
 | [docs/research.md](docs/research.md) | The research loop: the agents, the report, and how a citation is checked |
 | [docs/ingest.md](docs/ingest.md) | Ingesting without an agent: the exit codes, the report fields, the warnings |
 | [docs/papers.md](docs/papers.md) | What a paper is stored as, and the anchors a citation reaches |
-| [docs/rendering.md](docs/rendering.md) | The flavors, `lit render`, and the `lit:` markers a report cites with |
+| [docs/rendering.md](docs/rendering.md) | The flavors, `litdb render`, and the `lit:` markers a report cites with |
 | [docs/references.md](docs/references.md) | Citations, the reference store, and what makes one verifiable |
 | [docs/developing.md](docs/developing.md) | The layout of `lit/`, the tests, and the type checker |
 | [docs/evaluation.md](docs/evaluation.md) | Measuring whether a change to the skills made the answers better |
