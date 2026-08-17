@@ -74,6 +74,30 @@ def markers_in(text: str) -> list[str]:
     return MARKER.findall(text)
 
 
+def research_log(report_path: Path) -> str | None:
+    """The name of the log beside this report, or None where there is none.
+
+    A report is written as `<task>.source.md`, and its log as
+    `<task>.research-log.source.md`. Both suffixes come from `render_report`,
+    which decides them, so the audit looks for the file that command writes
+    rather than for a name spelled again here. Either form counts: the source is
+    the master, and the rendered log is what a reader opens.
+    """
+    from lit import render_report
+
+    name = report_path.name
+    if name.endswith(render_report.SOURCE_SUFFIX):
+        stem = name[: -len(render_report.SOURCE_SUFFIX)]
+    else:
+        stem = report_path.stem
+
+    for suffix in (render_report.LOG_SOURCE_SUFFIX, render_report.LOG_SUFFIX):
+        candidate = report_path.with_name(stem + suffix)
+        if candidate.is_file():
+            return candidate.name
+    return None
+
+
 def check_markers(found: list[str], root: Path) -> list[dict]:
     """Every marker that names nothing the collection holds, and why.
 
@@ -274,14 +298,7 @@ def check(report_path: Path, root: Path) -> dict:
         # The log says how the report was reached: what was searched, what was
         # read, and what the search never answered. A reader auditing a claim
         # the report does not make has nowhere else to look.
-        "research_log": next(
-            (
-                str(candidate.name)
-                for candidate in [report_path.with_suffix(".research-log.md")]
-                if candidate.is_file()
-            ),
-            None,
-        ),
+        "research_log": research_log(report_path),
     }
 
 

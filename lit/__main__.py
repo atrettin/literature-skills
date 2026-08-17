@@ -15,11 +15,14 @@ import sys
 # built from this, so a command that is added here is documented by that.
 COMMANDS: dict[str, tuple[str, str]] = {
     "add-paper": ("lit.add_paper", "ingest a paper from arXiv into the collection"),
+    "remove": ("lit.remove_paper", "take a paper out of the collection"),
     "find": ("lit.arxiv_discover", "find papers on arXiv by the subject of their abstracts"),
     "overlap": ("lit.collection_overlap", "weigh a candidate paper against what the collection holds"),
     "citations": ("lit.inspire_citations", "the papers that cite a paper, and the works it draws on"),
     "lookup": ("lit.reference_lookup", "what the collection knows about a cited work"),
     "search": ("lit.search_literature", "find a phrase in the text of the papers"),
+    "show": ("lit.show_text", "read what stands at an address in a paper"),
+    "toc": ("lit.toc", "what a paper is, and every chapter and section in it"),
     "render": ("lit.render", "write the collection a person reads, in one flavor"),
     "render-report": ("lit.render_report", "turn the lit: markers of a report into links"),
     "terminology": ("lit.terminology_scan", "the other names the literature uses for a subject"),

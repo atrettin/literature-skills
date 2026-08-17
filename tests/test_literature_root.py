@@ -17,7 +17,7 @@ from lit import collection_overlap
 from lit import inspire_citations
 from lit import reference_lookup
 from lit import paths
-from lit import search_literature
+from lit import search_literature, show_text, toc
 
 
 def test_default_root_is_the_project_collection(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -42,8 +42,10 @@ def test_an_empty_variable_is_no_variable(monkeypatch: pytest.MonkeyPatch) -> No
         (lambda: arxiv_discover.build_parser(), ["--topic", "quasielastic"]),
         (lambda: reference_lookup.build_parser(), ["some_tag"]),
         (lambda: inspire_citations.build_parser(), ["1706.03621"]),
-        (lambda: collection_overlap.build_parser(), ["1706.03621", "--all-papers"]),
+        (lambda: collection_overlap.build_parser(), ["1706.03621", "--scope", "disk"]),
         (lambda: search_literature.build_parser(), ["axial mass"]),
+        (lambda: show_text.build_parser(), ["a_slug/01_chapter"]),
+        (lambda: toc.build_parser(), ["a_slug"]),
     ],
 )
 def test_each_parser_reads_the_variable(

@@ -104,3 +104,51 @@ def test_a_line_that_is_not_json_names_itself(tmp_path: Path) -> None:
         assert "line 2" in str(error)
     else:
         raise AssertionError("a line that is not JSON must raise")
+
+
+# --------------------------------------------------------------------------
+# stepping from one block to the next
+# --------------------------------------------------------------------------
+
+
+def near(anchor: str, level: int = 0, kind: str = "paragraph") -> dict:
+    if kind == "heading":
+        return {"kind": "heading", "level": level, "title": anchor, "anchor": anchor}
+    return {"kind": kind, "anchor": anchor, "text": "the words"}
+
+
+def test_neighbours_step_to_the_blocks_either_side() -> None:
+    chapter = [near("p1"), near("p2"), near("p3")]
+    assert blocks.neighbours(chapter, 1) == {
+        "prev": "p1", "next": "p3", "parent": None,
+    }
+
+
+def test_neighbours_are_none_at_the_ends_of_a_chapter() -> None:
+    chapter = [near("p1"), near("p2")]
+    assert blocks.neighbours(chapter, 0)["prev"] is None
+    assert blocks.neighbours(chapter, 1)["next"] is None
+
+
+def test_neighbours_step_over_a_block_with_no_anchor() -> None:
+    """A block ingested before every block had an address cannot be opened,
+    so naming it would send a caller to a place it cannot reach."""
+    chapter = [near("p1"), {"kind": "math", "anchor": "", "tex": "x"}, near("p2")]
+    assert blocks.neighbours(chapter, 2)["prev"] == "p1"
+
+
+def test_the_parent_of_a_block_is_the_heading_above_it() -> None:
+    chapter = [near("sec-one", 1, "heading"), near("p1"), near("p2")]
+    assert blocks.neighbours(chapter, 2)["parent"] == "sec-one"
+
+
+def test_the_parent_of_a_heading_skips_its_own_equals() -> None:
+    """Two sections at one level are siblings. A sibling is not a parent."""
+    chapter = [
+        near("sec-top", 1, "heading"),
+        near("sec-a", 2, "heading"), near("p1"),
+        near("sec-b", 2, "heading"), near("p2"),
+    ]
+    assert blocks.neighbours(chapter, 3)["parent"] == "sec-top"
+    # A block under the second sibling still belongs to that sibling.
+    assert blocks.neighbours(chapter, 4)["parent"] == "sec-b"

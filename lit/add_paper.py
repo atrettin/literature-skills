@@ -280,6 +280,20 @@ def fetch(arxiv_id: str, args) -> tuple[dict, str]:
                              host="arxiv.org", reason=str(error))
 
         manifest["arxiv_id"] = arxiv_id
+        expected = getattr(args, "expect_title", "") or ""
+        if expected and collapse_whitespace(expected).lower() not in \
+                collapse_whitespace(manifest.get("title", "")).lower():
+            # An identifier recalled rather than read resolves to a real paper,
+            # and every stage after this succeeds on it. The collection then
+            # holds a paper nobody wanted and there is nothing in the report to
+            # say so. The caller knows what it went looking for, so it can say.
+            raise Exception2(
+                "TITLE_MISMATCH",
+                "%s is %r, which does not hold %r" % (
+                    arxiv_id, manifest.get("title", ""), expected),
+                arxiv_id=arxiv_id, title=manifest.get("title", ""),
+                expected=expected,
+            )
         if args.slug:
             slug = args.slug
         else:
@@ -427,6 +441,28 @@ def check(root: Path, slug: str, report: dict) -> Exception2 | None:
         })
     if ok:
         return None
+
+    # A tag that resolves to nothing is a property of the source bibliography,
+    # and not of this paper's text. A paper whose chapters, figures and anchors
+    # all landed is a paper the collection can read and cite; only the works it
+    # points *out* to are short. That is the same class of defect as
+    # `UNVERIFIED_REFERENCES`, which is already a warning, and raising it
+    # instead costs an agent a spawn to discover that nothing is broken.
+    #
+    # A duplicate, a missing page or a stale record is different: each one makes
+    # the store itself wrong, and the store serves every paper.
+    if not (found["duplicates"] or found["missing_pages"] or found["stale"]):
+        report["warnings"].append({
+            "code": "UNRESOLVED_CITATIONS",
+            "detail": "%d citation tag(s) of this paper resolve to no record, so "
+                      "the works they name cannot be looked up: %s. The paper's "
+                      "own text is complete and citable." % (
+                          len(report["checks"]["unresolved"]),
+                          ", ".join(report["checks"]["unresolved"][:5])),
+            "count": len(report["checks"]["unresolved"]),
+        })
+        return None
+
     return Exception2(
         "REFERENCE_CHECK_FAILED",
         "the citations of %s do not all resolve" % slug,
@@ -554,6 +590,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--author", help="one author name; the surname is what matters")
     parser.add_argument("--year", type=int, help="the year of the paper")
     parser.add_argument("--slug", help="the directory name to use, rather than a derived one")
+    parser.add_argument(
+        "--expect-title", metavar="TEXT",
+        help="refuse the paper unless its title holds this text; the guard "
+             "against an identifier that was remembered rather than read",
+    )
     parser.add_argument("--force", action="store_true",
                         help="replace a paper directory that is already there")
     cli.add_root_argument(parser)

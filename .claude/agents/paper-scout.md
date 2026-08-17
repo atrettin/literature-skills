@@ -21,14 +21,13 @@ slug that you were given.
 Report one line for each location:
 
 ```
-SQ2 | text/03_results.jsonl:181 | #sec-axialff | "<quotation>" | <how it bears, in one line>
+SQ2 | andreopoulos_2015_genie/03_results#p9 | "<quotation>" | <how it bears, in one line>
 ```
 
 | Part | What it holds |
 |---|---|
 | SQn | the sub-question. |
-| file:line | the stored chapter, as a path below the paper's directory, then a colon and the number of the line the quotation is on. One line is one block, so a quotation from one block is one line. |
-| anchor | the `anchor` field of that block, written with its `#`. Leave it empty when the block's anchor is `""`. |
+| address | `<slug>/<stem>#<anchor>`: the paper, the chapter the quotation is in, and the anchor of the block that holds it. |
 | quotation | the words of the paper. Two sentences at most. |
 | how it bears | supports it, contradicts it, gives the number, or gives the method. |
 
@@ -36,32 +35,33 @@ Then report the sub-questions that this paper does not touch, by number.
 
 Seven rules:
 
-- **Give a line number for each quotation.** The `Read` tool prints a number in
-  front of each line. Copy the number of the line that starts the quotation. The
-  caller reads the chapter at that line and compares. The caller discards a
-  quotation that carries no line number.
-- **Never guess a line number.** Report only a line that you read. A wrong number
-  wastes the caller's read. It also breaks the caller's trust in the quotation
-  beside it.
-- **Grep a few words at most.** Chapter text wraps at about 70 characters. A
-  grep for a whole sentence thus finds nothing while the sentence is there. You
-  have no `Bash` tool, thus you cannot run `litdb search`. The caller
-  runs it. When a grep finds nothing, read the chapter. Never say the paper does
-  not hold a text because a grep missed it.
+- **Give the anchor of the block the quotation is in.** One line of a `.jsonl`
+  is one block, and that line carries its own `anchor` field beside the words.
+  Copy it from there. You are reading the anchor and the words in the same
+  place, so the two cannot come apart.
+- **Never the chapter's anchor when the block has one of its own.** The chapter
+  heading names a section that runs for pages, and the caller then has to find
+  the block inside it. Every block has an anchor, so there is always one to
+  give: `#p9` for the ninth paragraph, `#eq-ckmt` or `#fig-f2` for something the
+  paper labelled, `#b3` for a block the paper did not label.
+- **Report no line numbers.** A line number describes the file that holds the
+  paper rather than the paper: a new ingest rewrites the chapter and moves it.
+  The anchor is the address, and it is the only one.
+- **Grep whole sentences freely.** One line is one block, so a sentence of the
+  paper sits on one line and a grep for it matches. What a grep cannot find is
+  mathematics: an equation is stored as the TeX the paper wrote, so the words a
+  reader sees around a symbol are not in that block. Read the chapter for those.
 - **Quote exactly.** Copy the words of the paper inside the quotation marks.
-  Never paraphrase there. The text of a chapter wraps across lines, thus a
-  quotation of one sentence can cover two lines. Join the two lines with one
-  space. A chapter writes its mathematics as LaTeX, and you can write
-  `$\nu_\mu$` as `ν_μ` in a quotation. The words must stay the words of the
-  paper.
-- **"Nothing relevant" is an answer.** Report it. It is not a failure, and it
-  saves the caller a read.
-- **Give the anchor that is above the text**, and not the anchor of the chapter,
-  when the chapter has more than one.
+  Never paraphrase there. A chapter writes its mathematics as LaTeX, and you can
+  write `$\nu_\mu$` as `ν_μ` in a quotation. The words must stay the words of
+  the paper.
+- **"Nothing relevant" is an answer.** Report it. You are the only reader that
+  goes through this paper end to end, so you are the only one who can say that
+  the paper does not treat a sub-question. That answer saves the caller a read
+  and is worth as much as a location.
 - **Report only this list.** No summary of the paper, and no answer to the
   sub-questions. The caller draws the conclusion.
 
-A line number addresses the file as you read it now. A new ingest of the paper
-rewrites the chapter and moves the numbers. The line number serves the caller's
-check. A report cites the anchor, which the paper's own label or the count of
-its paragraphs decides, and which survives a re-ingest.
+The anchor survives a re-ingest, because the paper's own label or the count of
+its blocks decides it. That is why the report carries it and why a report cites
+it.

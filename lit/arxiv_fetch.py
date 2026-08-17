@@ -857,6 +857,31 @@ def paragraph_anchors(chapter_blocks: list[dict]) -> list[dict]:
     return chapter_blocks
 
 
+def fallback_anchors(chapter_blocks: list[dict]) -> list[dict]:
+    """Give an address to every block that still has none, as `bN`.
+
+    A block with no anchor cannot be cited, cannot be opened, and cannot be
+    reported by a search that lands on it — the answer would name the chapter
+    and leave the reader to find the block inside it. An unnumbered display
+    equation is often the most quotable thing in a section, and until this it
+    was the one thing in the section with no address.
+
+    This runs after `paragraph_anchors` and takes what that left: mathematics
+    the paper did not number, a code listing, a table with no label, a marker,
+    and a paragraph too short for its own `pN`. The count is per file, as `pN`
+    is, and a block that already carries an anchor keeps it — so the anchors a
+    paper's own labels and the paragraph count produced do not move, and a
+    report written before this still resolves.
+    """
+    number = 0
+    for block in chapter_blocks:
+        if block.get("anchor"):
+            continue
+        number += 1
+        block["anchor"] = "b%d" % number
+    return chapter_blocks
+
+
 def clean_inline(text: str) -> str:
     """Clean a short fragment such as a section title or a caption."""
     return collapse_whitespace(clean_text(text, figures=None, chapter="")[0])
@@ -1963,8 +1988,8 @@ def convert(args) -> dict:
             # sanitise answers for what reaches disk; the block split and the
             # paragraph numbers both count the file that holds them, so they run
             # after a long chapter has been cut into its pieces.
-            chapter_blocks = paragraph_anchors(
-                blocks.parse(sanitise(chapter["text"]))
+            chapter_blocks = fallback_anchors(
+                paragraph_anchors(blocks.parse(sanitise(chapter["text"])))
             )
             for block in chapter_blocks:
                 if block.get("kind") == "figure":

@@ -8,13 +8,13 @@ papers that use the other name.
 
 Two sources answer that, and a scan can read either or both.
 
-`--in-text` reads the papers themselves. Two names for one object almost never
+`--corpus text` reads the papers themselves. Two names for one object almost never
 share a title, because a title names one thing once. They share a sentence,
 where an author writes the equation between them: "an acute coronary event, or
 myocardial infarction". A heading counts for more than a paragraph,
 because a heading is the author naming what the section is about.
 
-`--cited-by` reads the titles of the works those papers cite. Those titles are
+`--corpus cited` reads the titles of the works those papers cite. Those titles are
 the field's own words for its subjects, and they cover ground no paper of the
 collection holds in full.
 
@@ -30,8 +30,8 @@ that reaches that block already carries the location that justifies it.
 
 The scope is required. A collection serves many tasks, and it keeps the papers
 of each. A scan of the whole store therefore reports the vocabulary of somebody
-else's subject as another name for yours. `--in-text` and `--cited-by` name the
-papers of one task. `--all-papers` is the explicit opt-out, for a question about
+else's subject as another name for yours. `--scope` names the
+papers of one task. `--scope disk` is the explicit opt-out, for a question about
 the collection itself. There is no default.
 
 Prints one JSON report on stdout. It reads the collection on disk, and calls no
@@ -42,9 +42,9 @@ The exit status is 0 whenever the scan ran, 1 when the store does not parse, and
 empty `terms` list is an answer, and not a failure.
 
 Usage:
-    terminology_scan.py --topic "heart attacks" --in-text vogt_2019_infarction
-    terminology_scan.py --topic "the clotting cascade" --cited-by vogt_2019_infarction
-    terminology_scan.py --topic "coronary risk factors" --all-papers
+    terminology_scan.py --topic "heart attacks" --scope vogt_2019_infarction
+    terminology_scan.py --topic "the clotting cascade" --scope vogt_2019_infarction --corpus cited
+    terminology_scan.py --topic "coronary risk factors" --scope disk
 """
 
 from __future__ import annotations
@@ -57,6 +57,7 @@ from pathlib import Path
 
 from lit import arxiv_discover, blocks, cli, paths
 from lit import reference_store
+from lit import scope
 from lit import text
 from lit.text import collapse_whitespace, normalize_title
 
@@ -790,32 +791,18 @@ def build_parser() -> argparse.ArgumentParser:
         "that this phrase holds already",
     )
     # The scope, and no default. A scan of the whole store answers a question
-    # about the collection, and one collection serves more than one task.
-    # `--in-text` and `--cited-by` name the same working set from two sides, so
-    # they combine; `--all-papers` is the opt-out and combines with neither.
+    # about the collection, and one collection serves more than one task, so
+    # `--scope disk` is the explicit opt-out rather than the default.
+    scope.add_scope_argument(parser, required=True)
+    # Which corpus the scan reads. Both is what a working set is passed for: the
+    # papers' own words and the titles of what they cite name the same subject
+    # from two sides, and a name is worth finding whichever side writes it.
     parser.add_argument(
-        "--in-text",
-        action="append",
-        default=[],
-        metavar="SLUG",
-        dest="in_text",
-        help="read the text of this paper: its title, abstract, headings, "
-        "captions and paragraphs; repeat it for each paper of the working set",
-    )
-    parser.add_argument(
-        "--cited-by",
-        action="append",
-        default=[],
-        metavar="SLUG",
-        dest="cited_by",
-        help="read the titles of the works that this paper cites; repeat it for "
-        "each paper of the working set",
-    )
-    parser.add_argument(
-        "--all-papers",
-        action="store_true",
-        help="read the titles of the whole store; for a question about the "
-        "collection itself",
+        "--corpus",
+        choices=("text", "cited", "both"),
+        default="both",
+        help="read the papers' own words, the titles of the works they cite, "
+        "or both (default both)",
     )
     parser.add_argument(
         "--min-count", type=int, default=MIN_WEIGHT, metavar="N",
@@ -838,16 +825,6 @@ def main(argv: list[str] | None = None) -> int:
     args = cli.parse(build_parser(), argv)
     root = args.literature_root
 
-    if not (args.in_text or args.cited_by or args.all_papers):
-        return fail(
-            "a scope is required: --in-text, --cited-by or --all-papers", 2
-        )
-    if args.all_papers and (args.in_text or args.cited_by):
-        return fail(
-            "--all-papers asks about the collection, and combines with no "
-            "other scope", 2
-        )
-
     if not arxiv_discover.topic_terms(args.topic):
         return fail("--topic holds no word to compare against; write it in full", 2)
 
@@ -859,38 +836,39 @@ def main(argv: list[str] | None = None) -> int:
     papers = papers_of(root, records)
     held = paths.papers_on_disk(root)
 
-    if args.all_papers:
+    # Never an empty term list on a bad scope. A slug with a typo would narrow
+    # the scan to nothing, and an empty report reads as "the field has no other
+    # names for this subject".
+    try:
+        scopes = scope.parse_all(args.scope)
+        asked = scope.papers(root, scopes, known=papers)
+    except scope.ScopeError as error:
+        return fail(str(error), 2, **error.fields)
+
+    whole = any(one.whole_collection for one in scopes)
+    read_text = args.corpus in ("text", "both")
+    read_cited = args.corpus in ("cited", "both")
+
+    if whole:
         mode, scope_papers, in_scope, units = "all_papers", papers, records, []
     else:
-        unknown = sorted(
-            slug for slug in args.cited_by + args.in_text if slug not in papers
-        )
-        if unknown:
-            # Never an empty term list. A slug with a typo would narrow the scan
-            # to nothing, and an empty report reads as "the field has no other
-            # names for this subject".
-            return fail(
-                "no such paper in the collection", 2,
-                unknown_papers=unknown, papers=papers,
-            )
         # A slug the store knows only as a citer has no text on disk to read.
         # That is a different mistake from a typo, and it earns its own message.
-        absent = sorted(slug for slug in args.in_text if slug not in held)
-        if absent:
+        absent = sorted(slug for slug in asked if slug not in held)
+        if read_text and absent:
             return fail(
-                "--in-text needs the paper on disk, and these are known only "
-                "as citing papers", 2,
+                "reading the text needs the paper on disk, and these are known "
+                "only as citing papers", 2,
                 papers_without_text=absent, papers_on_disk=held,
             )
         mode = "+".join(
             name for name, given in
-            (("in_text", args.in_text), ("cited_by", args.cited_by)) if given
+            (("in_text", read_text), ("cited_by", read_cited)) if given
         )
-        scope_papers = sorted(set(args.cited_by) | set(args.in_text))
-        in_scope = cited_by(records, sorted(set(args.cited_by)))
-        units = [
-            unit for slug in sorted(set(args.in_text)) for unit in units_of(root, slug)
-        ]
+        scope_papers = asked
+        in_scope = cited_by(records, asked) if read_cited else []
+        units = [unit for slug in asked for unit in units_of(root, slug)] \
+            if read_text else []
 
     report = scan(
         root, args.topic, in_scope, papers, scope_papers, mode,

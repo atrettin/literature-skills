@@ -41,6 +41,10 @@ SUFFIX = ".jsonl"
 BLOCK_OPEN = "\ue002"
 BLOCK_CLOSE = "\ue003"
 
+# Every C0 control character other than the tab. None of them belongs inside a
+# stored string, and a NUL byte stops the line being JSON at all.
+CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0a-\x1f]")
+
 ANCHOR_LINE = re.compile(r'^<a id="([^"]*)"></a>$')
 HEADING_LINE = re.compile(r"^(#{1,6})\s+(?:(\d+(?:\.\d+)*)\.?\s+)?(.*)$")
 
@@ -166,25 +170,24 @@ def read(path: Path) -> list[dict]:
     A line that does not parse raises, naming its number. The store is the
     paper, and a paper that reads as one block short is worse than one that
     refuses to be read.
+
+    The control characters go before the parse. A NUL byte inside a stored
+    string is not JSON, so a chapter carrying one would refuse to be read at
+    all — and a paper that cannot be read is a paper whose text silently looks
+    absent, which is the failure the search exists to prevent, arriving by
+    another route. The byte is a defect of the conversion and it stays visible:
+    a caller that reports on the collection reads the file itself and says so.
+    Nothing is written back, so the store keeps whatever it holds.
     """
     blocks = []
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
         try:
-            blocks.append(json.loads(line))
+            blocks.append(json.loads(CONTROL_CHARACTERS.sub("", line)))
         except json.JSONDecodeError as error:
             raise ValueError("%s line %d is not JSON: %s" % (path, number, error))
     return blocks
-
-
-def lines_of(path: Path) -> list[tuple[int, dict]]:
-    """Each block with the line it sits on, which is what a citation checks."""
-    numbered = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if line.strip():
-            numbered.append((number, json.loads(line)))
-    return numbered
 
 
 # --------------------------------------------------------------------------
@@ -207,6 +210,34 @@ def words(block: dict) -> str:
     return ""
 
 
+def display(block: dict) -> str:
+    """Everything a block says, for a caller that is reading rather than matching.
+
+    `words` answers what a search matches, and deliberately calls mathematics
+    nothing. This answers what a reader has to see, so an equation is its TeX
+    and a table is its caption above its TeX. The two must stay separate: an
+    equation that entered `words` would put backslashes and braces into a
+    ranking, and a chapter shown without its equations is missing the half of
+    the argument that carries the result.
+    """
+    kind = block.get("kind")
+    if kind == "paragraph":
+        return block.get("text", "")
+    if kind == "heading":
+        number = block.get("number") or ""
+        return ("%s %s" % (number, block.get("title", ""))).strip()
+    if kind == "math":
+        return block.get("tex", "")
+    if kind == "code":
+        return block.get("text", "")
+    if kind == "figure":
+        return block.get("caption", "")
+    if kind == "table":
+        caption = block.get("caption", "")
+        return "\n".join(part for part in (caption, block.get("tex", "")) if part)
+    return block.get("text", "")
+
+
 def anchors(blocks: list[dict]) -> list[str]:
     return [block["anchor"] for block in blocks if block.get("anchor")]
 
@@ -216,3 +247,48 @@ def find_anchor(blocks: list[dict], anchor: str) -> dict | None:
         if block.get("anchor") == anchor:
             return block
     return None
+
+
+def neighbours(blocks: list[dict], index: int) -> dict:
+    """The blocks a reader would step to from this one: back, forward, and up.
+
+    An argument in a paper is not one block. Prose runs into an equation and out
+    of it again, and each of those is addressed on its own, so a caller that has
+    found the middle of an argument needs the way to its edges without searching
+    again. `parent` is the heading the block sits under, which is the whole
+    section when the two blocks either side are not enough.
+
+    Each is an anchor, or None where the chapter ends or the block stands
+    outside any heading. A block carrying no anchor is stepped over rather than
+    returned: it cannot be addressed, so naming it would give a caller a place
+    it cannot open.
+    """
+    def addressable(positions) -> str | None:
+        for position in positions:
+            anchor = blocks[position].get("anchor")
+            if anchor:
+                return anchor
+        return None
+
+    # A heading's parent is the heading above it, and a heading's equal is not
+    # above it: two sections at the same level are siblings, so the search skips
+    # them. Anything that is not a heading sits under the nearest heading of any
+    # level.
+    here = blocks[index]
+    under = (here.get("level") or 0) if here.get("kind") == "heading" else None
+
+    parent = None
+    for position in range(index - 1, -1, -1):
+        block = blocks[position]
+        if block.get("kind") != "heading" or not block.get("anchor"):
+            continue
+        if under is not None and (block.get("level") or 0) >= under:
+            continue
+        parent = block["anchor"]
+        break
+
+    return {
+        "prev": addressable(range(index - 1, -1, -1)),
+        "next": addressable(range(index + 1, len(blocks))),
+        "parent": parent,
+    }

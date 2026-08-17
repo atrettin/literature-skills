@@ -34,10 +34,18 @@ so several run together. They read the papers of the last command while the next
 command runs. The constraint is one request at a time, not one agent at a
 time.
 
-A scout reports a location as `text/03_results.jsonl:181`, with the anchor of
-the text and the words of the paper. The researcher opens the chapter at that
-line and compares. It discards a quotation that carries no line number. The line
-addresses the file on disk. The report cites the anchor, which a new ingest keeps.
+A scout reports a location as `andreopoulos_2015_genie/03_results#p9`, with the
+words of the paper beside it. The researcher opens exactly that with `litdb
+show` and compares, and discards a quotation that carries no anchor. There is
+one address and no other: a line number describes the file that holds a paper
+rather than the paper, and a new ingest moves it, whereas the anchor comes from
+the paper's own label or the count of its blocks and survives.
+
+Reading climbs a ladder, and stops at the rung that answers: `litdb toc` for
+what the paper holds and where, then `litdb search` scoped as narrowly as the
+question allows, and a `paper-scout` only when both left the sub-question open.
+A scout is also the one reader that goes through a paper end to end, so a claim
+that a paper is silent on a sub-question is a claim only a scout can support.
 
 The report goes to `reports/<task-slug>.source.md` in the project, beside
 `reports/<task-slug>.research-log.source.md`, which records each iteration: what

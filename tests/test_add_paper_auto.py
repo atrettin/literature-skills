@@ -225,20 +225,51 @@ def test_metadata_comes_back_whole(gate_off: None, monkeypatch: pytest.MonkeyPat
     assert found["year"]
 
 
-def test_a_citation_the_store_cannot_answer_fails_the_check(
+def test_a_citation_the_store_cannot_answer_warns_and_ingests(
     collection: Path, small_paper: dict, inspire_silent: FakeInspire
 ) -> None:
+    """A tag that resolves to nothing is a property of the bibliography, not the text.
+
+    The paper's own chapters, figures and anchors are complete, so the paper is
+    ingested and citable; only the works it points out to cannot be looked up.
+    Raising here would cost the caller an agent to discover nothing is broken.
+    """
     # --no-references leaves the chapters citing the paper's own LaTeX keys,
     # and no record answers those.
     status, reports = run(collection, "--auto", ARXIV_ID, "--no-references")
 
-    assert status == 2
-    assert reports[0]["exception"]["code"] == "REFERENCE_CHECK_FAILED"
-    assert reports[0]["exception"]["unresolved"]
-    # The paper is on disk, and the collection lists it. The citations are what
-    # failed, and the next run repairs those.
+    assert status == 0
+    assert reports[0]["status"] == "ingested"
+    assert reports[0]["exception"] is None
+    codes = [warning["code"] for warning in reports[0]["warnings"]]
+    assert "UNRESOLVED_CITATIONS" in codes
+    assert reports[0]["checks"]["unresolved"]
     assert (collection / SLUG / "INDEX.md").is_file()
     assert reports[0]["collection_row"] == "added"
+
+
+def test_a_store_defect_still_stops_the_ingest(
+    collection: Path, small_paper: dict, inspire_silent: FakeInspire,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A duplicate, a missing page or a stale record makes the store itself wrong.
+
+    That is not one paper's bibliography being short: the store answers for every
+    paper, so a defect in it is the caller's judgement and keeps raising.
+    """
+    real = check_references.check
+
+    def duplicated(root, paper=None):
+        found = real(root, paper)
+        found["duplicates"] = [{"identity": "doi:10.1/x", "tags": ["a", "b"]}]
+        return found
+
+    monkeypatch.setattr(check_references, "check", duplicated)
+    status, reports = run(collection, "--auto", ARXIV_ID)
+
+    assert status == 2
+    assert reports[0]["exception"]["code"] == "REFERENCE_CHECK_FAILED"
+    assert reports[0]["exception"]["duplicates"]
 
 
 def test_a_defect_of_another_paper_stays_elsewhere(
@@ -416,3 +447,32 @@ def test_a_definition_block_in_the_body_opens_no_chapter(
     )
     assert "newcommand" not in stored
     assert "\\text{keV}" in stored
+
+
+def test_expect_title_refuses_a_paper_that_is_not_the_one_asked_for(
+    collection: Path, small_paper: dict, inspire_silent: FakeInspire
+) -> None:
+    """The guard against an identifier recalled rather than read.
+
+    Such an identifier resolves to a real paper and every stage after the fetch
+    succeeds on it, so nothing else in the run can notice. The caller knows what
+    it went looking for, and this is where it says so.
+    """
+    status, reports = run(collection, "--auto", ARXIV_ID,
+                          "--expect-title", "angular momenta of neutron stars")
+
+    assert status == 2
+    assert reports[0]["exception"]["code"] == "TITLE_MISMATCH"
+    assert reports[0]["exception"]["expected"] == "angular momenta of neutron stars"
+    # Nothing was filed under a name nobody asked for.
+    assert not (collection / SLUG).exists()
+
+
+def test_expect_title_passes_on_a_substring_whatever_its_case(
+    collection: Path, small_paper: dict, inspire_silent: FakeInspire
+) -> None:
+    status, reports = run(collection, "--auto", ARXIV_ID,
+                          "--expect-title", "QUASIELASTIC scattering")
+
+    assert status == 0
+    assert reports[0]["status"] == "ingested"

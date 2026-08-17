@@ -32,13 +32,13 @@ Report one table, and nothing else. One row for each name, and at most
 ```markdown
 | Term | Where used | Same referent? | How it differs |
 |---|---|---|---|
-| <the name, as the paper writes it> | text/<stem>.jsonl:<line> #<anchor> | <one of the five answers> | <one or two sentences about this term> |
+| <the name, as the paper writes it> | <slug>/<stem>#<anchor> | <one of the five answers> | <one or two sentences about this term> |
 ```
 
 | Column | What it holds |
 |---|---|
 | Term | the name, as the papers write it. |
-| Where used | the stored chapter, as a path below the paper's directory, then a colon and the number of the line that holds the name, then the `anchor` field of that block. Leave the anchor out when it is `""`. |
+| Where used | the address of the block that holds the name: the paper, the chapter, and the `anchor` field of that block. Every block has one. |
 | Same referent? | one of `yes`, `narrower`, `wider`, `related`, `unclear`. |
 | How it differs | one or two sentences. Required in every row. |
 
@@ -68,7 +68,7 @@ The caller gave the subject `protein` and the slug `brown_2019_cell_metabolism`:
 
 | Term | Where used | Same referent? | How it differs |
 |---|---|---|---|
-| enzyme | text/04_catalysis.jsonl:118 #sec-enzymes | narrower | The chapter says "every enzyme is a protein, and most proteins catalyse no reaction". The term names the catalytic subset. |
+| enzyme | vogt_2019_catalysis/04_catalysis#p12 | narrower | The chapter says "every enzyme is a protein, and most proteins catalyse no reaction". The term names the catalytic subset. |
 
 Six rules:
 
@@ -80,10 +80,10 @@ Six rules:
 - **Differentiate. Never equate.** Say what each name emphasises, even when the
   answer is `yes`. An answer that makes two names one name destroys the
   distinction that the caller's report must keep.
-- **Every row carries a location, with a line number.** A name for which you
+- **Every row carries an address.** A name for which you
   found no passage goes in a list below the table, under "no evidence found". It
-  never becomes a row. The caller opens the chapter at the line you give and
-  compares; a row whose line does not hold the words is discarded whole.
+  never becomes a row. The caller opens the anchor you give and compares; a row
+  whose block does not hold the words is discarded whole.
 - **Quote exactly, and quote little.** Two sentences at most, inside quotation
   marks, in the "How it differs" column when a paper states the distinction.
 - **`unclear` is an answer.** Report it. A guess about a referent is worse than

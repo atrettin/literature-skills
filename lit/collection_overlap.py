@@ -28,7 +28,7 @@ symmetric number, and nothing ever bands on it.
 collection is persistent and serves every task that came before yours. Measured
 against all of it, a candidate that shares nothing with your question still reads
 `high`, because some earlier task ingested a paper on its subject. `--scope` and
-`--all-papers` are therefore a required pair with no default. A held paper
+`--scope disk` are therefore a required pair with no default. A held paper
 outside the scope is reported under `outside_scope`, with its coefficient and no
 band: it is on disk already, so it is a thing to read before you spend an ingest,
 and it is not evidence that your question is covered. A candidate the collection
@@ -64,7 +64,7 @@ that does not parse, and 2 for a bad argument.
 Usage:
     collection_overlap.py 1706.03621 --scope vogt_2019_infarction
     collection_overlap.py --doi 10.1016/j.ppnp.2018.01.006 --scope <slug> --resolve
-    collection_overlap.py --recid 1599542 --all-papers --max-papers 5
+    collection_overlap.py --recid 1599542 --scope disk --max-papers 5
 """
 
 from __future__ import annotations
@@ -77,6 +77,7 @@ from pathlib import Path
 from lit import cli, inspire_citations
 from lit import inspire_lookup
 from lit import rate_gate
+from lit import scope
 from lit import reference_store
 from lit import references
 
@@ -260,7 +261,7 @@ def split_scope(
 ) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     """Divide the papers into the ones in scope and the ones outside it.
 
-    `scope_slugs` of `None` is `--all-papers`: every paper is in scope, and
+    `scope_slugs` of `None` is `--scope disk`: every paper is in scope, and
     nothing is outside it.
     """
     if scope_slugs is None:
@@ -353,20 +354,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--recid", help="name the candidate by INSPIRE record number instead")
     # The scope, and no default. A band measured over a persistent collection
     # answers for every task that collection ever served, and not for this one.
-    scope = parser.add_mutually_exclusive_group(required=True)
-    scope.add_argument(
-        "--scope",
-        action="append",
-        default=[],
-        metavar="SLUG",
-        help="a paper of the working set of this question; repeat it for each one",
-    )
-    scope.add_argument(
-        "--all-papers",
-        action="store_true",
-        help="put every held paper in scope; for a question about the collection "
-        "itself. The research loop never uses it",
-    )
+    # `--scope disk` is the explicit opt-out, for a question about the
+    # collection itself; the research loop passes its working set instead.
+    scope.add_scope_argument(parser, required=True)
     parser.add_argument(
         "--resolve",
         action="store_true",
@@ -400,17 +390,15 @@ def main(argv: list[str] | None = None) -> int:
         return fail(str(error), 1)
 
     sets = paper_sets(store)
-    scope_slugs = None if args.all_papers else sorted(set(args.scope))
-    if scope_slugs is not None:
-        # A slug with a typo would empty the scope silently. Every candidate
-        # would then read `low`, and the agent would spend ingests on papers the
-        # collection holds already.
-        unknown = [slug for slug in scope_slugs if slug not in sets]
-        if unknown:
-            return fail(
-                "no such paper in the collection", 2,
-                unknown_papers=unknown, papers=sorted(sets),
-            )
+    # A slug with a typo would empty the scope silently. Every candidate would
+    # then read `low`, and the agent would spend ingests on papers the
+    # collection holds already.
+    try:
+        scopes = scope.parse_all(args.scope)
+        asked = scope.papers(root, scopes, known=sorted(sets))
+    except scope.ScopeError as error:
+        return fail(str(error), 2, **error.fields)
+    scope_slugs = None if any(one.whole_collection for one in scopes) else asked
 
     # Whether the collection holds the candidate is read from the handle the
     # caller gave, before anything is sent. A held candidate is then answered
@@ -477,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
             "unidentified": unidentified,
         },
         "scope": {
-            "mode": "all_papers" if args.all_papers else "working_set",
+            "mode": "all_papers" if scope_slugs is None else "working_set",
             "papers": sorted(others) if scope_slugs is None else scope_slugs,
             "papers_in_collection": len(sets),
             "outside_scope_papers": len(outside),

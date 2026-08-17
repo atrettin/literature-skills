@@ -98,12 +98,22 @@ the file alone.
 - `#sec-nuclear-effects` — a heading the source never labelled, named after its
   title, for the same reason.
 - `#p12` — the twelfth paragraph of prose in that one file, counted from `p1` in
-  each file. A block shorter than `PARAGRAPH_ANCHOR_MIN_CHARS` gets none: it is
-  a stub or a fragment the conversion left standing, and an address on it costs
-  more noise than it earns.
+  each file. A block shorter than `PARAGRAPH_ANCHOR_MIN_CHARS` gets no `pN`: it
+  is a stub or a fragment the conversion left standing, and counting it among
+  the paragraphs would move every number after it.
+- `#b7` — whatever is left, counted the same way per file: an unnumbered display
+  equation, a code listing, an unlabelled table, a short paragraph.
 
-A block that already carries a label keeps it. The paper's own name for a block
-addresses it better than a count of paragraphs does.
+**Every block has an anchor.** A block with no address could not be cited, could
+not be opened, and could not be reported by a search that landed on it — the
+answer would name the chapter and leave the reader to find the block inside it.
+An unnumbered display equation is often the most quotable thing in a section,
+and it is exactly the kind of block that carries no label of its own.
+
+A block that already carries a label keeps it, and `pN` is assigned before `bN`.
+The paper's own name for a block addresses it better than a count does, and
+fixing the order means a re-ingest never moves an anchor a report already
+cites.
 
 ## Splitting a long section
 

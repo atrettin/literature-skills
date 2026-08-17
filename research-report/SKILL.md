@@ -97,11 +97,19 @@ holds papers from other tasks, thus "held" says nothing about this question.
 that kind takes its scope as a flag that you repeat for each paper. The working
 set is that scope:
 
-| Tool | How you pass the set |
-|---|---|
-| `litdb search` | `--paper <slug>` for each paper of the set, when you verify a claim of this task |
-| `litdb terminology` | `--in-text <slug>` and `--cited-by <slug>` for each paper of the set, when you look for the other names of your subject |
-| `litdb overlap` | `--scope <slug>` for each paper of the set, when you weigh a candidate against what you hold |
+Every one of them takes the same `--scope`, and it takes the whole set in one
+call:
+
+```bash
+litdb search "<phrase>"    --scope <slug> <slug> <slug>
+litdb terminology --topic "…" --scope <slug> <slug> <slug>
+litdb overlap <arxiv-id>      --scope <slug> <slug> <slug>
+```
+
+A scope is the citation form cut off wherever you like — `disk`, `<slug>`,
+`<slug>/<stem>`, `<slug>/<stem>#<anchor>`, or a span `#<from>..#<to>` — so the
+`location` an answer reports is a scope you hand straight back to narrow the
+next call.
 
 A tool that you run over the whole collection answers a question about the
 collection. It does not answer a question about your task.
@@ -117,6 +125,8 @@ These limits hold for the whole task:
 | `MAX_TOTAL_INGESTS` | 20 |
 | `DRY_ITERATIONS` | 2 |
 | `MAX_PARALLEL_SCOUTS` | 4 |
+| `MAX_SECTION_WORDS` | 1200 |
+| `MIN_SCOUT_WORDS` | 2000 |
 | `CURRENCY_GRACE_MONTHS` | 12 |
 | `MAX_TERMINOLOGY_SCOUTS` | 3 |
 | `FIRST_PROSPECT_ITERATION` | 2 |
@@ -132,7 +142,14 @@ from the table in "How to refine". Write the choice and the reason in the log
 ### Step 2. Search
 
 Search the collection first with `use-literature`. That costs nothing. Then
-search arXiv with `find-papers`. Run one search at a time.
+search arXiv, one search at a time:
+
+```bash
+litdb find --topic "<the question, as a full phrase>" --max-results 15
+```
+
+That is the command the `find-papers` skill documents. Read that skill for how
+to write the topic and how to read the ranking.
 
 Write in the log: the exact `--topic` phrase, `ranking.backend`, the counts, and
 the best candidates with their `missing_terms`.
@@ -161,11 +178,24 @@ weigh them against what you already hold.** A rank says how well an abstract
 answers the question. It does not say whether the candidate builds on the same
 works as the papers of your working set, and the reference store does say that.
 
-1. Run `litdb overlap <arxiv-id> --scope <slug> …` on each candidate. Run one
-   check at a time: it asks INSPIRE, and INSPIRE limits its rate. Give
-   `--scope <slug>` for each paper of your working set, out of the `## Working
-   set` table of the log. Never `--all-papers`: the collection serves other
-   questions, and their papers would decide your band.
+1. Run `litdb overlap <arxiv-id> --scope <slug> <slug> …` on each candidate. Run
+   one check at a time: it asks INSPIRE, and INSPIRE limits its rate. Give the
+   whole working set out of the `## Working set` table of the log. Never
+   `--scope disk`: the collection serves other questions, and their papers would
+   decide your band.
+
+   It answers in this shape:
+
+   ```json
+   {"band": "low", "coefficient": 0.12,
+    "scope": {"mode": "working_set", "papers": ["…"]},
+    "closest": [{"paper": "…", "coefficient": 0.31}],
+    "outside_scope": [{"paper": "…", "coefficient": 0.44}]}
+   ```
+
+   `band` is `null` when nothing bands the candidate — an empty working set, or
+   a reference list too short to compare. That is an answer, and the `counts`
+   still hold.
 2. Read `outside_scope` first. A paper there is on disk, and it costs no ingest.
    Read it, and add it to the working set when its text bears on a sub-question.
 3. Ingest the candidate with the lowest overlap first. It brings the most ground
@@ -207,55 +237,106 @@ reading opens files on disk. Neither one sends a request.
 are incomplete until then, and a scout that starts early reads a part of the
 paper.
 
-**Read in two tiers.** The tier depends on how much you must read:
+**Read on a ladder. Stop at the rung that answers.** Every rung is cheaper than
+the one below it, and a rung skipped is context spent for nothing.
 
-| What you have | What you do |
-|---|---|
-| One paper, and its `paper.json` names the chapter you need | Read that chapter yourself, as `use-literature` says. |
-| Several papers, or a `paper.json` that does not settle it | Start one `paper-scout` agent for each paper. Give it the slug and the open sub-questions. Run at most `MAX_PARALLEL_SCOUTS` at one time. |
+#### Rung 1. The table of contents
+
+```bash
+litdb toc <slug>
+```
+
+One call says what the paper is and what is in it, with a word count and an
+address on every section. Where a section's title bears on a sub-question, read
+it straight away:
+
+```bash
+litdb show <slug>/<stem>#<anchor>
+```
+
+A review organised by the axis your question asks about is often answered by its
+section titles alone. **Where the section runs past `MAX_SECTION_WORDS`, do not
+read it whole** — go to rung 2 scoped to that section, and read the block that
+answers.
+
+Never read `paper.json` by hand. On a long paper its chapter list alone fills a
+context window, and this says the same thing bounded.
+
+#### Rung 2. Search
+
+```bash
+litdb search "<phrase>" --scope <slug>/<stem>#<anchor>
+litdb search "<phrase>" --scope <slug> --approx
+```
+
+Exact first, `--approx` when you are unsure of the words the field uses. Scope
+it as narrowly as the question allows and widen only when it answers nothing.
+
+**An argument in a paper is not one block.** Prose runs into an equation and out
+again, and each is addressed separately. Every result carries `prev`, `next` and
+`parent`, so widening costs no second search: `--context N` around a hit,
+`litdb show <slug>/<stem>#<from>..#<to>` for a run whose ends you saw in a
+listing, and the `parent` anchor for the whole section. **Mathematics never
+matches a search** — an equation is stored as TeX and not as words — so a claim
+resting on one is reached through context or a span and never found directly.
+
+#### Rung 3. A `paper-scout`
+
+Start one **only** when rungs 1 and 2 left a sub-question open and you have good
+reason this paper holds the answer. Give it the slug and the open sub-questions.
+Run at most `MAX_PARALLEL_SCOUTS` at one time.
+
+Two gates:
+
+- **Never scout a paper under `MIN_SCOUT_WORDS`.** Read it. Below that a scout's
+  report costs more than the paper it summarises.
+- **Never scout before rung 1.** The table of contents sometimes answers the
+  sub-question outright, and it always tells you whether a scout is worth it.
+
+**A scout is also how you establish absence.** It is the only reader that goes
+through a paper end to end, so "this paper does not treat SQ4" is a claim only a
+scout can support. That is a finding, not a failure, and it goes in the report.
 
 A paper that the collection held enters the working set here, and not at the
 search: it enters when you read text in it that bears on a sub-question.
 
-Expect `paper.json` to settle it rarely. What names a chapter for you is its
-title, the subsection titles and the word count, and none of those was written
-against your sub-questions. That is what a scout is for: it reads the whole
-paper against the questions that you have.
-
 **Verify before you cite.** A scout report tells you where to look. It is not a
-source. Each location it gives carries a line number, as
-`text/03_results.jsonl:181`. Read the chapter at that line with the `offset`
-option of `Read`, and compare the words there with the quotation.
-
-When the words are not at that line, do not conclude that the scout invented
-them. Find them instead:
+source. Each location it gives is an anchor, as `<slug>/03_results#p9`. Open it
+and compare the words with the quotation:
 
 ```bash
-litdb search "<the words the scout quoted>" --paper <slug>
+litdb show <slug>/03_results#p9 --context 1
 ```
 
-**Never search for a quotation with `grep`.** A phrase copied out of a rendered
-chapter carries a line break the store does not have, thus `grep` misses it.
-`grep` also prints nothing for a file that holds a NUL byte. A quotation that neither the line nor the search can place is
-not verified, whatever the scout wrote. Then write the finding in the log:
+`--context 1` brings the blocks either side, which is what tells you whether the
+paper is asserting the sentence, writing it as a condition, or giving it to
+somebody else. A sentence of the last two kinds does not support the claim you
+were about to make with it.
+
+**When the words are not there, do not conclude that the scout invented them.**
+Find them:
+
+```bash
+litdb search "<the words the scout quoted>" --scope <slug>
+```
+
+This is the reliable path and it returns the anchor that holds the words, so it
+verifies and re-addresses in one call. **Never search for a quotation with
+`grep`**: a phrase copied out of a rendered chapter carries a line break the
+store does not have, `grep` prints nothing at all for a file holding a NUL byte,
+and no `grep` matches an equation. A quotation that `litdb search` cannot place
+is not verified, whatever the scout wrote.
+
+Then write the finding in the log:
 
 ```
-SQ2: <the claim, in one sentence> — <slug>/03_results#sec-axialff
+SQ2: <the claim, in one sentence> — <slug>/03_results#p9
 ```
 
-A finding with no chapter and no anchor is not a finding. The finding and the
-report both carry the anchor, and not the line. The line addresses the file on
-disk. The anchor addresses the section.
-
-**Discard a quotation that carries no line number.** Do not read the chapter to
-rescue it. Do not cite it. Ask the scout again for that sub-question, or drop the
-location. The scout has the file open, thus a missing line number means that the
-scout did not read the text that it quoted.
-
-When the text at the line does not hold the quotation, do not conclude that the
-scout invented it. Read 20 lines around the number first. Plain `grep` gives a
-false negative on these files. The text wraps across lines, and some chapters
-hold a NUL byte.
+A finding with no anchor is not a finding. **Discard a quotation that carries no
+anchor.** Every block of every paper has one, so a scout that gave none did not
+read the block it quoted. Ask the scout again for that sub-question, or drop the
+location.
 
 ### Step 4. Assess
 
@@ -279,6 +360,15 @@ answer goes with it. Ask INSPIRE which papers cite that paper, newest first:
 
 ```bash
 litdb citations <arxiv-id> --direction citing --sort mostrecent
+```
+
+It answers in this shape. The results are **nested under the direction you
+asked for**, and not at the top level:
+
+```json
+{"paper": {...}, "query": {...},
+ "citing": {"counts": {"total": 41, "returned": 20},
+            "results": [{"title": "…", "arxiv_id": "…", "year": 2024, "held_as": null}]}}
 ```
 
 Read the titles and the summaries, and act:
@@ -309,33 +399,52 @@ Three things answer nothing. Say so each time:
 
 ### Step 4b. Find the other names of the subject
 
-**Run this after iteration 1. It is required.** Your query holds the words of
-the person who asked. The papers hold the words of the field, and the two are
-often different words for one area. `missing_terms` cannot tell you this. It
-names the terms of your query that a paper lacks. It never names the terms of
-the papers that your query lacks.
+**Run this after iteration 1, unless the gate below closes.** Your query holds
+the words of the person who asked. The papers hold the words of the field, and
+the two are often different words for one area. `missing_terms` cannot tell you
+this. It names the terms of your query that a paper lacks. It never names the
+terms of the papers that your query lacks.
 
-**Scope it to the working set.** Give one `--in-text` and one `--cited-by` for
-each paper in your working set, and no more:
+**The gate: is there a vocabulary gap to find?** The scan earns its cost when
+the person who asked described the subject in lay terms and the field has its
+own name for it. It earns nothing when the question already arrived in the
+field's own words. Skip it when **all** of these hold, and write in the log that
+you did and why:
+
+1. The topic phrase is drawn from the seed paper's own terminology, rather than
+   from a description you translated.
+2. The user named the subject, the method or the instrument in the field's
+   words.
+3. Your searches so far are returning papers on the subject, rather than papers
+   that merely repeat the words.
+
+When any of them fails, run the scan. A question that arrived as a description
+of a phenomenon rather than as its name is the case this exists for.
+
+**Scope it to the working set**, in one call:
 
 ```bash
-litdb terminology --topic "<your topic phrase>" \
-          --in-text <slug> --cited-by <slug> \
-          --in-text <slug> --cited-by <slug>
+litdb terminology --topic "<your topic phrase>" --scope <slug> <slug> <slug>
 ```
+
+It reads both corpora by default: the papers' own words, and the titles of the
+works they cite. `--corpus text` or `--corpus cited` narrows that when you want
+one side alone.
 
 The collection is persistent. It holds the papers of tasks that came before
 yours, and their words carry the vocabulary of other subjects. A scan of the
 whole store thus offers you the other names of somebody else's question. `litdb
-terminology` refuses to run without a scope for that reason. Never use `--all-papers`
-here: it answers a question about the collection, and not about your task.
+terminology` refuses to run without a scope for that reason. Never use
+`--scope disk` here: it answers a question about the collection, and not about
+your task.
 
 Check the `scope` block of the report. Its `papers` list must equal your working
 set. When it does not, you passed the wrong slugs.
 
-The scan reads two things, and it calls no API. `--in-text` reads the papers
+The scan reads two things, and it calls no API. `--corpus text` reads the papers
 themselves: their titles, abstracts, headings, captions and paragraphs.
-`--cited-by` reads the titles of the works they cite. It reports the terms that
+`--corpus cited` reads the titles of the works they cite, and the default reads
+both. It reports the terms that
 your topic does not hold, and a word your topic holds already lowers a term
 rather than lifting it — the names worth finding are the ones your query could
 not have reached.
@@ -370,7 +479,8 @@ it names the same object, and how it differs.
 narrower term finds papers about a part of your subject, and the report must say
 which part. Write the table in the log, under `### Terminology`.
 
-A later iteration can run the scan again. Iteration 1 must run it.
+A later iteration can run the scan again. When the gate opened at
+iteration 1, run it there.
 
 #### When the scan finds nothing, and a question is still open
 
@@ -624,12 +734,13 @@ Then tell the user:
   they run beside an ingest.
 - **Check for later work before you call a sub-question answered.** Step 4 says
   how, and the log says that you did it.
-- **Keep the full text out of your context.** Read `paper.json` files, the reports
-  of the agents, the JSON of the commands, and the chapters that you cite.
-  Never read a paper from beginning to end yourself. That is what a `paper-scout`
-  does for your sub-questions, and a `terminology-prospector` for its words.
+- **Keep the full text out of your context.** Read `litdb toc` for what a paper
+  holds, the reports of the agents, the JSON of the commands, and the sections
+  that you cite. Never read a paper from beginning to end yourself. That is what
+  a `paper-scout` does for your sub-questions, and a `terminology-prospector`
+  for its words.
 - **Cite only what you read.** Not an abstract. Not a summary. Not a quotation
-  from a scout that you did not check at the line that the scout gave. Discard a
-  quotation that carries no line number. Never check such a quotation by hand.
+  from a scout that you did not open at the anchor the scout gave. Discard a
+  quotation that carries no anchor.
 - **Report the limit that stopped you.** A budget is not an answer.
 - **Never commit a file below the literature root.** The papers are copyrighted.

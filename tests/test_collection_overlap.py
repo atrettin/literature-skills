@@ -126,7 +126,7 @@ def test_a_held_candidate_is_not_compared_with_itself(
 ) -> None:
     """A coefficient of 1.0 against itself would read as a second paper."""
     _, report = run(
-        ["2307.09241", "--all-papers", "--literature-root", str(collection)], capsys
+        ["2307.09241", "--scope", "disk", "--literature-root", str(collection)], capsys
     )
 
     held = report["paper"]["held_as"]
@@ -189,7 +189,7 @@ def test_a_short_reference_list_gives_counts_and_no_band(
     fake: FakeInspire, collection: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     code, report = run(
-        ["1706.03621", "--all-papers", "--literature-root", str(collection)], capsys
+        ["1706.03621", "--scope", "disk", "--literature-root", str(collection)], capsys
     )
 
     assert code == 0
@@ -245,7 +245,7 @@ def test_an_empty_collection_answers_zero_and_not_an_error(
 ) -> None:
     """A project can hold no papers yet, and that is an answer."""
     code, report = run(
-        ["1706.03621", "--all-papers", "--literature-root", str(tmp_path)], capsys
+        ["1706.03621", "--scope", "disk", "--literature-root", str(tmp_path)], capsys
     )
 
     assert code == 0
@@ -278,7 +278,7 @@ def test_the_resolve_pass_batches_by_the_inspire_batch_size(
     monkeypatch.setattr(inspire_lookup, "fetch_record", stub)
     write_store(tmp_path, {"a_paper": ["w00", "w01"]})
 
-    run(["1706.03621", "--all-papers", "--resolve", "--literature-root", str(tmp_path)], capsys)
+    run(["1706.03621", "--scope", "disk", "--resolve", "--literature-root", str(tmp_path)], capsys)
 
     lookups = [path for path in stub.paths if "or+recid" in path]
     # 45 unmatched references, one batch of `BATCH_SIZE` per request.
@@ -368,7 +368,7 @@ def test_outside_scope_is_empty_under_all_papers(
     monkeypatch.setattr(inspire_lookup, "fetch_record", stub)
     write_store(tmp_path, {"mine": mine, "theirs": theirs})
 
-    _, report = run(["1706.03621", "--all-papers", "--literature-root", str(tmp_path)], capsys)
+    _, report = run(["1706.03621", "--scope", "disk", "--literature-root", str(tmp_path)], capsys)
 
     assert report["scope"]["mode"] == "all_papers"
     assert report["outside_scope"] == []
@@ -386,7 +386,7 @@ def test_an_unknown_scope_slug_exits_rather_than_scoring_an_empty_scope(
 
     assert code == 2
     assert report["band"] is None
-    assert report["unknown_papers"] == ["no_such_paper"]
+    assert report["unknown_paper"] == "no_such_paper"
     # The check runs before anything is sent, so a typo costs no request.
     assert fake.paths == []
 

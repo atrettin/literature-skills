@@ -293,7 +293,7 @@ def test_cited_by_counts_the_works_one_paper_cites(
     write_store(tmp_path, many(ALIAS, enough(), papers=(MINE,)))
 
     status, report = run(tmp_path, "--topic", "heart attack",
-                         "--cited-by", MINE, capsys=capsys)
+                         "--scope", MINE, "--corpus", "cited", capsys=capsys)
 
     assert status == 0
     assert report["scope"]["mode"] == "cited_by"
@@ -308,13 +308,15 @@ def test_cited_by_hides_the_vocabulary_of_another_task(
     records += many("Binary black hole mergers observed", enough(), papers=(THEIRS,))
     write_store(tmp_path, records)
 
-    _, mine = run(tmp_path, "--topic", "heart attack", "--cited-by", MINE,
+    _, mine = run(tmp_path, "--topic", "heart attack", "--scope", MINE,
+                  "--corpus", "cited",
                   capsys=capsys)
 
     assert "acute myocardial infarctions" in reported(mine)
     assert not any("black hole" in term for term in reported(mine))
 
-    _, whole = run(tmp_path, "--topic", "heart attack", "--all-papers",
+    _, whole = run(tmp_path, "--topic", "heart attack", "--scope", "disk",
+                   "--corpus", "cited",
                    capsys=capsys)
 
     assert any("black hole" in term for term in reported(whole))
@@ -327,7 +329,7 @@ def test_all_papers_reads_the_whole_store(
     records += many("Binary black hole mergers observed", enough(), papers=(THEIRS,))
     write_store(tmp_path, records)
 
-    status, report = run(tmp_path, "--topic", "heart attack", "--all-papers",
+    status, report = run(tmp_path, "--topic", "heart attack", "--scope", "disk",
                          capsys=capsys)
 
     assert status == 0
@@ -339,7 +341,7 @@ def test_the_scan_refuses_to_run_with_no_scope(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """No flag is an error. A default would answer somebody else's question."""
+    """No scope is an error. A default would answer somebody else's question."""
     write_store(tmp_path, many(ALIAS, enough()))
     reads: list[Path] = []
     monkeypatch.setattr(
@@ -347,24 +349,26 @@ def test_the_scan_refuses_to_run_with_no_scope(
         lambda root: reads.append(root) or [],
     )
 
-    status, report = run(tmp_path, "--topic", "heart attack", capsys=capsys)
+    with pytest.raises(SystemExit) as exit_status:
+        run(tmp_path, "--topic", "heart attack", capsys=capsys)
 
-    assert status == 2
-    assert report["terms"] == []
+    assert exit_status.value.code == 2
     assert reads == []
 
 
-def test_all_papers_combines_with_no_other_scope(
+def test_the_whole_collection_absorbs_any_scope_beside_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """One asks about the collection, one asks about a task. Not both at once."""
     write_store(tmp_path, many(ALIAS, enough()))
 
-    status, report = run(tmp_path, "--topic", "heart attack", "--all-papers",
-                         "--cited-by", MINE, capsys=capsys)
+    status, report = run(tmp_path, "--topic", "heart attack", "--scope", "disk",
+                         "--scope", MINE, "--corpus", "cited", capsys=capsys)
 
-    assert status == 2
-    assert report["terms"] == []
+    # `disk` and a slug are tokens of one grammar, so a scope holding both is
+    # the union, which is the whole collection.
+    assert status == 0
+    assert report["scope"]["mode"] == "all_papers"
 
 
 def test_an_unknown_slug_exits_rather_than_reporting_nothing(
@@ -374,10 +378,10 @@ def test_an_unknown_slug_exits_rather_than_reporting_nothing(
     write_store(tmp_path, many(ALIAS, enough()))
 
     status, report = run(tmp_path, "--topic", "heart attack",
-                         "--cited-by", "no_such_paper", capsys=capsys)
+                         "--scope", "no_such_paper", capsys=capsys)
 
     assert status == 2
-    assert report["unknown_papers"] == ["no_such_paper"]
+    assert report["unknown_paper"] == "no_such_paper"
     assert report["terms"] == []
 
 
@@ -389,14 +393,16 @@ def test_the_report_names_its_own_scope(
     records += many("Binary black hole mergers observed", enough(), papers=(THEIRS,))
     write_store(tmp_path, records)
 
-    _, one = run(tmp_path, "--topic", "heart attack", "--cited-by", MINE,
+    _, one = run(tmp_path, "--topic", "heart attack", "--scope", MINE,
+                 "--corpus", "cited",
                  capsys=capsys)
 
     assert one["scope"]["papers"] == [MINE]
     assert one["scope"]["papers_in_collection"] == 2
     assert one["scope"]["titles_read"] == enough()
 
-    _, whole = run(tmp_path, "--topic", "heart attack", "--all-papers",
+    _, whole = run(tmp_path, "--topic", "heart attack", "--scope", "disk",
+                   "--corpus", "cited",
                    capsys=capsys)
 
     assert whole["scope"]["papers"] == sorted([MINE, THEIRS])
@@ -410,7 +416,7 @@ def test_the_scan_reads_a_store_from_disk(
     write_store(tmp_path, many(ALIAS, enough()))
 
     status, report = run(tmp_path, "--topic", "the risk of a heart attack",
-                         "--all-papers", capsys=capsys)
+                         "--scope", "disk", capsys=capsys)
 
     assert status == 0
     assert report["literature_root"] == str(tmp_path)
@@ -424,7 +430,7 @@ def test_a_broken_store_is_reported_and_not_scanned(
     tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / ".references.jsonl").write_text("{not json\n", encoding="utf-8")
 
-    status, report = run(tmp_path, "--topic", "heart attack", "--all-papers",
+    status, report = run(tmp_path, "--topic", "heart attack", "--scope", "disk",
                          capsys=capsys)
 
     assert status == 1
@@ -439,7 +445,7 @@ def test_a_broken_store_is_reported_and_not_scanned(
 def write_paper(
     root: Path, slug: str, title: str, abstract: str, chapters: dict[str, str]
 ) -> None:
-    """One paper stored, with the parts that `--in-text` reads.
+    """One paper stored, with the parts that `--corpus text` reads.
 
     Each chapter is given as the intermediate text the conversion builds, and
     stored through the same parse the conversion uses, so a test says what the
@@ -591,11 +597,11 @@ def test_the_text_source_reads_the_papers_and_the_store_does_not(
     )
 
     _, titles = run(tmp_path, "--topic", "heart attacks",
-                    "--cited-by", MINE, capsys=capsys)
+                    "--scope", MINE, "--corpus", "cited", capsys=capsys)
     assert "myocardial infarctions" not in reported(titles)
 
     status, text = run(tmp_path, "--topic", "heart attacks",
-                       "--in-text", MINE, capsys=capsys)
+                       "--scope", MINE, "--corpus", "text", capsys=capsys)
 
     assert status == 0
     assert text["scope"]["mode"] == "in_text"
@@ -616,7 +622,7 @@ def test_in_text_needs_the_paper_on_disk(
     write_store(tmp_path, many(ALIAS, enough()))
 
     status, report = run(tmp_path, "--topic", "heart attacks",
-                         "--in-text", MINE, capsys=capsys)
+                         "--scope", MINE, capsys=capsys)
 
     assert status == 2
     assert report["papers_without_text"] == [MINE]
@@ -634,7 +640,7 @@ def test_the_two_sources_combine(
     )
 
     status, report = run(tmp_path, "--topic", "heart attacks",
-                         "--in-text", MINE, "--cited-by", MINE,
+                         "--scope", MINE,
                          "--min-count", "1", capsys=capsys)
 
     assert status == 0

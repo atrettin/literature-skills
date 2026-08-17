@@ -61,7 +61,9 @@ The same work by hand:
 ```bash
 litdb --help                          # the ten commands
 litdb add-paper --auto 2307.09241     # ingest a paper
+litdb toc <slug>                      # what a paper is, and what is in it
 litdb search "axial mass"             # find a phrase in what you hold
+litdb show <slug>/<stem>#<anchor>     # read what stands at an address
 litdb lookup bodek_2008_axial_mass_quasielastic   # resolve a citation
 ```
 

@@ -68,17 +68,21 @@ would match a paragraph. Every block carries `kind` and `anchor`:
 ```json
 {"anchor":"sec-coherent-pi","kind":"heading","level":2,"number":"6.5","title":"Coherent Pion Production"}
 {"anchor":"p2","kind":"paragraph","text":"Figure [ref: fig:coh] shows … [cite: vilain_1993_phys_lett_b313]."}
-{"anchor":"","kind":"math","env":"eqnarray","tex":"…","numbers":["78","79"]}
+{"anchor":"b3","kind":"math","env":"eqnarray","tex":"…","numbers":["78","79"]}
 {"anchor":"fig-coherent-pi","kind":"figure","file":"coherent_pi.png","number":"22","caption":"…"}
 {"anchor":"tab-new-coherent-pion","kind":"table","number":"13","tex":"…","caption":"…"}
 ```
 
-An `anchor` of `""` means the block has no address of its own; cite the chapter
-alone for it. `#eq-ckmt`, `#fig-f2compare` and `#tab-fit` name an object the
-paper labelled. `#sec-nuclear-effects` names a heading, after its title. `#p12`
-names the twelfth paragraph of prose in that one file, counted from `p1` in each
-file. **Cite the anchor**, never the line: the line addresses the file as it is
-now, and a re-ingest moves it.
+**Every block has an anchor**, so everything in a paper can be cited and
+opened. `#eq-ckmt`, `#fig-f2compare` and `#tab-fit` name an object the paper
+labelled. `#sec-nuclear-effects` names a heading, after its title. `#p12` names
+the twelfth paragraph of prose in that one file, counted from `p1` in each file.
+`#b7` is a block the paper gave no label of its own — an unnumbered equation, a
+code listing, a short paragraph — counted the same way.
+
+**The anchor is the address, and there is no other.** A line number describes
+the file that holds the paper rather than the paper: a re-ingest rewrites the
+chapter and moves it. No command reports one, and no citation carries one.
 
 A citation is stored as `[cite: <tag>]` and a reference the paper makes to
 itself as `[ref: <label>]`. Both are markers and neither is a link: what a link
@@ -92,7 +96,9 @@ of `kind` `math` is one display equation, with the environment the paper used
 and the numbers it carries; `$…$` inside a paragraph is inline maths.
 
 You do not have to find an anchor yourself: `litdb search` gives the anchor of
-every block it matches, and `location` in its answer is the citation form.
+every block it matches, and `location` in its answer is the citation form. That
+same string is a scope and a `litdb show` argument, so the address you just read
+is the address you hand to the next command.
 
 Read `figures/` for a figure. `figures_raw/` exists only so the conversion can
 be redone; never read it, and never delete it.
@@ -101,18 +107,67 @@ be redone; never read it, and never delete it.
 
 1. Read `literature/README.md`.
 2. Select the papers that cover the subject.
-3. Read `paper.json` of each selected paper.
-4. Choose the chapters that the question needs. Read the chapter title, the
-   subsection titles beside it and the word count. A title names the subject,
-   and the word count says which chapter carries the argument rather than a
-   page of definitions.
-5. Run `litdb search` for a phrase of the question when the titles leave the choice
-   open. It answers with the chapter, the anchor and the line, so it selects the
-   chapter and finds the passage in one step.
-6. Read `text/<stem>.jsonl` for the chapters that steps 4 and 5 name, and one
-   more when a chapter points to it.
+3. Climb the ladder below on each paper, and stop at the rung that answers.
 
-Do not read all chapters of a paper.
+Do not read all chapters of a paper, and never read `paper.json` by hand: on a
+long paper its chapter list alone fills a context window, and `litdb toc` says
+the same thing bounded.
+
+### Rung 1. Read the table of contents
+
+```bash
+litdb toc <slug>
+```
+
+It says what the paper is — title, authors, year, where it appeared, its
+abstract — and then every chapter and section with an address and a word count.
+Often that is the whole answer: a review organised by the axis you are asking
+about is answered by its section titles, for the cost of one call.
+
+Where a title bears on the question, open it:
+
+```bash
+litdb show <slug>/<stem>#<anchor>
+```
+
+**Where that section runs past about 1200 words, do not read it whole.** Search
+inside it instead, with rung 2 scoped to it, and read the block that answers.
+
+`--depth` bounds the listing on a long paper and `truncated_at_depth` says when
+there is more. Go deeper one chapter at a time with
+`litdb show <slug>/<stem> --anchors-only`.
+
+### Rung 2. Search
+
+```bash
+litdb search "<a phrase of the question>" --scope <slug>/<stem>#<anchor>
+litdb search "<a phrase of the question>" --scope <slug>
+```
+
+Scope it as narrowly as the question allows, and widen only when it answers
+nothing. Exact first; `--approx` when you are unsure of the words the field
+uses, which ranks the blocks in scope against your phrase rather than matching
+it.
+
+**An argument in a paper is not one block.** Prose runs into an equation and out
+of it again, and each of those is addressed separately. Every result carries
+`prev`, `next` and `parent`, so the way out of a block costs no second search:
+
+| What you need | What you run |
+|---|---|
+| the blocks around a hit, when it reads as the middle of an argument | `litdb search "…" --context 2` |
+| a run you can already see the ends of, from an `--anchors-only` listing | `litdb show <slug>/<stem>#p5..#p8` |
+| the whole argument, when you cannot see its ends | `litdb show` on the `parent` anchor |
+
+**Mathematics never matches a search.** An equation is stored as the TeX the
+paper wrote, not as words, so a claim that rests on one is reached through
+`--context` or a span and is never found directly.
+
+### Rung 3. Read the chapter
+
+When rungs 1 and 2 leave the question open and you have good reason the paper
+holds the answer, read the chapter that the table of contents points at. That is
+the last rung because it is the most expensive one.
 
 ## To trace a claim a paper borrowed
 
@@ -175,7 +230,7 @@ Before you write a quotation into a report, find it in the paper it is said to
 come from:
 
 ```bash
-litdb search "<the words>" --paper <slug>
+litdb search "<the words>" --scope <slug>
 ```
 
 **Do not use `grep` for this.** A phrase copied out of a rendered chapter
@@ -185,11 +240,16 @@ match. Some files hold a NUL byte, and `grep` prints nothing for the whole file
 present look absent. `litdb search` matches the phrase and the stored block
 against each other in the same flat form, so neither can hide the other.
 
-The answer gives `location`, which is what a report cites, and `line_location`,
-which is the stored file and the line to open. `Read` that file at that line and
-check the words around the quotation. A paper can write a sentence as a
-condition, or give it to somebody else. Such a sentence does not support the
-claim that you were about to make with it.
+The answer gives `location`: the one address, which is what a report cites and
+what opens the passage. Open it and read what stands around the quotation:
+
+```bash
+litdb show <location> --context 1
+```
+
+A paper can write a sentence as a condition, or give it to somebody else. Such a
+sentence does not support the claim that you were about to make with it, and the
+block either side is what tells you which it is.
 
 **When a search returns nothing, suspect the search before you conclude
 absence.** Read `partial_matches`: it names the longest shorter phrase the
@@ -201,17 +261,30 @@ serves more than one question, and it keeps the papers of each. Such a hit is
 evidence about that paper. It is not evidence about yours. Read it, and decide.
 
 ```bash
-litdb search "axial mass" --paper <slug> --paper <slug>   # your working set
-litdb search "axial mass"                                 # the whole collection
+litdb search "axial mass" --scope <slug> <slug>   # your working set, in one call
+litdb search "axial mass" --scope disk            # the whole collection
 litdb search "M_A\s*=\s*1.03" --regex
+```
+
+Every command that reads the papers takes the same `--scope`, and a scope is the
+citation form cut off wherever you like:
+
+```
+disk                            every paper the collection holds
+<slug>                          one paper
+<slug>/<stem>                   one chapter
+<slug>/<stem>#<anchor>          one section, or one block
+<slug>/<stem>#<from>..#<to>     a span of blocks
 ```
 
 ## To find a figure
 
-1. Read the `figures` list of `literature/<slug>/paper.json`, or grep the
-   `"kind": "figure"` blocks of `text/`. Both carry the caption.
-2. Find the caption that describes the thing that you want.
-3. Read the PNG in `figures/` with the `Read` tool.
+```bash
+litdb toc <slug> --all-anchors      # every figure, with its caption and anchor
+litdb show <slug>#<fig-anchor>      # the caption, and the path to the image
+```
+
+Then `Read` the `path` the answer gives. Never build that path yourself.
 
 Do not read the chapters to find a figure.
 
@@ -265,13 +338,15 @@ the slug. Say that you did it and why.
   to `add-paper`.
 - A claim that a paper does not hold something needs a search method that you
   can state. A `grep` that found nothing is not such a method: it fails silently
-  on wrapped text and on a file with a NUL byte. Search with `litdb search`, and say
-  which phrases you searched for.
-- Give `litdb search` a scope. The collection serves more than one task and keeps the
-  papers of each, so name the papers with `--paper` when the question is about
-  your task. Leave `--paper` out when the question is about the collection
-  itself. Read the `scope` block of the answer, and check that it holds the
-  papers that you meant.
+  on wrapped text and on a file with a NUL byte, and it never matches an
+  equation. Search with `litdb search`, and say which phrases you searched for.
+  Read `partial_matches`: it names the longest shorter phrase the papers do
+  carry, which is the evidence for the word they never wrote.
+- Give `litdb search` a scope. The collection serves more than one task and keeps
+  the papers of each, so name the papers with `--scope <slug> <slug>` when the
+  question is about your task, and `--scope disk` when it is about the
+  collection itself. Read the `scope` block of the answer, and check that it
+  holds the papers that you meant.
 - Never answer from a citation alone. Its text and its tag both carry an author
   and a year, which is enough to look convincing and not enough to be right —
   they are identifiers, not citations. Resolve the tag with `litdb lookup`.

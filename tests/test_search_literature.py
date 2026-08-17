@@ -17,15 +17,23 @@ from pathlib import Path
 import pytest
 
 from lit import blocks
-from lit import search_literature
+from lit import arxiv_fetch, search_literature
 
 PAPER = "jeong_2023_shallow_deep_inelastic"
 OTHER = "juszczak_2003_recoil_nucleon_spectrum"
 
 
 def write_chapter(collection: Path, slug: str, stem: str, *stored: dict) -> Path:
-    """Store one chapter, as a list of blocks. Returns the file."""
-    return blocks.write(collection / slug / "text" / (stem + ".jsonl"), list(stored))
+    """Store one chapter, as a list of blocks. Returns the file.
+
+    Every block leaves the ingest with an address, so a chapter written for a
+    test has them too: a fixture whose blocks cannot be addressed would test a
+    store the conversion never produces.
+    """
+    chapter = arxiv_fetch.fallback_anchors(
+        arxiv_fetch.paragraph_anchors([dict(block) for block in stored])
+    )
+    return blocks.write(collection / slug / "text" / (stem + ".jsonl"), chapter)
 
 
 def prose(text: str, anchor: str = "") -> dict:
@@ -57,7 +65,7 @@ def test_a_line_break_inside_the_phrase_does_not_stop_the_match(
 
     assert status == 0
     assert report["matches"] == 1
-    assert report["results"][0]["file"] == "%s/text/09_wrapped.jsonl" % PAPER
+    assert report["results"][0]["location"].startswith("%s/09_wrapped#" % PAPER)
 
 
 def test_a_nul_byte_does_not_hide_the_file(
@@ -73,7 +81,7 @@ def test_a_nul_byte_does_not_hide_the_file(
 
     assert status == 0
     assert report["matches"] == 1
-    assert any("09_binary.jsonl" in warning for warning in report["warnings"])
+    assert any("09_binary" in warning for warning in report["warnings"])
 
 
 def test_the_result_gives_the_anchor_above_the_match(
@@ -91,23 +99,30 @@ def test_the_result_gives_the_anchor_above_the_match(
     assert report["results"][0]["anchor"] == "p1"
     assert report["results"][0]["location"] == "%s/09_anchored#p1" % PAPER
 
-    # A block with no anchor of its own is addressed by its chapter alone.
+    # A block the paper gave no label of its own is still addressed. Nothing in
+    # a chapter is reachable only by naming the chapter around it.
     _, above = run(collection, "before any anchor", capsys=capsys)
-    assert above["results"][0]["anchor"] is None
-    assert above["results"][0]["location"] == "%s/09_anchored" % PAPER
+    assert above["results"][0]["anchor"]
+    assert above["results"][0]["location"].startswith("%s/09_anchored#" % PAPER)
 
 
-def test_the_line_number_is_the_line_of_the_match(
+def test_no_result_carries_a_line_number(
     collection: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """The anchor is the one address. A line number describes the file, not the paper:
+    it moves whenever the paper is ingested again, and a reader cannot see that it has.
+    """
     write_chapter(collection, PAPER, "09_lines",
                   prose("one"), prose("two"), prose("three"),
                   prose("the phrase to find"), prose("five"))
 
     _, report = run(collection, "the phrase to find", capsys=capsys)
 
-    # One block is one line, so the line addresses the block that matched.
-    assert report["results"][0]["line"] == 4
+    found = report["results"][0]
+    assert "line" not in found and "line_location" not in found
+    # `b4`, not `p4`: these blocks are shorter than a paragraph anchor is given
+    # for, and the fallback addresses what the paragraph count leaves.
+    assert found["location"] == "%s/09_lines#b4" % PAPER
 
 
 def test_the_sentence_stops_at_the_sentence_boundary(
@@ -167,7 +182,7 @@ def test_a_phrase_that_matches_nothing_reports_the_part_that_does(
     assert report["matches"] == 0
     assert report["partial_matches"][0]["phrase"] == "the axial mass extracted from"
     assert any(
-        result["file"].endswith("09_partial.jsonl")
+        result["chapter"] == "09_partial"
         for result in report["partial_matches"][0]["results"]
     )
 
@@ -226,7 +241,7 @@ def test_paper_hides_a_hit_in_a_paper_of_another_task(
     _, everywhere = run(collection, "the phrase to find", capsys=capsys)
     assert everywhere["matches"] == 2
 
-    _, mine = run(collection, "the phrase to find", "--paper", PAPER, capsys=capsys)
+    _, mine = run(collection, "the phrase to find", "--scope", PAPER, capsys=capsys)
     assert mine["matches"] == 1
     assert mine["scope"]["papers"] == [PAPER]
 
@@ -235,11 +250,11 @@ def test_an_unknown_slug_exits_rather_than_reporting_no_match(
     collection: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Status 1 means the phrase is absent, and this phrase was never searched for."""
-    status, report = run(collection, "the axial mass", "--paper", "no_such_paper",
+    status, report = run(collection, "the axial mass", "--scope", "no_such_paper",
                          capsys=capsys)
 
     assert status == 2
-    assert report["unknown_papers"] == ["no_such_paper"]
+    assert report["unknown_paper"] == "no_such_paper"
 
 
 def test_the_report_names_its_own_scope(
@@ -249,13 +264,10 @@ def test_the_report_names_its_own_scope(
     write_chapter(collection, PAPER, "09_scoped", prose("the phrase to find"))
 
     _, whole = run(collection, "the phrase to find", capsys=capsys)
+    assert whole["scope"]["asked"] == ["disk"]
     assert whole["scope"]["papers"] == sorted([PAPER, OTHER])
-    assert whole["scope"]["papers_in_collection"] == 2
-    assert whole["scope"]["files_read"] == len(
-        search_literature.stored_files(collection)
-    )
 
-    _, one = run(collection, "the phrase to find", "--paper", PAPER, capsys=capsys)
+    _, one = run(collection, "the phrase to find", "--scope", PAPER, capsys=capsys)
+    assert one["scope"]["asked"] == [PAPER]
     assert one["scope"]["papers"] == [PAPER]
-    assert one["scope"]["papers_in_collection"] == 2
-    assert one["scope"]["files_read"] < whole["scope"]["files_read"]
+    assert one["scope"]["chapters"] < whole["scope"]["chapters"]

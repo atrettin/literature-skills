@@ -145,6 +145,26 @@ def set_journal(line: str, journal: str) -> str:
     return "| %s |" % " | ".join(parts)
 
 
+def drop_row(root: Path, slug: str) -> str:
+    """Take this paper's row out of the table. Returns `removed` or `absent`.
+
+    The index lists what the collection holds, so a row for a directory that is
+    not there sends a reader to a page that does not open.
+    """
+    path = root / INDEX_NAME
+    if not path.exists():
+        return "absent"
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header, end = find_table(lines, path)
+    for number in range(header + 2, end):
+        if row_slug(lines[number]) == slug:
+            del lines[number]
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return "removed"
+    return "absent"
+
+
 def add_row(root: Path, report: dict, description: str = "") -> str:
     """Put this paper's row into the table. Returns `added` or `present`.
 

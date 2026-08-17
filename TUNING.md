@@ -139,11 +139,10 @@ that coefficient into a band and a fixed sentence.
 
 Every value here is a judgement. Nobody measured any of them.
 
-The scope is not tunable, and it has no default. `--scope <slug>` and
-`--all-papers` are a required pair, the way `--in-text`, `--cited-by` and
-`--all-papers` are for `lit/terminology_scan.py`. A collection is persistent and serves every task that
-came before yours, so a band measured over all of it answers for those tasks and
-not for your question.
+The scope is not tunable, and it has no default. `--scope` is required here and
+for `lit/terminology_scan.py`, and `--scope disk` is the explicit opt-out. A
+collection is persistent and serves every task that came before yours, so a band
+measured over all of it answers for those tasks and not for your question.
 
 ## Researching a task
 
@@ -158,6 +157,8 @@ skill states them, and the agent obeys them.
 | `MAX_TOTAL_INGESTS` | 20 | How many papers the whole task ingests. It bounds a task that keeps finding one more paper worth reading. |
 | `DRY_ITERATIONS` | 2 | How many iterations can find no new relevant paper before the loop stops. A lower value stops earlier on a subject that the collection covers already. |
 | `MAX_PARALLEL_SCOUTS` | 4 | How many `paper-scout` agents read at one time. A scout calls no API, thus this value trades tokens against waiting. |
+| `MAX_SECTION_WORDS` | 1200 | The length past which the loop stops reading a section whole and searches inside it instead. It is about where a section stops being one argument and becomes several. A lower value searches sections that one call could have read; a higher value reads pages of definitions to reach one paragraph. It sits below `SHOW_MAX_WORDS`, so a section this clears is never cut by that cap. Nobody measured it. |
+| `MIN_SCOUT_WORDS` | 2000 | The length under which the loop reads a paper itself rather than scouting it. Below it a scout's report approaches the length of the paper it summarises: a four-page conference talk of about 2200 words cost roughly 34k tokens to scout and would have cost less to read whole. That observation is one case and not a measurement. A higher value reads more papers into the researcher's own context; a lower value spends an agent on a paper shorter than its report. |
 | `MAX_TERMINOLOGY_SCOUTS` | 3 | How many terms of one scan go to a `terminology-scout`. A scout calls no API, thus this value trades tokens against the number of terms that stay unclear. |
 | `FIRST_PROSPECT_ITERATION` | 2 | The earliest iteration in which a `terminology-prospector` may run. The scan is free and the prospector reads a whole paper, so the free method goes first and gets a whole iteration to work. A value of 1 spends tokens before anybody knows whether they were needed. A higher value delays the only method that finds a name carrying no string to match, and `MAX_ITERATIONS` is 4. |
 | `MAX_PROSPECTORS` | 2 | How many papers one iteration reads for their vocabulary. Each one costs about as much as a `paper-scout`. A higher value covers a working set whose papers use different words; the terms of two papers already overlap heavily, because they are the words of one field. |
@@ -174,6 +175,21 @@ papers. Nobody measured these values. Each one is a judgement.
 | `CONTEXT_CHARS` | 300 | How many characters of the matching sentence the answer prints. A higher value shows more of the paragraph and costs more context. A lower value can cut the words that decide whether the passage supports the claim. |
 | `MAX_RESULTS` | 20 | How many matches one search reports. A common word matches hundreds of times. A higher value shows more of them, and `--max-results` raises it for one call. |
 | `MIN_BACKOFF_WORDS` | 3 | The shortest phrase the backoff tries after the full phrase fails. A lower value finds a match for two words, which most papers carry, and that match says little. A higher value reports no partial match at all. |
+| `MAX_WORDS` | 2000 | How many words one search answers with, counting the context blocks. `--max-results` counts matches and cannot see this: twenty matches at `--context 2` is a hundred blocks. A higher value returns more of a wide search and costs more context. |
+| `APPROX_MIN_COVERAGE` | 0.34 | The share of the phrase's weighted terms a block must carry before `--approx` gives it to the cross-encoder. The prefilter is what keeps an approximate search affordable. A lower value scores more blocks and takes longer; a higher value drops a block that answers the question in the field's own words rather than the caller's. It is the same measure `lit/rerank.py` applies to abstracts, at the same value. |
+| `APPROX_MAX_BLOCKS` | 300 | How many blocks the cross-encoder reads in one approximate search. A model scores about 100 passages in 8 seconds, so this is what separates an answer from a command that looks hung. The answer reports how many blocks were ranked out of how many were in scope, so a caller can see when the cap bound the ranking. A higher value ranks more of a large scope and takes proportionally longer. |
+
+## Reading a paper
+
+`lit/show_text.py` and `lit/toc.py` read what stands at an address. Both exist to
+keep a whole chapter out of a context window, so both are capped. Nobody
+measured these values. Each one is a judgement.
+
+| Parameter | Now | What it does |
+|---|---|---|
+| `SHOW_MAX_WORDS` | 2000 | How many words one `litdb show` answers with. About 2700 tokens, which a caller can spend two or three times on one paper without crowding the work it is doing. Over the cap the answer is cut at a block boundary and reports the anchor to resume from. It is set above `MAX_SECTION_WORDS` on purpose: a section the research loop cleared for reading whole arrives whole, and this fires only as a backstop. Lower it towards that value and the cap starts firing on ordinary sections, costing a round trip each. Raise it past about 4000 and one call can take a tenth of a working context, which is the failure the cap exists to prevent. |
+| `TOC_DEPTH` | 2 | How many ranks of heading a table of contents lists: chapters and the sections directly under them. Depth counts ranks and not raw heading levels, because a paper's levels are not contiguous. A higher value describes a deeply nested paper in one call, and on a manual of sixty-six chapters puts hundreds of rows in front of a caller. A lower value needs one `litdb show --anchors-only` per chapter to go deeper. `truncated_at_depth` always says when there is more. |
+| `PREVIEW_CHARS` | 90 | How many characters of a block an `--anchors-only` row shows where the block has no title of its own. Enough to recognise what the block is; short enough that a listing stays a listing. |
 
 ## Choosing a model for an agent
 
