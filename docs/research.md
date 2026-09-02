@@ -17,14 +17,13 @@ under `Currency checks`, so a reader can see it.
 
 The skill runs in the agent that was given the task. That agent reads
 `paper.json` files, the reports of the agents below, and the chapters it cites,
-and it never reads a full text. Four agents take the reading off it, and the
+and it never reads a full text. Three agents take the reading off it, and the
 division is about context rather than speed:
 
 | Agent | Reads | Why it is separate |
 |---|---|---|
 | `paper-ingestor` | one report, and no chapter | it handles an exception of the ingest — an ambiguous title, a name two works want. `litdb add-paper` does the rest, and it reads no paper into any context. |
 | `paper-scout` | the whole paper, against the open sub-questions | `paper.json` says how long each chapter is and what it is called, and neither was written against these questions, so the record cannot say which chapter answers one. |
-| `terminology-scout` | the chapters that use one term | a term the query lacks is a question about the words of the field. The answer must differentiate the two names, and it must never equate them: "myocardial infarction" names the tissue death, and "heart attack" is also said of the event that causes it. |
 | `terminology-prospector` | the whole paper, for the names it gives the subject | a name can carry no string that a scan can match — an acronym a paper defines once, a symbol, or a name that no sentence joins to the subject. Only a reader of the whole paper finds those. It reads the paper for its vocabulary, which is a different question from the one a `paper-scout` reads it for, and a gate in the research loop decides when that second read is worth its tokens. |
 
 The request gate holds every command to one request at a time, at the pace each

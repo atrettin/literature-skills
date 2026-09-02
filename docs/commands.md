@@ -158,9 +158,9 @@ than running it every time: the scan earns its cost when the question arrived in
 lay terms and the field has its own name for the subject, and earns nothing when
 the question already arrived in the field's own words.
 
-A `terminology-scout` agent then says how one such term relates to the subject:
-the same object, a narrower one, a wider one, or a different one. When the scan
-finds nothing usable and a sub-question is still open, the loop escalates to a
+The loop then reads the passages behind such a term itself, and records whether
+it names the same object, a narrower one, a wider one, or a different one. When
+the scan finds nothing usable and a sub-question is still open, the loop escalates to a
 `terminology-prospector`, which reads a whole paper for the names it uses. That
 gate is in `research-report/SKILL.md`, and it never opens in the first
 iteration.

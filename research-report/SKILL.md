@@ -9,9 +9,10 @@ This skill answers a task from the published literature. It searches, it reads,
 it judges what is still missing, and it searches again. It stops when the task
 is answered, and then it writes a report.
 
-The loop is the point. The first papers that a search finds are approximate
-matches. You learn from them what you should have searched for. You also learn
-which papers they cite, and which papers cite them.
+The loop is the point. The first papers you find are only the entry point to
+understanding the topic. From there you will learn how to refine the search
+terms, refine the list of sub-questions, and enter the chain of citations you 
+may want to follow.
 
 Two things must both be true at the end:
 
@@ -33,7 +34,7 @@ file below the literature root.
 
 ## Before you start
 
-Run every command from the root of the project, so that `literature/` resolves.
+The papers being ingested are stored in a persistent collection on disk.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
 set, it is `literature/` in the project. `litdb` reads the variable itself, thus
@@ -51,7 +52,6 @@ the full text of a paper is large. Three agents keep that text out of it:
 |---|---|
 | `paper-ingestor` | handles an exception of the ingest for one paper. It reports the slug and the warnings, and no paper text. |
 | `paper-scout` | reads one paper that is on disk against your sub-questions. It reports the locations that answer them. It uses no API, thus several can run at the same time. |
-| `terminology-scout` | says how one term of the literature relates to your subject. It uses no API, thus several can run at the same time. |
 | `terminology-prospector` | reads one paper in full for the names it uses for your subject. It uses no API, thus several can run at the same time. A gate decides when it runs, because it reads a whole paper. |
 
 If the environment cannot start an agent, do the same work yourself: ingest with
@@ -128,7 +128,7 @@ These limits hold for the whole task:
 | `MAX_SECTION_WORDS` | 1200 |
 | `MIN_SCOUT_WORDS` | 2000 |
 | `CURRENCY_GRACE_MONTHS` | 12 |
-| `MAX_TERMINOLOGY_SCOUTS` | 3 |
+| `MAX_TERMS_CHECKED` | 3 |
 | `FIRST_PROSPECT_ITERATION` | 2 |
 | `MAX_PROSPECTORS` | 2 |
 | `MAX_PROPOSED_TERMS` | 6 |
@@ -467,17 +467,39 @@ Then read `terms`. Each one is in one of three states:
 |---|---|
 | You know it, and it names your subject | Add it to the topic phrase of the next search. |
 | You know it, and it names something else | Ignore it. Write one line in the log that says so. |
-| You do not know how it relates to your subject | Give it to a `terminology-scout` agent. |
+| You do not know how it relates to your subject | Read the passage yourself. |
 
-Start at most `MAX_TERMINOLOGY_SCOUTS` `terminology-scout` agents. Give each one
-the subject and one term. A scout calls no API, thus several run at the same
-time. Each one answers with a table: the term, where the papers use it, whether
-it names the same object, and how it differs.
+Check at most `MAX_TERMS_CHECKED` such terms. Each one arrives with its address,
+so `litdb show <slug>/<stem>#<anchor> --context 1` puts the passage in front of
+you, and `litdb search "<term>" --scope <your working set>` finds where else the
+papers use it. Read the passage that defines the term, and the passage that
+names it beside your subject. Five passages settle a term; when they do not, the
+answer is `unclear` and you write that.
 
-**Never treat a term as a synonym.** A scout answers `narrower`, `wider` or
-`related` more often than `yes`. That distinction is the finding. A search for a
+Answer each one in a row of this table, and write it in the log under
+`### Terminology`:
+
+```markdown
+| Term | Where used | Same referent? | How it differs |
+|---|---|---|---|
+| <the term, as the papers write it> | <slug>/<stem>#<anchor> | <yes, narrower, wider, related or unclear> | <one or two sentences> |
+```
+
+| The answer | What it means |
+|---|---|
+| `yes` | a paper states that the two names denote one object. |
+| `narrower` | the term names a part of what the subject names. |
+| `wider` | the subject names a part of what the term names. |
+| `related` | the term names a different object of the same area. |
+| `unclear` | no passage that you read settles it. |
+
+**Never treat a term as a synonym.** Begin from the assumption that two names
+differ: a field coins a second name because the first one does not fit. Answer
+`yes` only where a paper states the identity, and never because two terms share
+a sentence or look interchangeable to you. `narrower`, `wider` and `related` are
+the common answers, and that distinction is the finding — a search for a
 narrower term finds papers about a part of your subject, and the report must say
-which part. Write the table in the log, under `### Terminology`.
+which part.
 
 A later iteration can run the scan again. When the gate opened at
 iteration 1, run it there.
@@ -499,8 +521,8 @@ decides when you spend it.
 Both must hold:
 
 1. **The scan gave you nothing usable.** No term of the last scan entered your
-   topic phrase — either it reported none, or every `terminology-scout` you fed
-   answered `related` or `unclear`.
+   topic phrase — either it reported none, or every term you checked was
+   `related` or `unclear`.
 2. **A sub-question is still open**, and no paper of your working set answers it.
 
 When either fails, run the scan and stop there.
