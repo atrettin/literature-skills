@@ -10,8 +10,8 @@ chapters. Read only the chapters that you need. A full paper fills your context
 and gives you no more answers.
 
 `literature/` is not tracked by git. A new clone has an empty directory. A
-project with no `literature/` at all has no database yet — the `init-literature`
-skill starts one.
+project with no `literature/` at all has no database yet — the `litdb init`
+command starts one.
 
 ## Before you start
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install the literature skills: the `litdb` command, the six skills and the
+# Install the literature skills: the `litdb` command, the five skills and the
 # five agents.
 #
 #     ./install.sh
@@ -14,7 +14,7 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python="${PYTHON:-python3}"
 
-skills=(add-paper find-papers follow-citations init-literature research-report use-literature)
+skills=(add-paper find-papers follow-citations research-report use-literature)
 agents=(paper-ingestor paper-scout terminology-prospector terminology-scout)
 
 echo "installing literature-skills from $repo"

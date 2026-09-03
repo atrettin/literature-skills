@@ -138,7 +138,7 @@ def _open_gate_file(root: Path | None):
     It never creates the collection directory. A gate that made one would leave
     an empty `literature/` behind in whatever directory a script ran from, and
     would take its lock there rather than on the collection the caller named.
-    `init-literature` makes a collection; this only locks one.
+    `litdb init` makes a collection; this only locks one.
     """
     path = gate_path(root)
     if not path.parent.is_dir():

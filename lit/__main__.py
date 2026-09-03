@@ -14,6 +14,7 @@ import sys
 # The subcommand, the module behind it, and what it does. The help below is
 # built from this, so a command that is added here is documented by that.
 COMMANDS: dict[str, tuple[str, str]] = {
+    "init": ("lit.init_collection", "start an empty collection and make git ignore it"),
     "add-paper": ("lit.add_paper", "ingest a paper from arXiv into the collection"),
     "remove": ("lit.remove_paper", "take a paper out of the collection"),
     "find": ("lit.arxiv_discover", "find papers on arXiv by the subject of their abstracts"),

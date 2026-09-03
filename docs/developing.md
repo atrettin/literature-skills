@@ -22,6 +22,7 @@ the commands share.
 | `cli.py` | the parser, `--literature-root`, the JSON printer, the exit codes |
 | `text.py` | normalising a title, a name on disk, a table cell, an author list, a sentence |
 | `paths.py` | where things are in a collection, and which files a citation can be in |
+| `init_collection.py` | starts an empty collection and makes git ignore it |
 | `http.py` | one gated GET, and the header that identifies us to an API |
 | `rate_gate.py` | one request at a time to each host, across processes |
 | `reference_store.py` | `.references.jsonl`: the records, their tags, and merging one into another |

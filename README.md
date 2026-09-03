@@ -5,12 +5,11 @@ papers, stored as plain text that both humans and agents can read.
 
 The papers themselves are **never** version controlled — they are copyrighted.
 This repository holds only the skills and the code behind them. A project's
-`literature/` directory stays out of git, and `init-literature` makes sure of
+`literature/` directory stays out of git, and `litdb init` makes sure of
 it.
 
 | Skill | What it does |
 |---|---|
-| [init-literature](init-literature/SKILL.md) | Starts an empty collection: creates the directory with its index, and makes git ignore it. |
 | [add-paper](add-paper/SKILL.md) | Finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, asks INSPIRE-HEP where it was published, resolves its bibliography and indexes the result. The skill handles the exceptions the ingest raises. |
 | [use-literature](use-literature/SKILL.md) | How to find and read a paper already in the collection. |
 | [find-papers](find-papers/SKILL.md) | Searches arXiv by the subject of a paper's abstract, ranks the hits against the question with a local cross-encoder, describes each hit with its length and its citation count, and marks the ones the collection already holds. It then weighs a candidate you mean to ingest against the papers you hold for the question, from the works the two have in common. |
@@ -25,7 +24,7 @@ cd ~/work/software/literature-skills
 ./install.sh
 ```
 
-That installs the `litdb` command and symlinks the six skills into
+That installs the `litdb` command and symlinks the five skills into
 `~/.claude/skills/` and the four agents into `~/.claude/agents/`. Because they
 are symlinks, `git pull` in the clone updates every project at once.
 
@@ -59,7 +58,8 @@ Ask Claude Code for what you want, in a project. The skills load themselves:
 The same work by hand:
 
 ```bash
-litdb --help                          # the ten commands
+litdb --help                          # the commands
+litdb init                            # start an empty collection
 litdb add-paper --auto 2307.09241     # ingest a paper
 litdb toc <slug>                      # what a paper is, and what is in it
 litdb search "axial mass"             # find a phrase in what you hold
@@ -84,7 +84,7 @@ project, and nothing changes for a project that has one.
 A paper costs a download and a conversion. Paying that again in the next project
 buys nothing, and the second copy is a second thing to keep in step.
 
-A shared collection usually sits outside any repository. `init-literature` then
+A shared collection usually sits outside any repository. `litdb init` then
 has no `.gitignore` to write, says so, and states that the copyright still
 holds.
 

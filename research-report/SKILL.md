@@ -42,8 +42,9 @@ you do not give `--literature-root`.
 
 **Find the collection first.** It is at `$LITERATURE_ROOT` when that variable is
 set. If it is not set, it is `literature/` in the project. If neither is there,
-run `init-literature` before you search. Write the path down: the header of the
-report and each link in it depend on it.
+run `litdb init` before you search: it creates the directory with its index and
+makes git ignore it, and refuses if one already exists. Write the path down: the
+header of the report and each link in it depend on it.
 
 **Delegate the heavy reading.** Your own context is the limit on this work, and
 the full text of a paper is large. Three agents keep that text out of it:
