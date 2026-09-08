@@ -120,7 +120,9 @@ def test_an_unknown_paper_names_the_papers_that_are_there(collection: Path) -> N
     with pytest.raises(scope.ScopeError) as raised:
         scope.resolve(collection, [scope.parse("no_such_paper")])
     assert raised.value.fields["unknown_paper"] == "no_such_paper"
-    assert PAPER in raised.value.fields["papers"]
+    papers = raised.value.fields["papers"]
+    assert isinstance(papers, list)
+    assert PAPER in papers
 
 
 def test_an_unknown_chapter_names_the_chapters_of_that_paper(collection: Path) -> None:
@@ -137,8 +139,10 @@ def test_an_anchor_in_two_chapters_asks_the_caller_which(collection: Path) -> No
 
     with pytest.raises(scope.ScopeError) as raised:
         scope.resolve(collection, [scope.parse("%s#p1" % PAPER)])
-    assert "90_first" in raised.value.fields["chapters"]
-    assert "91_second" in raised.value.fields["chapters"]
+    chapters = raised.value.fields["chapters"]
+    assert isinstance(chapters, list)
+    assert "90_first" in chapters
+    assert "91_second" in chapters
 
 
 def test_an_anchor_in_one_chapter_needs_no_chapter(collection: Path) -> None:

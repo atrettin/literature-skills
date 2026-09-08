@@ -91,7 +91,7 @@ def describe(chapter: list[dict], index: int, selection: scope.Selection,
     # `location` carries the anchor, so the row does not repeat it. On a paper
     # of sixty-six chapters a field repeated per row is the difference between a
     # listing a caller can afford and one it cannot.
-    row = {"location": selection.location(index)}
+    row: dict[str, object] = {"location": selection.location(index)}
 
     if block.get("kind") == "heading":
         start, end = scope.span(chapter, block["anchor"]) if block.get("anchor") \
