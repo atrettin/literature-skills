@@ -36,6 +36,7 @@ This file provides guidance to OpenCode agents working in this repository.
 
 ## Common Pitfalls
 
+- **Exit Codes Through Pipes**: `litdb <cmd> | head` reports the exit status of `head`, not of `litdb`. When a command's exit status matters (0 answered, 1 absent, 2 judgement), capture it without a pipe, e.g. `litdb <cmd> > /dev/null; echo $?`.
 - **Missing Converters**: Figures may require `ghostscript` or `librsvg`. Install them separately if needed.
 - **API Dependencies**: Network tests require arXiv/INSPIRE-HEP access. Use mock data in `tests/data/` for offline testing.
 - **Flavor Mismatch**: Reports cite anchors specific to the rendered flavor. Ensure consistency with `litdb render`.
