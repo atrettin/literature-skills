@@ -1,6 +1,6 @@
 ---
 name: use-literature
-description: How to find and read published scientific papers in the local literature database in literature/. Use when a question is about the science behind the project — physical models, methods, experimental results — that the code and the project's own documentation do not answer.
+description: How to find and read published scientific papers in the local literature database. Use when a question is about the science behind the project — physical models, methods, experimental results — that the code and the project's own documentation do not answer.
 ---
 
 # Read the literature database
@@ -9,9 +9,9 @@ description: How to find and read published scientific papers in the local liter
 chapters. Read only the chapters that you need. A full paper fills your context
 and gives you no more answers.
 
-`literature/` is not tracked by git. A new clone has an empty directory. A
-project with no `literature/` at all has no database yet — the `litdb init`
-command starts one.
+`literature/` is not tracked by git, and nothing under it is, so a new clone
+has no directory at all. A project with no `literature/` has no database yet —
+the `litdb init` command starts one, and makes the directory.
 
 ## Before you start
 
@@ -147,7 +147,8 @@ litdb search "<a phrase of the question>" --scope <slug>
 Scope it as narrowly as the question allows, and widen only when it answers
 nothing. Exact first; `--approx` when you are unsure of the words the field
 uses, which ranks the blocks in scope against your phrase rather than matching
-it.
+it. `--approx` refuses the whole collection until you add `--force`, which
+lets it read every paper.
 
 **An argument in a paper is not one block.** Prose runs into an equation and out
 of it again, and each of those is addressed separately. Every result carries
@@ -198,8 +199,9 @@ the rest.
 
 What the answer can tell you:
 
-- **`held_as` names a directory.** The work is here in full. Read
-  `literature/<that slug>/paper.json` — it is an ordinary paper of the collection.
+- **`held_as` names a directory.** The work is here in full, as an ordinary
+  paper of the collection: answer from it with the same ladder, starting at
+  `litdb toc <that slug>`.
 - **`held_as` is null, with a `doi` or `arxiv_id`.** The work is identified but
   not here. Cite it from the answer; fetch it only if the question turns on
   reading it, as below.
@@ -217,12 +219,10 @@ litdb lookup --arxiv 1611.07770
 litdb lookup --cited-by <slug>                  # everything a paper draws on
 ```
 
-`literature/REFERENCES.md` is a view of the same data, sorted most-cited first,
-for a person browsing what the field is built on, and `literature/references/`
-is the same data again, one page per work, for a person following a citation.
-Do not read either to resolve a tag: the table holds one row per work across
-every paper here and grows without limit, and a page tells you less than the
-lookup does at the same cost.
+`literature/REFERENCES.md` is a view of the same data, one row per work across
+every paper here, sorted most-cited first, for a person browsing what the field
+is built on; `literature/references/` is the same data again, one page per
+work, for a person following a citation.
 
 ## To verify a quotation
 
@@ -233,23 +233,24 @@ come from:
 litdb search "<the words>" --scope <slug>
 ```
 
-**Do not use `grep` for this.** A phrase copied out of a rendered chapter
-carries the line break the reader's viewer put in it, and `grep` then gives no
-match. Some files hold a NUL byte, and `grep` prints nothing for the whole file
-— no error, and no "binary file matches". Both failures make text that is
-present look absent. `litdb search` matches the phrase and the stored block
-against each other in the same flat form, so neither can hide the other.
+`grep` over the stored `text/` files is the same test from the file side: one
+line is one block, so a hit's line addresses the block, and the block's
+`anchor` sits on that same line.
 
-The answer gives `location`: the one address, which is what a report cites and
-what opens the passage. Open it and read what stands around the quotation:
+The search's answer gives `location`: the one address, which is what a report
+cites and what opens the passage. Open it and read what stands around the
+quotation:
 
 ```bash
 litdb show <location> --context 1
 ```
 
-A paper can write a sentence as a condition, or give it to somebody else. Such a
-sentence does not support the claim that you were about to make with it, and the
-block either side is what tells you which it is.
+A found sentence is not a finding until its context says so. The paper may have
+written it as the assumption its argument starts from, not as a result, or it
+may be reporting a result that belongs to another work. In either case the
+sentence does not support the claim you were about to make with it, and the
+blocks on either side — the ones `--context 1` just showed — tell you which it
+is.
 
 **When a search returns nothing, suspect the search before you conclude
 absence.** Read `partial_matches`: it names the longest shorter phrase the
@@ -275,12 +276,14 @@ disk                            every paper the collection holds
 <slug>/<stem>                   one chapter
 <slug>/<stem>#<anchor>          one section, or one block
 <slug>/<stem>#<from>..#<to>     a span of blocks
+<slug>#<anchor>                 the anchor, in the chapter that carries it;
+                                refused when two chapters carry it
 ```
 
 ## To find a figure
 
 ```bash
-litdb toc <slug> --all-anchors      # every figure, with its caption and anchor
+litdb toc <slug> --all-anchors      # every figure, equation and table
 litdb show <slug>#<fig-anchor>      # the caption, and the path to the image
 ```
 
@@ -288,28 +291,30 @@ Then `Read` the `path` the answer gives. Never build that path yourself.
 
 Do not read the chapters to find a figure.
 
-Each entry carries the figure's number, its anchor and the chapter stem where
-the paper discusses it, so a figure a cross-reference names — `[ref: fig:xsec]`
-— is the entry whose `label` is `fig:xsec`, numbered 3, or 3a and 3b when the
-paper drew it as panels.
+Each entry carries the figure's `number` and its `location`, which holds the
+chapter stem and the anchor, so a figure a cross-reference names —
+`[ref: fig:xsec]` — is the entry whose anchor is `fig-xsec`, numbered 3, or 3a
+and 3b when the paper drew it as panels.
 
 ## To find a paper that is not there
 
 1. Search the references first: `litdb lookup --search "<author or title word>"`.
    A paper the collection does not hold may still be cited by one that it does,
    and the answer gives you the arXiv identifier to fetch it by.
-2. Search arXiv with the `find-papers` skill. It searches abstracts rather than
-   titles, so it finds a paper on the subject of the question, and it marks the
-   results the collection already holds. Use it when the question names a
-   subject; `litdb lookup` above answers when you have a name or a title.
+2. Search arXiv with the `find-papers` skill. It reads abstracts, and so it
+   finds a paper on the subject of the question; give it a title and it asks
+   arXiv for that one named paper too. It marks the results the collection
+   already holds. Use it when the question names a subject, or a paper the
+   collection does not cite.
 3. Otherwise tell the user that the database has no paper on the subject.
 4. Offer the `add-paper` skill.
 
 You may add a cited work yourself, without asking, when answering the question
 needs the source rather than the citing paper's summary of it — a number you
 must check, a derivation the citing paper only names. Take the `arxiv_id` from
-the lookup and follow `add-paper` from its step 3, using the record's `tag` as
-the slug. Say that you did it and why.
+the lookup and follow `add-paper` from its step 1, with `--slug` set to the
+record's `tag`, so the work keeps the name its citations already use. Say that
+you did it and why.
 
 ## Rules
 
@@ -331,17 +336,15 @@ the slug. Say that you did it and why.
   someone else for a fact, resolve the tag with `litdb lookup` and cite that work.
   Citing the paper you happened to read for a result it borrowed puts a wrong
   attribution into the project's documentation.
-- Never edit a rendered file — `README.md`, `REFERENCES.md`, `references/`,
-  `INDEX.md` or anything under `chapters/`. Every one of them is written again
-  from the store whenever a paper is added or `litdb render` runs, so an edit
-  there is lost. Never edit `.references.jsonl` or `text/` either; both belong
-  to `add-paper`.
+- Never edit a rendered file — `README.md`, `REFERENCES.md`, anything under
+  `references/`, `INDEX.md`, `FIGURES.md` or anything under `chapters/`. Every
+  one of them is written again from the store whenever a paper is added or
+  `litdb render` runs, so an edit there is lost. Never edit
+  `.references.jsonl` or `text/` either; both belong to `add-paper`.
 - A claim that a paper does not hold something needs a search method that you
-  can state. A `grep` that found nothing is not such a method: it fails silently
-  on wrapped text and on a file with a NUL byte, and it never matches an
-  equation. Search with `litdb search`, and say which phrases you searched for.
-  Read `partial_matches`: it names the longest shorter phrase the papers do
-  carry, which is the evidence for the word they never wrote.
+  can state: which files you searched, and which phrases. `grep` over the
+  `text/` files is one such method, and `litdb search` the other; say which you
+  ran and what you searched for.
 - Give `litdb search` a scope. The collection serves more than one task and keeps
   the papers of each, so name the papers with `--scope <slug> <slug>` when the
   question is about your task, and `--scope disk` when it is about the
