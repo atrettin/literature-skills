@@ -36,12 +36,9 @@ file below the literature root.
 
 The papers being ingested are stored in a persistent collection on disk.
 
-The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
-set, it is `literature/` in the project. `litdb` reads the variable itself, thus
-you do not give `--literature-root`.
-
 **Find the collection first.** It is at `$LITERATURE_ROOT` when that variable is
-set. If it is not set, it is `literature/` in the project. If neither is there,
+set. If it is not set, it is `literature/` in the project. `litdb` reads the
+variable itself, thus you do not give `--literature-root`. If neither is there,
 run `litdb init` before you search: it creates the directory with its index and
 makes git ignore it, and refuses if one already exists. Write the path down: the
 header of the report and each link in it depend on it.
@@ -51,7 +48,7 @@ the full text of a paper is large. Three agents keep that text out of it:
 
 | Agent | What it does |
 |---|---|
-| `paper-ingestor` | handles an exception of the ingest for one paper. It reports the slug and the warnings, and no paper text. |
+| `paper-ingestor` | resolves the exception of one failed ingest. When the resolution needs the user it brings the question back; when it completes it reports the slug and the warnings, and no paper text. |
 | `paper-scout` | reads one paper that is on disk against your sub-questions. It reports the locations that answer them. It uses no API, thus several can run at the same time. |
 | `terminology-prospector` | reads one paper in full for the names it uses for your subject. It uses no API, thus several can run at the same time. A gate decides when it runs, because it reads a whole paper. |
 
@@ -108,9 +105,10 @@ litdb overlap <arxiv-id>      --scope <slug> <slug> <slug>
 ```
 
 A scope is the citation form cut off wherever you like — `disk`, `<slug>`,
-`<slug>/<stem>`, `<slug>/<stem>#<anchor>`, or a span `#<from>..#<to>` — so the
-`location` an answer reports is a scope you hand straight back to narrow the
-next call.
+`<slug>/<stem>`, `<slug>/<stem>#<anchor>`, a span
+`<slug>/<stem>#<from>..#<to>`, or a bare anchor `<slug>#<anchor>`, which names
+the chapter that carries it — so the `location` an answer reports is a scope
+you hand straight back to narrow the next call.
 
 A tool that you run over the whole collection answers a question about the
 collection. It does not answer a question about your task.
@@ -171,8 +169,9 @@ whole queue. It prints one JSON report per paper, as one object per line. It
 exits 2 when any paper raised an exception.
 
 **Start a `paper-ingestor` agent only for a paper whose report carries an
-`exception`.** Give that agent the identifier of that paper. The exception is
-the one part of an ingest that needs judgement.
+`exception`.** Give that agent the identifier of that paper and the fields of
+its exception. The exception is the one part of an ingest that needs
+judgement, and a judgement it cannot make it brings back to you.
 
 **When more candidates look worth an ingest than the iteration budget allows,
 weigh them against what you already hold.** A rank says how well an abstract
@@ -187,16 +186,18 @@ works as the papers of your working set, and the reference store does say that.
 
    It answers in this shape:
 
-   ```json
-   {"band": "low", "coefficient": 0.12,
-    "scope": {"mode": "working_set", "papers": ["…"]},
-    "closest": [{"paper": "…", "coefficient": 0.31}],
-    "outside_scope": [{"paper": "…", "coefficient": 0.44}]}
-   ```
+    ```json
+    {"band": "low", "overlap": 0.12,
+     "scope": {"mode": "working_set", "papers": ["…"]},
+     "closest": [{"slug": "…", "references": 41, "shared": 3,
+                  "overlap": 0.31}],
+     "outside_scope": [{"slug": "…", "references": 38, "shared": 8,
+                        "overlap": 0.44}]}
+    ```
 
-   `band` is `null` when nothing bands the candidate — an empty working set, or
-   a reference list too short to compare. That is an answer, and the `counts`
-   still hold.
+    `band` is `null` when nothing bands the candidate — an empty working set, or
+    a reference list too short to compare. That is an answer, and
+    `candidate_references` and `in_scope` still hold.
 2. Read `outside_scope` first. A paper there is on disk, and it costs no ingest.
    Read it, and add it to the working set when its text bears on a sub-question.
 3. Ingest the candidate with the lowest overlap first. It brings the most ground
@@ -247,18 +248,14 @@ the one below it, and a rung skipped is context spent for nothing.
 litdb toc <slug>
 ```
 
-One call says what the paper is and what is in it, with a word count and an
-address on every section. Where a section's title bears on a sub-question, read
-it straight away:
+The same rung as in the `use-literature` skill: one call says what the paper is
+and what is in it, with a word count and an address on every section, and a
+review organised by the axis your question asks about is often answered by its
+section titles alone. Where a section's title bears on a sub-question, read it
+straight away with `litdb show <slug>/<stem>#<anchor>`.
 
-```bash
-litdb show <slug>/<stem>#<anchor>
-```
-
-A review organised by the axis your question asks about is often answered by its
-section titles alone. **Where the section runs past `MAX_SECTION_WORDS`, do not
-read it whole** — go to rung 2 scoped to that section, and read the block that
-answers.
+**Where the section runs past `MAX_SECTION_WORDS`, do not read it whole** — go
+to rung 2 scoped to that section, and read the block that answers.
 
 Never read `paper.json` by hand. On a long paper its chapter list alone fills a
 context window, and this says the same thing bounded.
@@ -270,16 +267,12 @@ litdb search "<phrase>" --scope <slug>/<stem>#<anchor>
 litdb search "<phrase>" --scope <slug> --approx
 ```
 
-Exact first, `--approx` when you are unsure of the words the field uses. Scope
-it as narrowly as the question allows and widen only when it answers nothing.
-
-**An argument in a paper is not one block.** Prose runs into an equation and out
-again, and each is addressed separately. Every result carries `prev`, `next` and
-`parent`, so widening costs no second search: `--context N` around a hit,
-`litdb show <slug>/<stem>#<from>..#<to>` for a run whose ends you saw in a
-listing, and the `parent` anchor for the whole section. **Mathematics never
-matches a search** — an equation is stored as TeX and not as words — so a claim
-resting on one is reached through context or a span and never found directly.
+The same rung as in the `use-literature` skill, and its rules hold: exact
+first, `--approx` when you are unsure of the words the field uses, scope it as
+narrowly as the question allows and widen only when it answers nothing. An
+argument in a paper is not one block, and mathematics never matches a search;
+the `use-literature` skill gives the ways out of a block, and each costs no
+second search.
 
 #### Rung 3. A `paper-scout`
 
@@ -302,17 +295,13 @@ A paper that the collection held enters the working set here, and not at the
 search: it enters when you read text in it that bears on a sub-question.
 
 **Verify before you cite.** A scout report tells you where to look. It is not a
-source. Each location it gives is an anchor, as `<slug>/03_results#p9`. Open it
-and compare the words with the quotation:
-
-```bash
-litdb show <slug>/03_results#p9 --context 1
-```
-
-`--context 1` brings the blocks either side, which is what tells you whether the
-paper is asserting the sentence, writing it as a condition, or giving it to
-somebody else. A sentence of the last two kinds does not support the claim you
-were about to make with it.
+source. Each location it gives is an anchor, as `<slug>/03_results#p9`. Verify
+it the way the `use-literature` skill gives under "To verify a quotation": find
+the words in the paper they come from, open the `location` with
+`litdb show <location> --context 1`, and read what stands around them, because a
+found sentence is not a finding until its context says so — the paper may be
+asserting it, writing it as the assumption its argument starts from, or
+reporting a result that belongs to another work.
 
 **When the words are not there, do not conclude that the scout invented them.**
 Find them:
@@ -322,11 +311,8 @@ litdb search "<the words the scout quoted>" --scope <slug>
 ```
 
 This is the reliable path and it returns the anchor that holds the words, so it
-verifies and re-addresses in one call. **Never search for a quotation with
-`grep`**: a phrase copied out of a rendered chapter carries a line break the
-store does not have, `grep` prints nothing at all for a file holding a NUL byte,
-and no `grep` matches an equation. A quotation that `litdb search` cannot place
-is not verified, whatever the scout wrote.
+verifies and re-addresses in one call. A quotation the search cannot place is
+not verified, whatever the scout wrote.
 
 Then write the finding in the log:
 
@@ -356,8 +342,12 @@ A closed-negative sub-question is an answer. It goes in the report.
 the mark `answered`, and for that mark alone. A `partial` sub-question stays in
 the loop, and a `closed-negative` one leans on no paper.
 
-Name the paper that supplies the answer. Remove that paper's text, and the
-answer goes with it. Ask INSPIRE which papers cite that paper, newest first:
+Name the paper that supplies the answer, and show that it does: remove that
+paper's full text, and the answer must go with it. An answer that stands
+without the paper's text was supplied by something else — the paper's
+abstract, another paper, or what you knew before the task — and the citation
+is then an address you did not open. Ask INSPIRE which papers cite that
+paper, newest first:
 
 ```bash
 litdb citations <arxiv-id> --direction citing --sort mostrecent
@@ -368,8 +358,10 @@ asked for**, and not at the top level:
 
 ```json
 {"paper": {...}, "query": {...},
- "citing": {"counts": {"total": 41, "returned": 20},
-            "results": [{"title": "…", "arxiv_id": "…", "year": 2024, "held_as": null}]}}
+ "citing": {"total": 41, "returned": 20,
+            "counts": {"held": 0, "cited": 3, "new": 17},
+            "results": [{"title": "…", "arxiv_id": "…",
+                         "year": 2024, "held_as": null}]}}
 ```
 
 Read the titles and the summaries, and act:
@@ -719,16 +711,25 @@ that says what that means.
 litdb check-report reports/<task-slug>.source.md
 ```
 
-It checks five things, against the store rather than against any rendered file:
+It checks the report against the store, and not against any rendered file:
 
-1. Each marker names a paper the collection holds.
+1. Each marker resolves. A work the collection does not hold is reported in
+   `works_not_in_collection` without failing the check: a report may name a
+   work it does not hold, and the reader can go and get it.
 2. Each chapter and each anchor is one the paper has.
 3. Each tag has a record in the store.
-4. The body and the references name the same works. `cited_but_not_listed`
+4. The body holds no `[cite: …]` marker: those belong to the chapters of the
+   collection, and one in the report means chapter text was copied where a
+   `lit:ref/<tag>` reference was wanted.
+5. The body and the references name the same works. `cited_but_not_listed`
    names a work the body cites and the references omit: add the work to the
    references. `listed_but_not_cited` names a work the references list and the
    body cites nowhere: cite the work in the body, or remove the entry.
-5. Each unconfirmed work carries its mark.
+6. Each unconfirmed work carries its mark.
+7. The report cites at least one work. A report that attributes nothing to
+   anything has nothing to audit.
+
+Any of them false is `"ok": false`.
 
 **The report is not finished until `"ok": true`.** Correct what it reports and
 run it again. Then write the report a person reads:
@@ -737,9 +738,11 @@ run it again. Then write the report a person reads:
 litdb render-report reports/<task-slug>.source.md
 ```
 
-That writes `reports/<task-slug>.md`, with every marker resolved into a link for
-the collection's current flavor, and the same for the research log. The source
-is the master: a flavor change re-renders it and never edits it.
+That writes `reports/<task-slug>.md`, with every marker resolved into a link
+for the collection's current flavor. The source is the master: a flavor change
+re-renders it and never edits it. The research log needs no rendering: it holds
+plain addresses and no `lit:` marker, so it is written under its final name,
+`reports/<task-slug>.research-log.md`, from the start.
 
 Then tell the user:
 

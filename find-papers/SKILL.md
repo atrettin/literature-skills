@@ -91,14 +91,14 @@ answers my question". `recent` answers "what came out last". `cited` answers
 `relevance_rank` in each of the three orders. You thus see how the model ranked
 each paper, in every order.
 
-**A search takes about 5 to 9 seconds.** It sends one request to arXiv, and a
-second one three seconds later when the first finds little. It then reads up to
-a hundred abstracts with the cross-encoder. One INSPIRE request follows the
-arXiv requests, and it describes the shortlist with its length and its citation
+**A search takes about 5 to 9 seconds.** It sends up to three requests to
+arXiv: the strict one, and two that widen when the one before finds little. It
+then reads the abstract of every candidate that carries at least a third of
+the terms, with the cross-encoder. One INSPIRE request follows the arXiv
+requests, and it describes the shortlist with its length and its citation
 count. The first search of all also fetches the model, which adds a few seconds
-and happens one time. It writes what it is doing to the error output
-while you wait. Wait for it. Do not start a second search because the first
-looks slow.
+and happens one time. It writes what it is doing to the error output while you
+wait. Wait for it. Do not start a second search because the first looks slow.
 
 **A category is exact.** `--category astro-ph` excludes `astro-ph.HE`, which is
 a separate category and not a part of it. Give both when you want both.
@@ -141,7 +141,7 @@ Then, for each result:
 | `coverage` | No cross-encoder is installed. The order counts words only. A paper that repeats the words of the question ranks above one that answers it. |
 
 Do two things when the backend is `coverage`. Tell the user that the order
-counts words only. Give the install command from "Before you start".
+counts words only, and give them the install command: `pip install flashrank`.
 
 **A `broad` result is a weak result.** No paper carried every term, so the
 search asked for any of them. Read `missing_terms` before you use that paper.
@@ -186,8 +186,8 @@ question*. The collection is persistent and serves other questions, and their
 papers must not decide your band: a candidate that shares nothing with your
 subject still shares references with whatever an earlier task ingested, and
 measured against all of it that candidate reads `high`. You would then decline
-an ingest your question needs. A caller with no such list yet gives no `--scope`,
-and it says so instead of guessing.
+an ingest your question needs. The flag is required, so a caller with no such
+list yet does not run the check: there is no set to measure against.
 
 **State the cost.** A candidate the collection does not hold costs two requests
 to INSPIRE: one resolves the identifier to a record, one reads the reference

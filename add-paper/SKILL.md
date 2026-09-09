@@ -38,6 +38,10 @@ litdb add-paper --auto \
     --title "<title>" --author "<author>" --year <year>
 ```
 
+Give an identifier you recalled rather than read `--expect-title <part of the
+title>`: the ingest refuses the paper unless the arXiv title holds that text,
+and raises `TITLE_MISMATCH` when it does not.
+
 It prints one JSON object per paper, one object per line. **The exit
 code says who acts:**
 
@@ -127,6 +131,15 @@ produced no chapter holding text. `main_tex` names the file it tried, and
 `sections_found` says how many sections it found. Report the failure. The paper
 needs a conversion by hand, or none.
 
+### `TITLE_MISMATCH`
+
+You gave `--expect-title`, and the paper the identifier serves is not the one
+you went looking for: `arxiv_id` is the identifier, `title` is what it is, and
+`expected` is the text you asked the title to hold. A remembered identifier
+resolves to a real paper, and every stage after this would succeed on it. Find
+the right identifier — run the title search of step 1, or check the DOI — and
+run the ingest again with it.
+
 ### `SLUG_EXISTS`
 
 The paper directory is already there, and the caller gave no `--force`.
@@ -142,6 +155,16 @@ The paper is on disk and the collection lists it. Its citations are what failed.
 The exception carries `unresolved`, `duplicates`, `missing_pages` and `residue`,
 each already scoped to this paper, and `elsewhere` for the rest of the
 collection.
+
+The exception fires when `duplicates`, `missing_pages` or `stale` is non-empty.
+`unresolved` alone does not: the ingest reports it as the warning
+`UNRESOLVED_CITATIONS`, and the paper stays, with exit 0. `stale` alone does
+fire it, with every field below empty: a record claims to be held in full at a
+paper directory that is not there, because the paper was removed or its
+directory moved. No command enumerates which record is stale, and the
+exception does not name it. Report the defect to the user, with the slug: the
+record still answers the citation it holds, and re-ingesting the paper it names
+writes the directory again.
 
 - `unresolved` — a chapter cites a tag no record answers. Say so. The claim that
   citation supports cannot be traced until it resolves.
@@ -232,7 +255,6 @@ The `references` block of the report counts what happened:
 | `unchanged` | works already known and already listing it — a re-run |
 | `unverified` | rows of the whole store whose identity nothing confirmed |
 | `retagged` | citations repointed, because the store knew a work by another tag |
-| `relinked` | files whose `[cite: …]` markers became links |
 | `held` | works of the store this collection also holds in full |
 
 Tell the user the count of unverified references. Those rows are marked ⚠: their
