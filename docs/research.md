@@ -11,6 +11,14 @@ follow through the citation graph. The loop stops when each sub-question is
 answered, or when a limit in [TUNING.md](../TUNING.md) stops it — and the report
 says which of the two happened.
 
+Before the loop starts, the agent divides the task into numbered
+sub-questions, gives each its nature — what the field holds now, where a claim
+first stands, or the accepted treatment — and shows the plan to the user. The
+nature decides the first move of the sub-question and the direction the agent
+follows through the citation graph while it stays open. The loop starts only
+when the user approves the plan, and a paper the user names enters the working
+set at the start, with the sub-question that named it.
+
 A sub-question counts as answered only after the loop asks INSPIRE which papers
 cite the paper that supplies the answer. The research log holds that search,
 under `Currency checks`, so a reader can see it.

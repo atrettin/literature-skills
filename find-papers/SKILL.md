@@ -10,6 +10,10 @@ first, and so it finds a paper on the subject when the title of that paper
 never gives the words. When the abstracts answer with too little, it asks for
 the topic as a title, and so it also finds the one paper you name.
 
+This skill finds. It does not add a paper to the collection: whether a found
+paper is ingested is the caller's decision, and the skill that adds it is
+`add-paper`.
+
 Use `use-literature` first. It reads the papers the project holds already, and
 that costs nothing. Use this skill when the collection cannot answer the
 question.
@@ -160,8 +164,8 @@ paper from it.
 |---|---|
 | `held_as` holds a directory name | The collection holds this paper in full. Read it with `use-literature`. Do not ingest it again. |
 | `held_as` holds a directory name, and your task did not put it there | Read the paper. Add it to the working set of your task when its text bears on a sub-question. `research-report/SKILL.md` defines the working set. |
-| `known_as` holds a tag, `held_as` is `null` | A paper in the collection cites this work. Run `litdb lookup <tag>` for the full record. Ingest it with `add-paper` when the question needs the work itself. |
-| both are `null` | The collection does not know this paper. Report it, and offer the `add-paper` skill with the arXiv identifier. |
+| `known_as` holds a tag, `held_as` is `null` | A paper in the collection cites this work. Run `litdb lookup <tag>` for the full record. The caller ingests it with `add-paper` when the question needs the work itself. |
+| both are `null` | The collection does not know this paper. Report it with its arXiv identifier. Whether to ingest it is the caller's decision, and `add-paper` is the skill that adds it. |
 
 ## Step 4. Weigh a candidate against the papers of your question
 
@@ -250,11 +254,8 @@ answer. A weak result is worse than no result. Never give one as an answer.
   never run an overlap check beside a search or an ingest.
 - **An abstract is not a paper.** Never cite a paper that you found here. You
   read 400 characters of its abstract. That is enough to choose the paper. It is
-  not enough to know what the paper says. Ingest it with `add-paper` and read
-  it, or cite nothing.
-- **Ask before you ingest.** A paper that the user did not name costs a
-  download, a conversion, and space on disk. Report what you found. Let the user
-  choose.
+  not enough to know what the paper says. The caller ingests it with `add-paper`
+  and reads it, or cites nothing.
 - **A rank is not a judgement of relevance.** Report the backend that produced
   the order, and report `missing_terms`. Never present position 1 as the answer
   without them.

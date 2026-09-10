@@ -62,7 +62,12 @@ Open the research log and write these three things:
 
 1. The task, in one sentence.
 2. The task, divided into numbered sub-questions: **SQ1**, **SQ2**, and so on.
-3. For each sub-question, what an answer to it would look like.
+3. One row per sub-question: what an answer to it would look like, its nature,
+   and the papers the user named for it.
+
+| SQ | An answer looks like | Nature | Seed papers |
+|---|---|---|---|
+| SQ1 | … | latest result | 2103.12345 |
 
 Each kind of task divides:
 
@@ -72,24 +77,61 @@ Each kind of task divides:
 | "Check the claims in this file" | one for each claim. Quote the claim in the log. |
 | "List the models that X uses, by energy range" | one for each class of model, and one more for the completeness of the list. |
 
+**Give each sub-question its nature.** The nature decides the first move you
+make for the sub-question, and the direction you follow in the citation graph
+while it stays open:
+
+| Nature | The question asks for | The first move | While it stays open |
+|---|---|---|---|
+| latest result | what the field holds now | the forward search from the seed, or from the best paper step 2 finds: `litdb citations <arxiv-id> --direction citing --sort mostrecent` | forward |
+| earliest original | where a claim first stands | the backward trace of the claim: `litdb lookup <tag>` for its tag, and `litdb citations <arxiv-id> --direction cited` for the work the store does not hold | backward |
+| consensus | the accepted treatment | the review search: `litdb find --kind review`, the topic phrased the way a review writes its own abstract | forward, `--sort mostcited` |
+
+The table in "How to refine" still names the move where the last iteration
+showed something for the sub-question. The nature names it while nothing has
+been learned yet, and a refine move wins where both apply, because it answers
+what you learned. A sub-question that checks a claim the user put down is
+*earliest original*: find where the claim stands, and the currency check of
+step 4 settles whether it still does. A sub-question that asks for the
+completeness of a list is *consensus*: the review is the paper that says the
+list is complete.
+
+**A seed paper is a paper the user named for the task.** It enters the
+working set at the start, with the sub-question that named it, held or not:
+the user's name is a judgement of relevance that a search never is. A seed
+with an arXiv identifier needs no search; a seed named by title gets the title
+search of step 2, and the identifier the search gives you is what step 3
+ingests. A seed skips the overlap check of step 3, because no number weighs
+the user's choice. It counts against the ingest budget like any paper.
+
+**Show the user the plan, and wait for the approval.** Show them the table —
+the sub-questions, what an answer looks like, the nature, the seeds — and ask
+them to proceed or to correct it. A correction rewrites the table and is shown
+again. The loop starts only on an approval, and the log keeps it under
+`## Plan`, with the corrections the user made.
+
 **This list is the contract.** Step 4 judges the work against it, and not
 against your memory of the task. You can add a sub-question that the reading
-uncovers. Never delete one without a line in the log that says why.
+uncovers; one that post-dates the approval is named in "Limitations of this
+search". Never delete one without a line in the log that says why.
 
 **Open the working set.** The working set is the list of papers of the
 collection that bear on this question. It starts empty. Write it in the log
 under `## Working set`, and add to it as the task runs.
 
-A paper enters the working set in one of two ways:
+A paper enters the working set in one of three ways:
 
 | How | When |
 |---|---|
 | You ingested it for this task | at the ingest, with the sub-question that needed it |
 | The collection held it, and you read text in it that bears on a sub-question | at the read, and never at the search |
+| The user named it for this task | at the start, with the sub-question that named it |
 
 A paper that a search reports as held does **not** enter the set. A held paper
-enters when you read it and the text bears on a sub-question. The collection
-holds papers from other tasks, thus "held" says nothing about this question.
+enters when you read it and the text bears on a sub-question — the one
+exception is a seed, which the user's name puts in at the start and which you
+read before you cite it like any other paper. The collection holds papers from
+other tasks, thus "held" says nothing about this question.
 
 **Give the working set to every tool that reads more than one paper.** A tool of
 that kind takes its scope as a flag that you repeat for each paper. The working
@@ -130,9 +172,13 @@ These limits hold for the whole task:
 
 ### Step 1. Plan the iteration
 
-Choose the open sub-questions to work on. Choose a search or a citation lookup
-from the table in "How to refine". Write the choice and the reason in the log
-**before** you act.
+Choose the open sub-questions to work on, and choose the move for each of
+them. The move is named by the sub-question's nature — its first move where
+you have not searched it yet, the direction it follows while it stays open
+otherwise — and by the table in "How to refine", which names the move where
+the last iteration showed something. Where both name a move, the refine move
+answers what you learned, and it wins. Write the choice and the reason in the
+log **before** you act.
 
 ### Step 2. Search
 
@@ -435,12 +481,23 @@ reason to choose the forward search.
 Write one entry for each iteration, in this shape:
 
 ```markdown
+## Plan
+
+<the task, in one sentence>
+
+| SQ | An answer looks like | Nature | Seed papers |
+|---|---|---|---|
+| SQ1 | … | latest result | 2103.12345 |
+
+Approved: <approved without change | the corrections the user made>
+
 ## Working set
 
 | Slug | How it entered | Sub-questions |
 |---|---|---|
 | <slug> | ingested, iteration 1 | SQ2, SQ3 |
 | <slug> | held, read at iteration 2 | SQ5 |
+| <slug> | seed, named by the user | SQ1 |
 
 ## Iteration <n> — <date>
 
@@ -476,8 +533,8 @@ SQ1 answered (currency: <slug>) · SQ2 partial · SQ3 open · SQ4 closed-negativ
 <continue, with the refinement and the reason | stop, with the reason>
 ```
 
-The `## Working set` table stands once, above the first iteration entry. Write
-the `scope:` line each time the set grows. A reader can then see which papers a
+The `## Plan` section and the `## Working set` table stand once, above the
+first iteration entry. Write the `scope:` line each time the set grows. A reader can then see which papers a
 tool covered at that point of the task.
 
 Three rules hold the log together:
@@ -505,6 +562,8 @@ Write it in the form of a scientific paper:
 **"Limitations of this search" must hold each of these that is true:**
 
 - the sub-questions that you closed as negative, and how you searched for them;
+- each sub-question added after the user approved the plan, and the iteration
+  that added it;
 - a limit that stopped the loop, and which limit it was;
 - each sub-question that you marked answered with no currency check, and the
   paper that supplies its answer;
@@ -622,6 +681,10 @@ Then tell the user:
   ingests a whole queue. Do not start a search, a `litdb citations` lookup or a second
   ingest beside a running ingest. A scout and your own reading call no API, thus
   they run beside an ingest.
+- **Ingest within the budget, without asking per paper.** The task the user
+  accepted is to read the literature, and the budget of step 3 is the consent
+  for it. The `find-papers` skill finds and reports; it does not ask, and
+  neither do you.
 - **Check for later work before you call a sub-question answered.** Step 4 says
   how, and the log says that you did it.
 - **Keep the full text out of your context.** Read `litdb toc` for what a paper
