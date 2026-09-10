@@ -147,8 +147,10 @@ measured over all of it answers for those tasks and not for your question.
 ## Researching a task
 
 `research-report/SKILL.md` runs the loop that answers a task from the
-literature. These limits stop the loop. They are not numbers in a script: the
-skill states them, and the agent obeys them.
+literature, and `find-terms/SKILL.md` runs its step for the other names of the
+subject. These limits stop the loop: the loop states the first eight, and
+`find-terms` states the last four. They are not numbers in a script: the skill
+states them, and the agent obeys them.
 
 | Parameter | Now | What it does |
 |---|---|---|
@@ -159,11 +161,11 @@ skill states them, and the agent obeys them.
 | `MAX_PARALLEL_SCOUTS` | 4 | How many `paper-scout` agents read at one time. A scout calls no API, thus this value trades tokens against waiting. |
 | `MAX_SECTION_WORDS` | 1200 | The length past which the loop stops reading a section whole and searches inside it instead. It is about where a section stops being one argument and becomes several. A lower value searches sections that one call could have read; a higher value reads pages of definitions to reach one paragraph. It sits below `SHOW_MAX_WORDS`, so a section this clears is never cut by that cap. Nobody measured it. |
 | `MIN_SCOUT_WORDS` | 2000 | The length under which the loop reads a paper itself rather than scouting it. Below it a scout's report approaches the length of the paper it summarises: a four-page conference talk of about 2200 words cost roughly 34k tokens to scout and would have cost less to read whole. That observation is one case and not a measurement. A higher value reads more papers into the researcher's own context; a lower value spends an agent on a paper shorter than its report. |
+| `CURRENCY_GRACE_MONTHS` | 12 | How young a paper must be for the loop to mark a sub-question answered without a forward-citation search on it. A higher value skips the search more often, and a conclusion can then rest on work that a later paper overtook. A lower value spends one INSPIRE request on a paper that few works can yet cite. This value is a judgement: a preprint of the last year has few citers, and a paper of two years can already carry a correction. Nobody measured it. |
 | `MAX_TERMS_CHECKED` | 3 | How many terms of one scan the loop opens the passages for. Reading a term costs a handful of bounded `litdb show` calls in the researcher's own context, thus this value trades that context against the number of terms that stay unclear. |
 | `FIRST_PROSPECT_ITERATION` | 2 | The earliest iteration in which a `terminology-prospector` may run. The scan is free and the prospector reads a whole paper, so the free method goes first and gets a whole iteration to work. A value of 1 spends tokens before anybody knows whether they were needed. A higher value delays the only method that finds a name carrying no string to match, and `MAX_ITERATIONS` is 4. |
 | `MAX_PROSPECTORS` | 2 | How many papers one iteration reads for their vocabulary. Each one costs about as much as a `paper-scout`. A higher value covers a working set whose papers use different words; the terms of two papers already overlap heavily, because they are the words of one field. |
 | `MAX_PROPOSED_TERMS` | 6 | How many names one prospector reports. Each one may then cost a scout or a search. A higher value returns the paper's whole vocabulary, and most of a paper's vocabulary names something other than the subject. |
-| `CURRENCY_GRACE_MONTHS` | 12 | How young a paper must be for the loop to mark a sub-question answered without a forward-citation search on it. A higher value skips the search more often, and a conclusion can then rest on work that a later paper overtook. A lower value spends one INSPIRE request on a paper that few works can yet cite. This value is a judgement: a preprint of the last year has few citers, and a paper of two years can already carry a correction. Nobody measured it. |
 
 ## Searching the text
 

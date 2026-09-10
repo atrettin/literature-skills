@@ -127,10 +127,6 @@ These limits hold for the whole task:
 | `MAX_SECTION_WORDS` | 1200 |
 | `MIN_SCOUT_WORDS` | 2000 |
 | `CURRENCY_GRACE_MONTHS` | 12 |
-| `MAX_TERMS_CHECKED` | 3 |
-| `FIRST_PROSPECT_ITERATION` | 2 |
-| `MAX_PROSPECTORS` | 2 |
-| `MAX_PROPOSED_TERMS` | 6 |
 
 ### Step 1. Plan the iteration
 

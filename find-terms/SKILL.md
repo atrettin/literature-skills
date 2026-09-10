@@ -14,6 +14,17 @@ This skill runs inside the loop of `research-report`, after its first
 iteration. The loop holds what this skill takes: the topic phrase, the working
 set, the sub-questions, and the log the results go into.
 
+## The limits
+
+These limits hold the step:
+
+| Limit | Value |
+|---|---|
+| `MAX_TERMS_CHECKED` | 3 |
+| `FIRST_PROSPECT_ITERATION` | 2 |
+| `MAX_PROSPECTORS` | 2 |
+| `MAX_PROPOSED_TERMS` | 6 |
+
 ## The gate: is there a vocabulary gap to find?
 
 The scan earns its cost when the person who asked described the subject in lay
