@@ -185,6 +185,14 @@ done
 if command -v litdb >/dev/null 2>&1; then
     echo
     echo "done. litdb is $(command -v litdb)"
+    echo
+    echo "Next, choose where the literature will live, initialize it, and name"
+    echo "the flavor its papers will be rendered in — vscode for the KaTeX"
+    echo "preview built into VS Code, obsidian for Obsidian:"
+    echo "    litdb init --flavor vscode"
+    echo "    litdb init --literature-root ~/literature --flavor obsidian"
+    echo "The flavor is recorded with the collection, and it can be changed"
+    echo "later with litdb render --flavor."
 else
     # pip put the script somewhere that PATH does not reach. Say where, rather
     # than leaving a command that reports "not found" for no visible reason.

@@ -104,6 +104,9 @@ def stem_of(path: Path) -> str:
 # the flavor the collection is rendered in
 # --------------------------------------------------------------------------
 
+FLAVORS = ("vscode", "obsidian")
+DEFAULT_FLAVOR = "vscode"
+
 
 def state_path(root: Path) -> Path:
     return root / STATE_NAME
@@ -114,16 +117,16 @@ def flavor(root: Path) -> str:
 
     It is a property of the files on disk and not of the shell that reads them:
     the anchors a render writes differ per flavor, so a report written against
-    the wrong one names anchors that are not there. `$LITERATURE_FLAVOR` answers
-    for a collection that has never been rendered, and `litdb render --flavor`
-    records the answer from then on.
+    the wrong one names anchors that are not there. `litdb init` records one
+    when a collection starts, `litdb render --flavor` records it from then on,
+    and `$LITERATURE_FLAVOR` answers for a collection that recorded no flavor.
     """
     path = state_path(root)
     if path.is_file():
         recorded = json.loads(path.read_text(encoding="utf-8")).get("flavor")
         if recorded:
             return recorded
-    return os.environ.get("LITERATURE_FLAVOR") or "vscode"
+    return os.environ.get("LITERATURE_FLAVOR") or DEFAULT_FLAVOR
 
 
 def set_flavor(root: Path, name: str) -> Path:

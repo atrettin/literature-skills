@@ -18,8 +18,8 @@ import pytest
 from lit import collection_index, init_collection, paths
 
 
-def run(collection: Path, capsys) -> tuple[int, dict]:
-    status = init_collection.main(["--literature-root", str(collection)])
+def run(collection: Path, capsys, *extra: str) -> tuple[int, dict]:
+    status = init_collection.main(["--literature-root", str(collection), *extra])
     return status, json.loads(capsys.readouterr().out)
 
 
@@ -131,3 +131,68 @@ def test_the_index_it_writes_is_the_shared_empty_template(
     run(root, capsys)
 
     assert (root / "README.md").read_text(encoding="utf-8") == collection_index.EMPTY_INDEX
+
+
+def test_a_fresh_collection_records_the_default_flavor(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LITERATURE_FLAVOR", raising=False)
+    root = tmp_path / "literature"
+
+    status, report = run(root, capsys)
+
+    assert status == 0
+    assert report["flavor"] == "vscode"
+    assert paths.flavor(root) == "vscode"
+
+
+def test_init_records_the_flavor_it_is_given(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LITERATURE_FLAVOR", raising=False)
+    root = tmp_path / "literature"
+
+    status, report = run(root, capsys, "--flavor", "obsidian")
+
+    assert status == 0
+    assert report["flavor"] == "obsidian"
+    assert paths.flavor(root) == "obsidian"
+
+
+def test_init_without_a_flavor_records_the_environment_value(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LITERATURE_FLAVOR", "obsidian")
+    root = tmp_path / "literature"
+
+    status, report = run(root, capsys)
+
+    assert status == 0
+    assert report["flavor"] == "obsidian"
+    assert paths.flavor(root) == "obsidian"
+
+
+def test_refusing_an_existing_collection_leaves_its_flavor_untouched(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from conftest import write_paper
+
+    root = tmp_path / "literature"
+    root.mkdir()
+    write_paper(root, "lovelace_2025_analytical_engine", {"01_intro": [
+        {"type": "p", "anchor": "p1", "tex": "The engine is analytical."},
+    ]})
+    paths.set_flavor(root, "vscode")
+
+    status, report = run(root, capsys, "--flavor", "obsidian")
+
+    assert status == 2
+    assert report["flavor"] == "vscode"
+    assert paths.flavor(root) == "vscode"
+    assert "not applied" in report["flavor_note"]

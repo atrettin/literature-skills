@@ -2,9 +2,10 @@
 """Start an empty collection, and make git keep its papers out of the repository.
 
 This is the mechanical half of starting a collection. It creates the directory
-and its index, makes sure git ignores it, and renders the reference index from
-the (empty) store. What is left to a person is choosing what the collection is
-for, and what `add-paper` puts into it — neither of which this command guesses.
+and its index, records the flavor the collection will be rendered in, makes
+sure git ignores it, and renders the reference index from the (empty) store.
+What is left to a person is choosing what the collection is for, and what
+`add-paper` puts into it — neither of which this command guesses.
 
 The one thing it must get right is git. The papers are copyrighted, and a
 collection that is not ignored will be committed sooner or later. So the ignore
@@ -23,6 +24,7 @@ and the caller has to decide whether to keep it.
 Usage:
     litdb init
     litdb init --literature-root ~/literature
+    litdb init --flavor obsidian
 """
 
 from __future__ import annotations
@@ -144,16 +146,31 @@ def settle_git(root: Path) -> tuple[str, list[str]]:
 def build_parser() -> argparse.ArgumentParser:
     parser = cli.parser(__doc__)
     cli.add_root_argument(parser)
+    parser.add_argument(
+        "--flavor",
+        choices=paths.FLAVORS,
+        help="the flavor to record the new collection in; without it, "
+        "$LITERATURE_FLAVOR, else the default. It can be changed later "
+        "with `litdb render --flavor`.",
+    )
     return parser
 
 
-def _exists_report(root: Path) -> dict:
-    return {
+def _exists_report(root: Path, flavor: str | None = None) -> dict:
+    report = {
         "literature_root": str(root),
         "created": False,
         "already_exists": True,
         "papers": len(paths.papers_on_disk(root)),
+        "flavor": paths.flavor(root),
     }
+    if flavor is not None and flavor != report["flavor"]:
+        report["flavor_note"] = (
+            "%s was not applied: init does not touch a collection that "
+            "exists. Its recorded flavor is %s; change it with "
+            "`litdb render --flavor %s`." % (flavor, report["flavor"], flavor)
+        )
+    return report
 
 
 def run(argv: list[str] | None = None) -> tuple[int, dict]:
@@ -164,7 +181,7 @@ def run(argv: list[str] | None = None) -> tuple[int, dict]:
     if root.exists() and root.is_dir():
         # Refuse rather than guess: the index is the record of what is held,
         # and rewriting it would drop every paper it lists.
-        return 2, _exists_report(root)
+        return 2, _exists_report(root, args.flavor)
 
     # The empty directory first, and no file of the collection: git's
     # trailing-slash rule only matches once the directory exists, so the ignore
@@ -174,6 +191,13 @@ def run(argv: list[str] | None = None) -> tuple[int, dict]:
 
     readme = root / collection_index.INDEX_NAME
     readme.write_text(collection_index.EMPTY_INDEX, encoding="utf-8")
+
+    # The flavor is settled at the start and recorded with the collection:
+    # every render from then on — an ingest, a re-render, a report — follows
+    # it, and a collection never starts with the question open. Without the
+    # flag, the value $LITERATURE_FLAVOR answers with, else the default.
+    flavor = args.flavor or paths.flavor(root)
+    paths.set_flavor(root, flavor)
 
     references_status, references = update_references.run(
         ["--render-only", "--literature-root", str(root)]
@@ -188,6 +212,7 @@ def run(argv: list[str] | None = None) -> tuple[int, dict]:
         "created": True,
         "already_exists": False,
         "papers": 0,
+        "flavor": flavor,
         "readme": str(readme),
         "git": git_outcome,
         "git_note": git_notes,

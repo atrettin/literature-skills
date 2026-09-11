@@ -34,9 +34,11 @@ not allowed on a heading, so a heading has no other address.
 
 It is a property of the files on disk, not of the shell that reads them. The
 anchors a render wrote are the anchors that are there, so a report written
-against a different flavor names anchors that are not. `litdb render --flavor
-<name>` records the answer; `$LITERATURE_FLAVOR` answers only for a collection
-that has never been rendered.
+against a different flavor names anchors that are not. `litdb init` records it
+when a collection starts — the `--flavor` you give, else `$LITERATURE_FLAVOR`,
+else `vscode` — so a collection holds one from its first paper; `litdb render
+--flavor <name>` records it from then on; and `$LITERATURE_FLAVOR` answers only
+for a collection that recorded no flavor.
 
 `litdb add-paper` renders each paper it ingests in the recorded flavor, so a
 collection is never half one thing and half another.

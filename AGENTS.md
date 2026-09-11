@@ -31,7 +31,7 @@ This file provides guidance to OpenCode agents working in this repository.
 
 - **Rate Limiting**: The arXiv and INSPIRE-HEP APIs enforce rate limits. `lit/rate_gate.py` ensures compliance across processes. Avoid parallel API calls.
 - **Literature Directory**: Git ignores `literature/` and `*.pdf`/`*.eps` files. Papers are copyrighted and must not be committed.
-- **Flavor Rendering**: The collection is rendered in a specific flavor (`vscode` or `obsidian`). Use `litdb render --flavor` to set it.
+- **Flavor Rendering**: The collection is rendered in a specific flavor (`vscode` or `obsidian`). `litdb init --flavor` records it when a collection starts; use `litdb render --flavor` to change it.
 - **Scope Handling**: Commands use `--scope` to target specific papers or chapters. Defaults vary by command.
 
 ## Common Pitfalls

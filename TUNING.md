@@ -228,7 +228,7 @@ the default there. A cheaper model costs less and reads less well.
 | `DEFAULT_AUTHORS` | `lit/reference_lookup.py` | 3 | How many authors a resolved citation names. |
 | `MAX_AUTHORS` | `lit/update_references.py` | 3 | The same, for the rendered `REFERENCES.md` table. |
 | `MAX_CITED_BY` | `lit/update_references.py` | 8 | How many citing papers one row of that table lists. |
-| `DEFAULT_FLAVOR` | `lit/render.py` | `vscode` | Which flavor a collection is rendered in when nothing has recorded one and `$LITERATURE_FLAVOR` is unset. It decides what the anchors of a fresh collection look like, and so which viewer opens a citation without further work. `vscode` because a KaTeX preview needs no other program installed; a reader who keeps the collection in Obsidian sets the flavor once with `litdb render --flavor obsidian`. Nobody measured it. |
+| `DEFAULT_FLAVOR` | `lit/paths.py` | `vscode` | Which flavor a collection is rendered in when nothing has recorded one and `$LITERATURE_FLAVOR` is unset. It decides what the anchors of a fresh collection look like, and so which viewer opens a citation without further work. `vscode` because a KaTeX preview needs no other program installed; a reader who keeps the collection in Obsidian sets the flavor once with `litdb render --flavor obsidian`. Nobody measured it. |
 | `ALT_MAX_CHARS` | `lit/render.py` | 120 | How long the alt text of a rendered figure runs before it is cut. It repeats the caption, which sits under the image in full, so it exists for a reader who cannot see the image and not as a second copy of the text. A higher value describes a complicated figure better and makes the markup harder to read past. Nobody measured it. |
 
 ## Ingesting a paper

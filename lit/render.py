@@ -27,6 +27,7 @@ from pathlib import Path
 
 from lit import blocks, cli, collection_index, paths, reference_store, update_references
 from lit import write_index
+from lit.paths import FLAVORS
 from lit.arxiv_fetch import (
     ALIGNED_MATH_ENVIRONMENTS,
     BARE_MATH_ENVIRONMENTS,
@@ -36,9 +37,6 @@ from lit.arxiv_fetch import (
     split_math_rows,
 )
 from lit.text import collapse_whitespace
-
-FLAVORS = ("vscode", "obsidian")
-DEFAULT_FLAVOR = "vscode"
 
 # How long an alt attribute runs before it is cut. It repeats the caption, which
 # sits under the image in full, so it exists for a reader who cannot see the

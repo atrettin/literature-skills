@@ -39,9 +39,14 @@ The papers being ingested are stored in a persistent collection on disk.
 **Find the collection first.** It is at `$LITERATURE_ROOT` when that variable is
 set. If it is not set, it is `literature/` in the project. `litdb` reads the
 variable itself, thus you do not give `--literature-root`. If neither is there,
-run `litdb init` before you search: it creates the directory with its index and
-makes git ignore it, and refuses if one already exists. Write the path down: the
-header of the report and each link in it depend on it.
+ask the user which flavor the collection should be rendered in — `vscode` for
+the KaTeX preview built into VS Code, `obsidian` for Obsidian — and run
+`litdb init --flavor <flavor>` before you search: it creates the directory with
+its index, records the flavor every render will follow from the first paper on,
+makes git ignore it, and refuses if one already exists. The flavor decides how
+a reader opens every link in the report, and it is a choice the user makes,
+not one you make for them. Write the path down: the header of the report and
+each link in it depend on it.
 
 **Delegate the heavy reading.** Your own context is the limit on this work, and
 the full text of a paper is large. Three agents keep that text out of it:

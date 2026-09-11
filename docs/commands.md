@@ -8,7 +8,7 @@ unreadable, `2` a bad argument or a judgement for the caller to make.
 
 | Command | Answers |
 |---|---|
-| `litdb init` | starts an empty collection: creates the directory with its index, makes git ignore it, and renders the reference index. Refuses if one already exists |
+| `litdb init` | starts an empty collection: creates the directory with its index, records its flavor (the `--flavor` you give, else `$LITERATURE_FLAVOR`, else `vscode`), makes git ignore it, and renders the reference index. Refuses if one already exists |
 | `litdb add-paper --auto <arxiv-id> …` | **the entry point.** Ingests each paper end to end, and prints one report per paper |
 | `litdb find --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, describes each hit with its length and its citation count, and marks the ones the collection holds |
 | `litdb overlap <arxiv-id> --scope <slug> …` | says how much of what a candidate paper cites the collection already knows |
