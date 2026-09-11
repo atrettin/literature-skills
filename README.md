@@ -20,8 +20,8 @@ it.
 ## Installing
 
 ```bash
-git clone <this repo> ~/work/software/literature-skills
-cd ~/work/software/literature-skills
+git clone https://github.com/atrettin/literature-skills.git
+cd literature-skills
 ./install.sh --for claude        # or: --for opencode, --for both
 ```
 

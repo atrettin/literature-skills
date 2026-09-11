@@ -1,7 +1,7 @@
 # Developing
 
 ```bash
-git clone <this repo> && cd literature-skills
+git clone https://github.com/atrettin/literature-skills.git && cd literature-skills
 python3 -m venv .venv
 .venv/bin/python -m pip install --editable ".[rerank,dev]"
 .venv/bin/python -m pytest
