@@ -195,14 +195,17 @@ measured these values. Each one is a judgement.
 
 ## Choosing a model for an agent
 
-The frontmatter of each agent in `.claude/agents/` names its model. A cheaper
-model costs less and reads less well.
+Each agent in [`agents/`](agents/) carries a `model-tier` — `small` or `large`
+— and the install maps the tier to a model: the `--small` and `--large` names
+you pass to `install.sh`, or, when neither is given, `haiku` and `sonnet` for
+Claude Code, or the model of the agent that invokes it for OpenCode, which is
+the default there. A cheaper model costs less and reads less well.
 
-| Parameter | Now | What it does |
+| Agent | Tier | What it does |
 |---|---|---|
-| `model` of `paper-ingestor` | `sonnet` | The model that handles an exception of the ingest script. The script does the mechanical work. Two judgements are left: the identity of a paper, and a name that two works want. Each one decides what the collection holds from then on. `haiku` is the cheaper value to try. A wrong paper, or a tag given to the wrong work, costs more than the saving. |
-| `model` of `terminology-prospector` | `sonnet` | The model that reads a whole paper for the names it gives the subject. It must separate a name for the subject from a topic the paper discusses beside it, and then judge the referent. `haiku` is the cheaper value to try, and a smaller model returns the paper's subject headings as names. |
-| `model` of `paper-scout` | `haiku` | The model that reads one paper against the sub-questions. This is targeted extraction, and not synthesis. `sonnet` is the value to try when scouts miss a passage that answers a question. |
+| `paper-ingestor` | large | The model that handles an exception of the ingest script. The script does the mechanical work. Two judgements are left: the identity of a paper, and a name that two works want. Each one decides what the collection holds from then on. `haiku` is the cheaper value to try. A wrong paper, or a tag given to the wrong work, costs more than the saving. |
+| `terminology-prospector` | large | The model that reads a whole paper for the names it gives the subject. It must separate a name for the subject from a topic the paper discusses beside it, and then judge the referent. `haiku` is the cheaper value to try, and a smaller model returns the paper's subject headings as names. |
+| `paper-scout` | small | The model that reads one paper against the sub-questions. This is targeted extraction, and not synthesis. `sonnet` is the value to try when scouts miss a passage that answers a question. |
 
 ## Matching a paper you can name
 

@@ -1,7 +1,7 @@
 # literature-skills
 
-Claude Code skills for building and reading a local database of scientific
-papers, stored as plain text that both humans and agents can read.
+Skills for Claude Code or OpenCode, for building and reading a local database
+of scientific papers, stored as plain text that both humans and agents can read.
 
 The papers themselves are **never** version controlled — they are copyrighted.
 This repository holds only the skills and the code behind them. A project's
@@ -22,17 +22,40 @@ it.
 ```bash
 git clone <this repo> ~/work/software/literature-skills
 cd ~/work/software/literature-skills
-./install.sh
+./install.sh --for claude        # or: --for opencode, --for both
 ```
 
-That installs the `litdb` command and symlinks the six skills into
-`~/.claude/skills/` and the three agents into `~/.claude/agents/`. Because they
-are symlinks, `git pull` in the clone updates every project at once.
+The `--for` switch picks the backend the skills and agents are installed for.
+It installs the `litdb` command, symlinks the six skills, and writes the three
+agents, into:
+
+| Backend | Skills | Agents |
+|---|---|---|
+| Claude Code | `~/.claude/skills/` | `~/.claude/agents/` |
+| OpenCode | `~/.config/opencode/skills/` | `~/.config/opencode/agents/` |
+
+The skills are symlinks, so a `git pull` in the clone updates them in every
+project at once. The agents are generated from one source in
+[`agents/`](agents/), because the small header each one carries differs between
+the backends; re-run the install after you edit an agent.
+
+For OpenCode, name the models the subagents should run on:
+
+```bash
+./install.sh --for opencode --small <model> --large <model>
+```
+
+`paper-scout` takes the small model, and `paper-ingestor` and
+`terminology-prospector` take the large one. Leave both off and each subagent
+inherits the model of the agent that invokes it. Claude Code always writes a
+model — `haiku` for the small tier, `sonnet` for the large — unless you pass
+names. See [TUNING.md](TUNING.md) for why one agent is small and the others are
+large.
 
 It installs into whichever Python runs it. To choose one:
 
 ```bash
-PYTHON=~/.venvs/tools/bin/python ./install.sh
+PYTHON=~/.venvs/tools/bin/python ./install.sh --for claude
 ```
 
 The installer says where `litdb` landed, and what to add to `PATH` if that
@@ -49,7 +72,8 @@ warning, so a partial install degrades rather than fails:
 
 ## Using it
 
-Ask Claude Code for what you want, in a project. The skills load themselves:
+Ask Claude Code or OpenCode for what you want, in a project. The skills load
+themselves:
 
 > Start a literature collection for this project.
 > Add the NuSTEC white paper.

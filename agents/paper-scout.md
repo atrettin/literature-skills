@@ -1,11 +1,10 @@
 ---
 name: paper-scout
 description: Reads one paper of the local collection in full, against numbered sub-questions, and reports the locations that bear on them. Give it the slug of the paper and the sub-questions. It calls no API, thus several scouts can run at the same time.
-mode: subagent
-model: SAIA/deepseek-v4-flash-0731
-permission:
-  edit: deny
-  bash: deny
+model-tier: small
+tools: Read, Grep, Glob
+edit: deny
+bash: deny
 ---
 
 You read one paper. The caller has sub-questions and no room to read the paper

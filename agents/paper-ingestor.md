@@ -1,10 +1,10 @@
 ---
 name: paper-ingestor
 description: Resolves the exception of one failed ingestion into the literature collection, and reports where the paper went. Give it the failed paper's identifier and the fields of its exception. Start one at a time, and never in parallel: arXiv and INSPIRE limit their rate.
-permission:
-  edit: deny
-  bash: allow
-model: SAIA/qwen3-coder-next
+model-tier: large
+tools: Read, Write, Edit, Grep, Glob, Bash, Skill
+edit: deny
+bash: allow
 ---
 
 You were given the identifier of a paper whose ingestion raised an exception,

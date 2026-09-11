@@ -33,7 +33,7 @@ WITH_LINE = re.compile(r"\.jsonl:\d+")
 CONTRACT_FILES = (
     [ROOT / "README.md"]
     + sorted((ROOT / "docs").glob("*.md"))
-    + sorted((ROOT / ".claude" / "agents").glob("*.md"))
+    + sorted((ROOT / "agents").glob("*.md"))
     + sorted((ROOT / "research-report").rglob("*.md"))
     + sorted((ROOT / "use-literature").rglob("*.md"))
 )
@@ -51,28 +51,28 @@ def read(relative: str) -> str:
 
 
 def test_the_scout_example_is_an_anchor() -> None:
-    assert EXAMPLE in read(".claude/agents/paper-scout.md")
+    assert EXAMPLE in read("agents/paper-scout.md")
 
 
 def test_the_scout_table_names_the_address_field() -> None:
-    text = (ROOT / ".claude" / "agents" / "paper-scout.md").read_text(encoding="utf-8")
+    text = (ROOT / "agents" / "paper-scout.md").read_text(encoding="utf-8")
     rows = [line for line in text.splitlines() if line.startswith("| address |")]
     assert len(rows) == 1
 
 
 def test_the_scout_is_told_to_give_the_anchor_of_the_block() -> None:
     assert "Give the anchor of the block the quotation is in" in read(
-        ".claude/agents/paper-scout.md"
+        "agents/paper-scout.md"
     )
 
 
 def test_the_scout_is_told_not_to_report_a_line_number() -> None:
-    assert "Report no line numbers" in read(".claude/agents/paper-scout.md")
+    assert "Report no line numbers" in read("agents/paper-scout.md")
 
 
 def test_the_scout_is_told_it_is_the_reader_that_can_report_absence() -> None:
     """Only a scout reads a paper end to end, so only a scout can say it is silent."""
-    text = read(".claude/agents/paper-scout.md")
+    text = read("agents/paper-scout.md")
     assert "Nothing relevant" in text
     assert "end to end" in text
 

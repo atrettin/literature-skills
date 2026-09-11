@@ -4,7 +4,7 @@ This file provides guidance to OpenCode agents working in this repository.
 
 ## Key Commands
 
-- **Installation**: Run `./install.sh` to install the `litdb` command and symlink skills/agents. Use `PYTHON=~/.venvs/tools/bin/python ./install.sh` to specify a Python environment.
+- **Installation**: Run `./install.sh --for claude` (or `--for opencode`, `--for both`) to install the `litdb` command, symlink the skills, and write the agents for that backend. The agents are generated from `agents/` with a per-backend header. Use `PYTHON=~/.venvs/tools/bin/python ./install.sh --for claude` to specify a Python environment. For OpenCode, `--small`/`--large` name the subagents' models; omit them for model inheritance.
 - **Testing**: Run `.venv/bin/python -m pytest` for unit tests. Use `.venv/bin/python -m pytest -m network` for network-dependent tests.
 - **Type Checking**: Run `.venv/bin/python -m pyright` to verify type correctness.
 
