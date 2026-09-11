@@ -265,6 +265,66 @@ def test_a_collection_with_no_residue_reports_none(collection: Path) -> None:
     assert check_references.check(collection)["residue"] == []
 
 
+# --------------------------------------------------------------------------
+# drop_definitions takes the definitions, never the paper around them
+# --------------------------------------------------------------------------
+
+
+NATBIB_PREAMBLE = r"""
+\begin{thebibliography}{60}%
+\makeatletter
+\providecommand \@ifxundefined [1]{%
+ \@ifx{#1\undefined}
+}%
+\providecommand \@secondoftwo [1]{}%
+\providecommand \bibitemStop [0]{}%
+\end{thebibliography}
+"""
+
+
+def test_the_preamble_after_the_last_section_keeps_the_body() -> None:
+    """The natbib preamble follows the last section, and it is what bit.
+
+    A definition there that this could not read advanced the cursor without
+    handing the prose to `pieces`, so the whole document went and the
+    reference list stood for the paper.
+    """
+    body = (
+        "\\section{Introduction}\n"
+        "The cross section grows with energy.\n"
+        "\n"
+        "\\section{Results}\n"
+        "The data are described.\n"
+    )
+
+    kept = arxiv_fetch.drop_definitions(body + NATBIB_PREAMBLE)
+
+    assert "\\section{Introduction}" in kept
+    assert "The cross section grows with energy." in kept
+    assert "The data are described." in kept
+
+
+def test_a_name_carrying_an_at_sign_is_read_whole() -> None:
+    text = "Prose before.\n\\providecommand \\@secondoftwo [1]{}\nProse after.\n"
+
+    kept = arxiv_fetch.drop_definitions(text)
+
+    assert "@secondoftwo" not in kept
+    assert "Prose before." in kept
+    assert "Prose after." in kept
+
+
+def test_a_definition_this_cannot_read_stays_whole_and_loses_nothing_before_it() -> None:
+    text = "Prose before.\n\\providecommand \\x [1] without a body\nProse after.\n"
+
+    kept = arxiv_fetch.drop_definitions(text)
+
+    assert "Prose before." in kept
+    # Left in place, and not half-cut: the keyword is still on it.
+    assert "\\providecommand" in kept
+    assert "Prose after." in kept
+
+
 def test_no_fixture_file_holds_a_control_character() -> None:
     fixture = Path(__file__).resolve().parent / "data" / "collection_fixture"
     for path in fixture.rglob("*.jsonl"):

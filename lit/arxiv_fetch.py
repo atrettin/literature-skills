@@ -518,6 +518,13 @@ def drop_definitions(text: str) -> str:
 
     The definitions are read before this runs — see `collect_macros`. Only the
     text of them goes.
+
+    Every step hands the text it keeps to `pieces` before it advances, so a
+    group this cannot read costs the definition alone, never the prose that
+    ran up to it. A paper that types its bibliography out in the TeX carries
+    its natbib preamble — `\\providecommand\\@ifxundefined [1]{…}` and kin —
+    after its last section, and a definition left unread there once took the
+    whole body with it, leaving the reference list standing for the paper.
     """
     pieces = []
     cursor = 0
@@ -529,12 +536,17 @@ def drop_definitions(text: str) -> str:
         if match.group(1) or match.group(0).startswith("\\def"):
             # The name, as `{\x}` or as `\x`, then the argument count, then the
             # body. A group this cannot read is one to leave in place: a half
-            # cut definition is worse than a whole one.
+            # cut definition is worse than a whole one, and the text up to it
+            # is the paper, so it goes to `pieces` either way.
             if index < len(text) and text[index] == "{":
                 index = match_brace(text, index)
             else:
-                name = re.match(r"\\[a-zA-Z]+|\\.", text[index:])
+                # A name may carry `@`, the internal marker of a package
+                # preamble under `\makeatletter`: `\\@secondoftwo` is a word,
+                # not a one-character command.
+                name = re.match(r"\\[a-zA-Z@]+|\\.", text[index:])
                 if not name:
+                    pieces.append(text[cursor : match.end()])
                     cursor = match.end()
                     continue
                 index += name.end()
@@ -547,6 +559,7 @@ def drop_definitions(text: str) -> str:
                     break
                 index = skip_spaces(text, closing + 1)
             if index >= len(text) or text[index] != "{":
+                pieces.append(text[cursor : match.end()])
                 cursor = match.end()
                 continue
             index = match_brace(text, index)
@@ -1858,6 +1871,20 @@ def convert(args) -> dict:
                     "their original keys" % error
                 )
         body = drop_bibliography(body)
+
+        # A \bibitem that survived the removal sits outside every
+        # thebibliography environment the search could see, which means the
+        # document was not read as a document. Stored, its reference list
+        # passes for the paper's text; refused, it is one paper that wants a
+        # conversion by hand.
+        if re.search(r"\\bibitem\b", body):
+            raise ParserFailure(
+                "the reference list of %s survived the removal of the "
+                "bibliography, so the body was not read as written; it needs a "
+                "conversion by hand, or none" % args.arxiv_id,
+                main_tex=str(main_tex.relative_to(source_dir)),
+                sections_found=0,
+            )
 
         positions = section_positions_texsoup(body)
         parser_used = "texsoup"
