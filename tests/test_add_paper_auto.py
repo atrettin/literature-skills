@@ -225,6 +225,90 @@ def test_metadata_comes_back_whole(gate_off: None, monkeypatch: pytest.MonkeyPat
     assert found["year"]
 
 
+def test_a_revtex_bibliography_does_not_fail_the_ingest(
+    collection: Path, small_paper: dict, inspire_silent: FakeInspire,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """revtex calls its bibliography `references`, and the removal knew one name.
+
+    Left in place, the list is the paper's last chapter, and the guard that
+    refuses a document whose references survived raises `PARSER_FAILURE` — a
+    paper that is perfectly readable is reported as one needing a conversion by
+    hand.
+    """
+    from lit import arxiv_fetch
+
+    def revtex_source(arxiv_id: str, work_dir: Path) -> Path:
+        source_dir = work_dir / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "paper.tex").write_text(
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\section{Data Access}\n"
+            "The tables are downloadable.\n"
+            "\\begin{references}\n"
+            "\\bibitem{barone} V. Barone, Eur. Phys. J. {\\bf C12} (2000) 243.\n"
+            "\\end{references}\n"
+            "\\section*{Appendix}\n"
+            "The model is described here.\n"
+            "\\end{document}\n",
+            encoding="utf-8",
+        )
+        return source_dir
+
+    monkeypatch.setattr(arxiv_fetch, "download_source", revtex_source)
+    status, reports = run(collection, "--auto", ARXIV_ID)
+
+    assert status == 0
+    assert reports[0]["status"] == "ingested"
+    assert reports[0]["exception"] is None
+    stored = (collection / SLUG / paths.TEXT_DIR / "01_data_access.jsonl").read_text(
+        encoding="utf-8"
+    )
+    assert "Barone" not in stored
+    titles = [chapter["title"] for chapter in reports[0]["chapters"]]
+    assert "Appendix" in titles
+
+
+def test_the_last_reference_does_not_take_the_appendix(
+    collection: Path, small_paper: dict, inspire_silent: FakeInspire,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An entry ends where its list does, not at the end of the file.
+
+    Without that boundary the appendix was read as part of the last work
+    cited, and the store held a reference whose text was the appendix.
+    """
+    from lit import arxiv_fetch
+
+    def with_appendix(arxiv_id: str, work_dir: Path) -> Path:
+        source_dir = work_dir / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "paper.tex").write_text(
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\section{Results}\n"
+            "The data are described.\n"
+            "\\begin{references}\n"
+            "\\bibitem{barone} V. Barone, Eur. Phys. J. {\\bf C12} (2000) 243.\n"
+            "\\end{references}\n"
+            "\\section*{Appendix}\n"
+            "The model is described here.\n"
+            "\\end{document}\n",
+            encoding="utf-8",
+        )
+        return source_dir
+
+    monkeypatch.setattr(arxiv_fetch, "download_source", with_appendix)
+    status, reports = run(collection, "--auto", ARXIV_ID)
+
+    assert status == 0
+    titles = [chapter["title"] for chapter in reports[0]["chapters"]]
+    assert "Appendix" in titles
+    store = (collection / "REFERENCES.md").read_text(encoding="utf-8")
+    assert "The model is described here" not in store
+
+
 def test_a_citation_the_store_cannot_answer_warns_and_ingests(
     collection: Path, small_paper: dict, inspire_silent: FakeInspire
 ) -> None:

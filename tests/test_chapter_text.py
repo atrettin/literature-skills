@@ -330,3 +330,155 @@ def test_no_fixture_file_holds_a_control_character() -> None:
     for path in fixture.rglob("*.jsonl"):
         text = path.read_text(encoding="utf-8", errors="replace")
         assert not re.search(r"[\x00-\x08\x0b-\x1f]", text), path
+
+
+# --------------------------------------------------------------------------
+# a bibliography is found by what it holds, not by what it is called
+# --------------------------------------------------------------------------
+
+REVTEX_BIBLIOGRAPHY = (
+    "\\section{Data Access}\n"
+    "The tables are downloadable.\n"
+    "\n"
+    "\\begin{references}\n"
+    "\\bibitem{barone} V. Barone, Eur. Phys. J. {\\bf C12} (2000) 243.\n"
+    "\n"
+    "\\bibitem{nmc} M. Arneodo, Nucl. Phys. {\\bf B483} (1997) 3.\n"
+    "\\end{references}\n"
+    "\n"
+    "\\section*{Appendix}\n"
+    "The model is described here.\n"
+)
+
+
+def test_a_bibliography_named_references_is_taken_out() -> None:
+    """revtex calls the list `references`, and the parser knew only `thebibliography`.
+
+    Left in, the list is the paper's last chapter, and the check that refuses a
+    document whose references survived fails the whole ingest.
+    """
+    kept = arxiv_fetch.drop_bibliography(REVTEX_BIBLIOGRAPHY)
+
+    assert "\\bibitem" not in kept
+    assert "The tables are downloadable." in kept
+
+
+def test_the_appendix_after_a_references_list_survives() -> None:
+    kept = arxiv_fetch.drop_bibliography(REVTEX_BIBLIOGRAPHY)
+
+    assert "\\section*{Appendix}" in kept
+    assert "The model is described here." in kept
+
+
+def test_the_last_entry_of_a_list_ends_where_the_environment_does() -> None:
+    """Without the closing boundary the last entry runs into the appendix.
+
+    The appendix was read as part of the last work cited, so the store held a
+    reference whose text was a table of fit parameters.
+    """
+    from lit import references
+
+    items = references.split_bibitems(REVTEX_BIBLIOGRAPHY)
+
+    assert [key for key, _ in items] == ["barone", "nmc"]
+    assert "The model is described here" not in items[-1][1]
+    assert "Appendix" not in items[-1][1]
+
+
+def test_a_thebibliography_list_is_still_taken_out() -> None:
+    body = (
+        "\\section{Results}\n"
+        "The data are described.\n"
+        "\n"
+        "\\begin{thebibliography}{9}\n"
+        "\\bibitem{a} A. Author, J. Phys. 1 (2000) 1.\n"
+        "\\end{thebibliography}\n"
+    )
+
+    kept = arxiv_fetch.drop_bibliography(body)
+
+    assert "\\bibitem" not in kept
+    assert "The data are described." in kept
+
+
+def test_an_environment_inside_the_list_does_not_cut_the_entry_after_it() -> None:
+    """A closed environment before an entry is not that entry's boundary.
+
+    Taking its end as the boundary cut the entry back to nothing, and a work
+    with no text is dropped from the store with no error.
+    """
+    from lit import references
+
+    body = (
+        "\\begin{thebibliography}{9}\n"
+        "\\bibitem{a} A. Author, J. Phys. 1 (2000) 1.\n"
+        "\\begin{center}\\rule{1in}{0.4pt}\\end{center}\n"
+        "\\bibitem{b} B. Author, Nucl. Phys. 2 (2001) 2.\n"
+        "\\end{thebibliography}\n"
+    )
+
+    items = references.split_bibitems(body)
+
+    assert [key for key, _ in items] == ["a", "b"]
+    assert "B. Author" in dict(items)["b"]
+
+
+def test_each_list_is_split_on_its_own() -> None:
+    """Joining two lists lets the second one's environments bound the first's entries."""
+    from lit import references
+
+    body = (
+        "\\begin{thebibliography}{9}\n"
+        "\\bibitem{a} A. Author, J. Phys. 1 (2000) 1.\n"
+        "\\end{thebibliography}\n"
+        "\\begin{thebibliography}{9}\n"
+        "\\bibitem{b} B. Author, Nucl. Phys. 2 (2001) 2.\n"
+        "\\end{thebibliography}\n"
+    )
+
+    items = [item for block in references.bibliography_blocks(body)
+             for item in references.split_bibitems(block)]
+
+    assert [key for key, _ in items] == ["a", "b"]
+    assert "B. Author" in dict(items)["b"]
+
+
+def test_a_list_that_is_never_closed_is_still_taken_out() -> None:
+    """A truncated submission is malformed, and failing it would be a new refusal.
+
+    The environment ran to the end of the file before this was found by name,
+    and it still does: an unclosed list is the last thing in the document.
+    """
+    body = (
+        "\\section{Data}\n"
+        "The tables are downloadable.\n"
+        "\\begin{thebibliography}{9}\n"
+        "\\bibitem{a} A. Author, J. Phys. 1 (2000) 1.\n"
+    )
+
+    kept = arxiv_fetch.drop_bibliography(body)
+
+    assert "\\bibitem" not in kept
+    assert "The tables are downloadable." in kept
+
+
+def test_a_wrapper_around_the_list_keeps_what_the_wrapper_holds() -> None:
+    """The list is the innermost environment that holds the entries.
+
+    Taking the outermost span removed the wrapper whole, and with it the
+    appendix prose that sat beside the list.
+    """
+    body = (
+        "\\begin{appendices}\n"
+        "\\section*{Appendix}\n"
+        "The model is described here.\n"
+        "\\begin{thebibliography}{9}\n"
+        "\\bibitem{a} A. Author, J. Phys. 1 (2000) 1.\n"
+        "\\end{thebibliography}\n"
+        "\\end{appendices}\n"
+    )
+
+    kept = arxiv_fetch.drop_bibliography(body)
+
+    assert "\\bibitem" not in kept
+    assert "The model is described here." in kept

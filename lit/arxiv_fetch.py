@@ -662,14 +662,18 @@ def drop_bibliography(body: str) -> str:
     sections ends in "F.A. Brieva and J.R. Rook, Nuclear Physics A291".
     references.py has already read it by the time this runs, and the entries
     live in the reference store where a citation can reach them.
+
+    The list is found by what it holds, not by what it is called. LaTeX's own
+    name for it is `thebibliography`, and revtex — which typesets most of the
+    older literature — calls it `references`. A paper whose list is under any
+    other name keeps it here, and then the reference list is what the chapters
+    are made of.
     """
-    while True:
-        found = find_environment(body, "thebibliography")
-        if not found:
-            break
-        body = body[: found[0]] + body[found[1] :]
-    # Only the environment is cut out, never everything after it. A paper that
-    # puts its references before its appendices — and plenty do — would
+    spans = references.bibliography_spans(body)
+    for start, end in reversed(spans):
+        body = body[:start] + body[end:]
+    # Only the environments are cut out, never everything after them. A paper
+    # that puts its references before its appendices — and plenty do — would
     # otherwise lose every appendix along with them.
     return re.sub(r"\\bibliography\s*\{[^}]*\}", "", body)
 
@@ -1872,11 +1876,10 @@ def convert(args) -> dict:
                 )
         body = drop_bibliography(body)
 
-        # A \bibitem that survived the removal sits outside every
-        # thebibliography environment the search could see, which means the
-        # document was not read as a document. Stored, its reference list
-        # passes for the paper's text; refused, it is one paper that wants a
-        # conversion by hand.
+        # A \bibitem that survived the removal sits outside every environment
+        # the search could see, which means the document was not read as a
+        # document. Stored, its reference list passes for the paper's text;
+        # refused, it is one paper that wants a conversion by hand.
         if re.search(r"\\bibitem\b", body):
             raise ParserFailure(
                 "the reference list of %s survived the removal of the "

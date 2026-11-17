@@ -416,14 +416,109 @@ def from_bib_entry(fields: dict) -> dict:
 
 
 # --------------------------------------------------------------------------
+# where the bibliography is
+# --------------------------------------------------------------------------
+
+ENVIRONMENT_TOKEN = re.compile(r"\\(begin|end)\s*\{([^{}]*)\}")
+
+
+def environment_spans(text: str) -> list[tuple[int, int, int, int, str]]:
+    """Every ``\\begin{name}...\\end{name}`` span, with the name it used.
+
+    Each is ``(start, content_start, content_end, end, name)``: the whole span,
+    the text it wraps, and the name the source wrote. The name is whatever the
+    source wrote, so a paper that calls its bibliography ``references`` rather
+    than ``thebibliography`` is found by what it holds, not by what it is
+    called.
+
+    An environment that is never closed still yields a span: an opener with no
+    closer runs to the end of the text, and an opener inside one that closes
+    ends where its container does. A truncated submission is malformed, and
+    treating its bibliography as absent would fail the whole paper. An
+    ``\\end`` that matches no ``\\begin`` closes nothing and is skipped.
+    """
+    open_stack: list[tuple[str, int, int]] = []
+    spans: list[tuple[int, int, int, int, str]] = []
+    for match in ENVIRONMENT_TOKEN.finditer(text):
+        name = collapse_whitespace(match.group(2))
+        if match.group(1) == "begin":
+            open_stack.append((name, match.start(), match.end()))
+            continue
+        depth = next(
+            (d for d in range(len(open_stack) - 1, -1, -1) if open_stack[d][0] == name),
+            None,
+        )
+        if depth is None:
+            continue
+        # An opener between this one and the closer was never closed. It cannot
+        # outlive its container, so it ends where the container does.
+        for inner_name, inner_start, inner_content in open_stack[depth + 1:]:
+            spans.append((inner_start, inner_content, match.start(),
+                          match.start(), inner_name))
+        start, content_start = open_stack[depth][1], open_stack[depth][2]
+        spans.append((start, content_start, match.start(), match.end(), name))
+        del open_stack[depth:]
+    for name, start, content_start in open_stack:
+        spans.append((start, content_start, len(text), len(text), name))
+    return spans
+
+
+def bibliography_spans(text: str) -> list[tuple[int, int]]:
+    """The spans of the environments that hold ``\\bibitem`` entries.
+
+    A bibliography is an environment holding ``\\bibitem``, whatever the source
+    named it: ``thebibliography`` from LaTeX itself, ``references`` from
+    revtex, or a name of the author's own.
+
+    The innermost such span is the list. Keeping the outermost instead would
+    take a wrapper environment — ``appendices``, say — whole, and with it the
+    prose that wrapper holds and the bibliography does not.
+    """
+    found = [
+        (start, end)
+        for start, _, _, end, _ in environment_spans(text)
+        if re.search(r"\\bibitem\b", text[start:end])
+    ]
+    innermost = [
+        span for span in found
+        if not any(other[0] > span[0] and other[1] < span[1] for other in found)
+    ]
+    return sorted(set(innermost))
+
+
+def bibliography_blocks(text: str) -> list[str]:
+    """The text of each bibliography environment, and nothing else.
+
+    One string per list rather than one joined string: ``split_bibitems`` reads
+    the structure of what it is given, and joining two lists would let the
+    environments of the second bound the entries of the first.
+    """
+    spans = bibliography_spans(text)
+    return [text[start:end] for start, end in spans]
+
+
+# --------------------------------------------------------------------------
 # .bbl files and inline bibliographies
 # --------------------------------------------------------------------------
 
 
 def split_bibitems(text: str) -> list[tuple[str, str]]:
-    """[(key, raw entry text)] in bibliography order."""
+    """[(key, raw entry text)] in bibliography order.
+
+    An entry ends at the next ``\\bibitem``, or at the end of the environment
+    the list sits in. Without the second boundary the last entry of a list runs
+    on to the end of the file, and an appendix that follows the references is
+    read as part of the last work cited.
+
+    Only an environment that actually holds the entry bounds it. One that
+    opened and closed before the entry is not a boundary, and taking its end
+    would cut the entry back to nothing.
+    """
+    spans = environment_spans(text)
+    starts = [match.start() for match in re.finditer(r"\\bibitem\s*(?=[\[{])", text)]
+
     items = []
-    for match in re.finditer(r"\\bibitem\s*(?=[\[{])", text):
+    for number, match in enumerate(re.finditer(r"\\bibitem\s*(?=[\[{])", text)):
         index = match.end()
         while index < len(text) and text[index].isspace():
             index += 1
@@ -435,10 +530,19 @@ def split_bibitems(text: str) -> list[tuple[str, str]]:
             continue
         key, index = read_braced(text, index)
         key = collapse_whitespace(key)
-        following = re.search(r"\\bibitem\s*[\[{]|\\end\s*\{thebibliography\}", text[index:])
-        body = text[index : index + following.start()] if following else text[index:]
+        next_start = starts[number + 1] if number + 1 < len(starts) else len(text)
+        # The end of an environment that holds this entry and closes before the
+        # next one. An environment that opens inside the entry — a table, a
+        # figure — is part of it and bounds nothing, and neither does one that
+        # closed before the entry began.
+        enclosing = [
+            content_end
+            for start, _, content_end, _, _ in spans
+            if start < match.start() < content_end <= next_start
+        ]
+        limit = min([next_start] + enclosing)
         if key:
-            items.append((key, body))
+            items.append((key, text[index:limit]))
     return items
 
 
@@ -632,7 +736,13 @@ def read_bibliography(source_dir: Path, body: str) -> tuple[dict[str, dict], lis
         except OSError:
             continue
     if not items:
-        items = split_bibitems(strip_comments(body))
+        # One list at a time: splitting a joined string would let the second
+        # list's environments bound the entries of the first.
+        for block in bibliography_blocks(strip_comments(body)):
+            items.extend(split_bibitems(block))
+        if not items:
+            # No environment holds the entries, so they sit in the body itself.
+            items = split_bibitems(strip_comments(body))
     return bib, items
 
 
