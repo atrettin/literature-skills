@@ -35,7 +35,7 @@ from pathlib import Path
 from lit import blocks, paths
 
 RASTER_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff"}
-GHOSTSCRIPT_SUFFIXES = {".eps", ".ps", ".pdf"}
+GHOSTSCRIPT_SUFFIXES = {".eps", ".epsi", ".ps", ".pdf"}
 SVG_SUFFIXES = {".svg"}
 
 RAW_DIR_NAME = "figures_raw"
@@ -102,7 +102,7 @@ def render_with_ghostscript(source: Path, target: Path) -> None:
         "-dTextAlphaBits=4",
         "-dGraphicsAlphaBits=4",
     ]
-    if source.suffix.lower() == ".eps":
+    if source.suffix.lower() in {".eps", ".epsi"}:
         # Render the BoundingBox rather than a full page of mostly white.
         command.append("-dEPSCrop")
     command.extend(["-sOutputFile=%s" % target, str(source)])

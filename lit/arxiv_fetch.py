@@ -75,7 +75,7 @@ CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b-\x1f]")
 # One sentence of prose is longer than this.
 PARAGRAPH_ANCHOR_MIN_CHARS = 80
 
-FIGURE_EXTENSIONS = (".pdf", ".png", ".jpg", ".jpeg", ".eps", ".ps", ".gif", ".svg")
+FIGURE_EXTENSIONS = (".pdf", ".png", ".jpg", ".jpeg", ".eps", ".epsi", ".ps", ".gif", ".svg")
 
 # How a figure names its file. \includegraphics carries a star form, and older
 # papers reach for the epsf and psfig interfaces instead — a paper using any of
