@@ -1,7 +1,7 @@
 """`litdb serve`: the shared collection, as web pages for people and MCP for agents.
 
     litdb serve [--host H] [--port P] [--root-path /prefix]   run the server
-    litdb serve add-user <name>                               print a new user's token
+    litdb serve add-user [--admin] <name>                     print a new user's token
 
 The server needs the `server` extra: `pip install ".[server]"`.
 """
@@ -21,6 +21,8 @@ def build_parser():
     sub = parser.add_subparsers(dest="action")
     add = sub.add_parser("add-user", help="create a user and print their token once")
     add.add_argument("name")
+    add.add_argument("--admin", action="store_true",
+                     help="may force a re-ingest that replaces a paper the collection holds")
     parser.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")))
     parser.add_argument(
@@ -43,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
 
         with state.connect(root) as db:
             try:
-                token = state.add_user(db, args.name)
+                token = state.add_user(db, args.name, args.admin)
             except (ValueError, sqlite3.IntegrityError) as error:
                 print("lit: %s" % error, file=sys.stderr)
                 return cli.JUDGEMENT

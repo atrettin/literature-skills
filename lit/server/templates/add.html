@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Add papers{% endblock %}
+{% block main %}
+<h1>Add papers</h1>
+<p>Give one or more arXiv identifiers, such as <code>2307.09241</code> or <code>hep-ph/0207172</code>.
+A paper the collection already holds is added to the library at once. Any other is downloaded and converted first, which takes a few minutes; <a href="{{ base }}/jobs">Ingests</a> shows how far it got.</p>
+<form method="post" action="{{ base }}/add">
+  <textarea name="ids" rows="3" required></textarea>
+  <label>to library
+  <select name="library">
+    {% for l in libraries %}<option value="{{ l.name }}" {% if l.name == library %}selected{% endif %}>{{ l.name }}</option>{% endfor %}
+  </select></label>
+  <button>Add</button>
+</form>
+{% if results %}
+<table>
+<thead><tr><th>Identifier</th><th>Outcome</th></tr></thead>
+<tbody>
+{% for r in results %}
+<tr><td>{{ r.argument }}</td><td>
+  {% if r.outcome == "listed" %}already in the collection, added to {{ library }}: <a href="{{ base }}/lit/{{ r.what }}/INDEX.md">{{ r.what }}</a>
+  {% elif r.outcome == "queued" %}queued as ingest #{{ r.what }}
+  {% else %}<span class="error">{{ r.what }}</span>{% endif %}
+</td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+{% endblock %}
