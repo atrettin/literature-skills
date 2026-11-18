@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Ingests{% endblock %}
+{% block head %}{% if busy %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block main %}
+<h1>{% if status == "failed" %}Failed ingests{% else %}Ingests{% endif %}</h1>
+<p><a href="{{ base }}/jobs">All</a> · <a href="{{ base }}/jobs?status=failed">Failed only</a>{% if busy %} · this page refreshes every 5 s while an ingest runs{% endif %}</p>
+<table>
+<thead><tr><th>#</th><th>Paper</th><th>Library</th><th>By</th><th>Status</th><th>Queued</th><th>Finished</th></tr></thead>
+<tbody>
+{% for j in jobs %}
+<tr>
+  <td>{{ j.id }}</td>
+  <td>{% if j.slug %}<a href="{{ base }}/lit/{{ j.slug }}/INDEX.md">{{ j.slug }}</a>{% else %}{{ j.source }}{% endif %}</td>
+  <td>{{ j.library }}</td><td>{{ j.user }}</td><td>{{ j.status }}</td><td>{{ j.created }}</td><td>{{ j.finished or "" }}</td>
+</tr>
+{% if j.status == "failed" %}
+<tr class="detail"><td></td><td colspan="6">
+  {% set r = j.report or {} %}
+  {% if r.exception %}<strong>{{ r.exception.code }}</strong>: {{ r.exception.detail }}{% else %}<pre>{{ r.error }}</pre>{% endif %}
+  <form method="post" action="{{ base }}/jobs/{{ j.id }}/retry" class="inline">
+    {% if admin %}<label><input type="checkbox" name="force" value="1"> replace what the collection holds (--force)</label>{% endif %}
+    <button>Retry</button>
+  </form>
+</td></tr>
+{% endif %}
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

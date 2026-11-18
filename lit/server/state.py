@@ -1,4 +1,4 @@
-"""What the server knows beyond the papers: its users and their libraries.
+"""What the server knows beyond the papers: users, libraries and ingest jobs.
 
 The papers stay files in the collection, in the format every `litdb` command
 reads. This is the rest, in one SQLite file inside the collection directory, so
@@ -8,27 +8,64 @@ reader refuses to serve it.
 
 A token is stored only as its SHA-256. Whoever reads the database learns who the
 users are, and cannot sign in as one of them.
+
+A library is a named list of slugs. It copies nothing: the papers stay in the
+shared collection, and a library turns into the `--scope` of a command.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
+import re
 import secrets
 import sqlite3
+import subprocess
+import sys
+import threading
+from datetime import datetime
 from pathlib import Path
+
+from lit import identity, reference_store
 
 DB_NAME = ".server.db"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     name       TEXT PRIMARY KEY,
-    token_hash TEXT NOT NULL UNIQUE
+    token_hash TEXT NOT NULL UNIQUE,
+    admin      INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS libraries (
     name  TEXT PRIMARY KEY,
     owner TEXT NOT NULL REFERENCES users(name)
 );
+CREATE TABLE IF NOT EXISTS library_papers (
+    library  TEXT NOT NULL REFERENCES libraries(name),
+    slug     TEXT NOT NULL,
+    added_by TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (library, slug)
+);
+CREATE TABLE IF NOT EXISTS jobs (
+    id       INTEGER PRIMARY KEY,
+    source   TEXT NOT NULL,          -- arxiv:<id>; a PDF backend would add its own prefix
+    library  TEXT NOT NULL REFERENCES libraries(name),
+    user     TEXT NOT NULL,
+    status   TEXT NOT NULL,          -- queued, running, done, failed
+    force    INTEGER NOT NULL DEFAULT 0,
+    slug     TEXT,
+    report   TEXT,                   -- the JSON add-paper printed, or the error
+    created  TEXT NOT NULL,
+    finished TEXT
+);
 """
+
+NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+
+# How long one ingest may run before the worker gives up on it. A long review
+# with a hundred figures takes minutes; an hour means something hangs.
+INGEST_TIMEOUT_S = 3600
 
 
 def db_path(root: Path) -> Path:
@@ -37,7 +74,7 @@ def db_path(root: Path) -> Path:
 
 def connect(root: Path) -> sqlite3.Connection:
     """A connection with the schema in place. Cheap enough to open per request."""
-    db = sqlite3.connect(db_path(root))
+    db = sqlite3.connect(db_path(root), timeout=30)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
     return db
@@ -47,17 +84,27 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def add_user(db: sqlite3.Connection, name: str) -> str:
+def now() -> str:
+    return datetime.now().isoformat(sep=" ", timespec="seconds")
+
+
+def check_name(name: str) -> str:
+    if not NAME.match(name or ""):
+        raise ValueError("a name is letters, digits, - and _: %r" % name)
+    return name
+
+
+def add_user(db: sqlite3.Connection, name: str, admin: bool = False) -> str:
     """Create a user and their personal library, and return their token.
 
     The token is shown once. Only its hash is kept, so a lost token is replaced
     by deleting the user and adding them again, not by looking it up.
     """
-    if not name or not name.replace("-", "").replace("_", "").isalnum():
-        raise ValueError("a user name is letters, digits, - and _: %r" % name)
+    check_name(name)
     token = secrets.token_urlsafe(24)
     with db:
-        db.execute("INSERT INTO users (name, token_hash) VALUES (?, ?)", (name, hash_token(token)))
+        db.execute("INSERT INTO users (name, token_hash, admin) VALUES (?, ?, ?)",
+                   (name, hash_token(token), int(admin)))
         db.execute("INSERT INTO libraries (name, owner) VALUES (?, ?)", (name, name))
     return token
 
@@ -68,3 +115,199 @@ def user_for(db: sqlite3.Connection, token: str | None) -> str | None:
         return None
     row = db.execute("SELECT name FROM users WHERE token_hash = ?", (hash_token(token),)).fetchone()
     return row["name"] if row else None
+
+
+def is_admin(db: sqlite3.Connection, user: str) -> bool:
+    row = db.execute("SELECT admin FROM users WHERE name = ?", (user,)).fetchone()
+    return bool(row and row["admin"])
+
+
+# --------------------------------------------------------------------------
+# libraries
+# --------------------------------------------------------------------------
+
+
+def libraries(db: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Every library, with its owner and how many papers it lists."""
+    return db.execute(
+        "SELECT l.name, l.owner, COUNT(p.slug) AS papers FROM libraries l "
+        "LEFT JOIN library_papers p ON p.library = l.name GROUP BY l.name ORDER BY l.name"
+    ).fetchall()
+
+
+def create_library(db: sqlite3.Connection, name: str, owner: str) -> None:
+    check_name(name)
+    with db:
+        db.execute("INSERT INTO libraries (name, owner) VALUES (?, ?)", (name, owner))
+
+
+def library_exists(db: sqlite3.Connection, name: str) -> bool:
+    return db.execute("SELECT 1 FROM libraries WHERE name = ?", (name,)).fetchone() is not None
+
+
+def library_slugs(db: sqlite3.Connection, name: str) -> list[str]:
+    rows = db.execute("SELECT slug FROM library_papers WHERE library = ? ORDER BY slug", (name,))
+    return [row["slug"] for row in rows]
+
+
+def add_to_library(db: sqlite3.Connection, library: str, slug: str, user: str) -> None:
+    """List a paper in a library. Listing it twice is not an error."""
+    with db:
+        db.execute("INSERT OR IGNORE INTO library_papers VALUES (?, ?, ?, ?)",
+                   (library, slug, user, now()))
+
+
+def remove_from_library(db: sqlite3.Connection, library: str, slug: str) -> None:
+    """Take a paper out of a library. The collection keeps it."""
+    with db:
+        db.execute("DELETE FROM library_papers WHERE library = ? AND slug = ?", (library, slug))
+
+
+# --------------------------------------------------------------------------
+# ingest jobs
+# --------------------------------------------------------------------------
+
+
+def arxiv_source(argument: str) -> str:
+    """`arxiv:<id>` for what a user typed, without the version.
+
+    The version is not the paper: the collection holds one version of each, the
+    one the first ingest found.
+    """
+    argument = argument.strip()
+    if not identity.looks_like_arxiv_id(argument):
+        raise ValueError("not an arXiv identifier: %r" % argument)
+    return "arxiv:" + reference_store.normalize_arxiv(argument)
+
+
+def held_slug(root: Path, source: str) -> str | None:
+    """The slug of the paper that holds this source already, or None."""
+    return reference_store.held_index(root).get(source)
+
+
+def add_paper(db: sqlite3.Connection, root: Path, argument: str, library: str,
+              user: str) -> tuple[str, str]:
+    """Put a paper in a library, ingesting it first if the collection lacks it.
+
+    Returns ("listed", slug) when the collection held it, and ("queued", job id)
+    when an ingest has to run first.
+    """
+    source = arxiv_source(argument)
+    if not library_exists(db, library):
+        raise ValueError("no library named %r" % library)
+    slug = held_slug(root, source)
+    if slug:
+        add_to_library(db, library, slug, user)
+        return "listed", slug
+    with db:
+        cursor = db.execute(
+            "INSERT INTO jobs (source, library, user, status, created) VALUES (?, ?, ?, 'queued', ?)",
+            (source, library, user, now()),
+        )
+    return "queued", str(cursor.lastrowid)
+
+
+def jobs(db: sqlite3.Connection, status: str | None = None, limit: int = 200) -> list[dict]:
+    query = "SELECT * FROM jobs" + (" WHERE status = ?" if status else "") + " ORDER BY id DESC LIMIT ?"
+    rows = db.execute(query, ((status, limit) if status else (limit,))).fetchall()
+    return [dict(row, report=json.loads(row["report"]) if row["report"] else None) for row in rows]
+
+
+def job(db: sqlite3.Connection, job_id: int) -> dict | None:
+    row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    if row is None:
+        return None
+    return dict(row, report=json.loads(row["report"]) if row["report"] else None)
+
+
+def retry(db: sqlite3.Connection, job_id: int, force: bool = False) -> None:
+    """Queue a failed job again. `force` replaces a paper directory that is there."""
+    with db:
+        db.execute(
+            "UPDATE jobs SET status = 'queued', force = ?, report = NULL, finished = NULL "
+            "WHERE id = ? AND status = 'failed'",
+            (int(force), job_id),
+        )
+
+
+def requeue_interrupted(db: sqlite3.Connection) -> None:
+    """A job that was running when the server stopped runs again from the start."""
+    with db:
+        db.execute("UPDATE jobs SET status = 'queued' WHERE status = 'running'")
+
+
+def ingest_command(root: Path, source: str, force: bool) -> list[str]:
+    kind, _, identifier = source.partition(":")
+    if kind != "arxiv":
+        raise ValueError("no ingest backend for %r" % source)
+    command = [sys.executable, "-m", "lit", "add-paper", "--auto", identifier,
+               "--literature-root", str(root)]
+    return command + (["--force"] if force else [])
+
+
+def last_json_line(text: str) -> dict | None:
+    for line in reversed(text.strip().splitlines()):
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def run_job(db: sqlite3.Connection, root: Path, row: sqlite3.Row) -> None:
+    """Run one ingest to its end, and record what happened.
+
+    The ingest is `litdb add-paper` in a process of its own: its exit status
+    and its one-line report are the contract every caller of it already reads,
+    and a crash or a hang in the conversion stays out of the server.
+    """
+    source, force = row["source"], bool(row["force"])
+    slug = None if force else held_slug(root, source)
+    if slug:
+        status, report = "done", {"status": "present", "slug": slug}
+    else:
+        try:
+            done = subprocess.run(ingest_command(root, source, force), capture_output=True,
+                                  text=True, timeout=INGEST_TIMEOUT_S)
+            report = last_json_line(done.stdout) or {
+                "error": (done.stderr or done.stdout).strip()[-2000:] or "no output"}
+            ok = done.returncode == 0
+        except subprocess.TimeoutExpired:
+            report, ok = {"error": "the ingest ran longer than %d s" % INGEST_TIMEOUT_S}, False
+        except ValueError as error:
+            report, ok = {"error": str(error)}, False
+        slug = report.get("slug") if ok else None
+        status = "done" if ok and slug else "failed"
+    if slug:
+        add_to_library(db, row["library"], slug, row["user"])
+    with db:
+        db.execute("UPDATE jobs SET status = ?, slug = ?, report = ?, finished = ? WHERE id = ?",
+                   (status, slug, json.dumps(report, ensure_ascii=False), now(), row["id"]))
+
+
+class Worker(threading.Thread):
+    """The one thread that ingests, one job at a time, oldest first.
+
+    One at a time is what the APIs allow anyway: the rate gate sends one request
+    per host at a time. `wake` is set when a job is queued, so a new job starts
+    at once rather than at the next poll.
+    """
+
+    def __init__(self, root: Path) -> None:
+        super().__init__(daemon=True, name="ingest")
+        self.root = root
+        self.wake = threading.Event()
+
+    def run(self) -> None:
+        db = connect(self.root)
+        requeue_interrupted(db)
+        while True:
+            row = db.execute(
+                "SELECT * FROM jobs WHERE status = 'queued' ORDER BY id LIMIT 1").fetchone()
+            if row is None:
+                self.wake.wait(timeout=30)
+                self.wake.clear()
+                continue
+            with db:
+                db.execute("UPDATE jobs SET status = 'running' WHERE id = ?", (row["id"],))
+            run_job(db, self.root, row)

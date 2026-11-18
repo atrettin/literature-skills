@@ -10,7 +10,11 @@
 <body>
 <header>
   <a href="{{ base }}/">Papers</a>
-  {% if user %}<span class="user">{{ user }} · <a href="{{ base }}/logout">sign out</a></span>{% endif %}
+  {% if user %}
+  <a href="{{ base }}/add">Add papers</a>
+  <a href="{{ base }}/jobs">Ingests</a>
+  <span class="user">{{ user }} · <a href="{{ base }}/logout">sign out</a></span>
+  {% endif %}
 </header>
 <main>
 {% block main %}{% endblock %}

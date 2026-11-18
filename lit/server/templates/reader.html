@@ -6,7 +6,16 @@
 <script defer src="{{ base }}/static/reader.js"></script>
 {% endblock %}
 {% block main %}
-{% if contents %}<nav><a href="{{ base }}/lit/{{ contents }}/INDEX.md">Contents of this paper</a></nav>{% endif %}
+{% if contents %}<nav>
+  <a href="{{ base }}/lit/{{ contents }}/INDEX.md">Contents of this paper</a>
+  {% if libraries %}
+  <form method="post" action="{{ base }}/libraries/add" class="inline">
+    <input type="hidden" name="slug" value="{{ contents }}">
+    <select name="library">{% for l in libraries %}<option value="{{ l.name }}" {% if l.name == user %}selected{% endif %}>{{ l.name }}</option>{% endfor %}</select>
+    <button>Add to library</button>
+  </form>
+  {% endif %}
+</nav>{% endif %}
 <article>
 {{ body|safe }}
 </article>

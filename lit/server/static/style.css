@@ -9,3 +9,8 @@ article img { max-width: 100%; height: auto; }
 .math.block { overflow-x: auto; margin: 1rem 0; }
 .error { color: #c33; }
 input { width: 100%; max-width: 30rem; padding: .4rem; }
+form.inline { display: inline-flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+nav { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+textarea { width: 100%; max-width: 30rem; display: block; margin-bottom: .5rem; }
+tr.detail td { border-bottom: 1px solid var(--line); font-size: .9rem; }
+pre { white-space: pre-wrap; margin: 0; }

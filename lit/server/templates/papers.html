@@ -1,13 +1,34 @@
 {% extends "base.html" %}
 {% block main %}
-<h1>Papers</h1>
-<p>{{ papers|length }} papers in the collection.</p>
+<h1>{% if library %}Library {{ library }}{% else %}All papers{% endif %}</h1>
+<form method="get" action="{{ base }}/" class="inline">
+  <select name="library">
+    <option value="">All papers in the collection</option>
+    {% for l in libraries %}
+    <option value="{{ l.name }}" {% if l.name == library %}selected{% endif %}>{{ l.name }} ({{ l.papers }}, {{ l.owner }})</option>
+    {% endfor %}
+  </select>
+  <button>Show</button>
+</form>
+<p>{{ papers|length }} papers.</p>
 <table>
-<thead><tr><th>Title</th><th>Authors</th><th>Year</th></tr></thead>
+<thead><tr><th>Title</th><th>Authors</th><th>Year</th>{% if library %}<th></th>{% endif %}</tr></thead>
 <tbody>
 {% for p in papers %}
-<tr><td><a href="{{ base }}/lit/{{ p.slug }}/INDEX.md">{{ p.title }}</a></td><td>{{ p.authors }}</td><td>{{ p.year }}</td></tr>
+<tr>
+  <td><a href="{{ base }}/lit/{{ p.slug }}/INDEX.md">{{ p.title }}</a></td><td>{{ p.authors }}</td><td>{{ p.year }}</td>
+  {% if library %}<td>
+    <form method="post" action="{{ base }}/libraries/remove">
+      <input type="hidden" name="library" value="{{ library }}"><input type="hidden" name="slug" value="{{ p.slug }}"><button title="Take it out of this library; the collection keeps it">Remove</button>
+    </form>
+  </td>{% endif %}
+</tr>
 {% endfor %}
 </tbody>
 </table>
+<h2>New library</h2>
+<form method="post" action="{{ base }}/libraries" class="inline">
+  <input name="name" placeholder="name: letters, digits, - and _" pattern="[A-Za-z0-9_-]+" required>
+  <button>Create</button>
+</form>
 {% endblock %}
