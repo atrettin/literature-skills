@@ -30,6 +30,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "check-report": ("lit.check_report", "check that every citation of a report resolves"),
     "inspire": ("lit.inspire_lookup", "ask INSPIRE-HEP where a paper was published"),
     "references": ("lit.update_references", "merge and render the reference store"),
+    "serve": ("lit.server", "serve the collection as web pages and MCP (needs the server extra)"),
 }
 
 
