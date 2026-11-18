@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block main %}
+<h1>Sign in</h1>
+<p>Paste the token the administrator gave you.</p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post" action="{{ base }}/login">
+  <input name="token" type="password" autocomplete="current-password" required autofocus>
+  <button>Sign in</button>
+</form>
+{% endblock %}

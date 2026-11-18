@@ -26,10 +26,16 @@ dependencies = [
 # above one that answers it. It runs on ONNX Runtime rather than torch: about
 # 60 MB installed, and a 21 MB model downloaded on first use.
 rerank = ["flashrank>=0.2.9"]
+# `litdb serve`: the shared collection as web pages and an MCP endpoint. The MCP
+# SDK brings the web framework (Starlette) and the server (uvicorn) with it.
+server = ["mcp>=1.9", "jinja2>=3.1", "markdown-it-py>=3.0", "mdit-py-plugins>=0.4"]
 dev = ["pytest>=8.0", "pyright>=1.1.390"]
 
 [project.scripts]
 litdb = "lit.__main__:main"
 
 [tool.setuptools]
-packages = ["lit"]
+packages = ["lit", "lit.server"]
+
+[tool.setuptools.package-data]
+"lit.server" = ["templates/*.html", "static/*"]

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="{{ base }}/static/reader.js"></script>
+{% endblock %}
+{% block main %}
+{% if contents %}<nav><a href="{{ base }}/lit/{{ contents }}/INDEX.md">Contents of this paper</a></nav>{% endif %}
+<article>
+{{ body|safe }}
+</article>
+{% endblock %}

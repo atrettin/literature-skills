@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Papers</h1>
+<p>{{ papers|length }} papers in the collection.</p>
+<table>
+<thead><tr><th>Title</th><th>Authors</th><th>Year</th></tr></thead>
+<tbody>
+{% for p in papers %}
+<tr><td><a href="{{ base }}/lit/{{ p.slug }}/INDEX.md">{{ p.title }}</a></td><td>{{ p.authors }}</td><td>{{ p.year }}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

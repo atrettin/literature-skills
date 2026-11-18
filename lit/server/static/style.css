@@ -1,0 +1,11 @@
+:root { color-scheme: light dark; --muted: #777; --line: #ccc; }
+body { margin: 0; font: 16px/1.55 system-ui, sans-serif; background: Canvas; color: CanvasText; }
+header { display: flex; gap: 1rem; padding: .6rem 1rem; border-bottom: 1px solid var(--line); }
+header .user { margin-left: auto; color: var(--muted); }
+main { max-width: 52rem; margin: 0 auto; padding: 1rem; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+article img { max-width: 100%; height: auto; }
+.math.block { overflow-x: auto; margin: 1rem 0; }
+.error { color: #c33; }
+input { width: 100%; max-width: 30rem; padding: .4rem; }

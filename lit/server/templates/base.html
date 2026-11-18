@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Literature{% endblock %}</title>
+<link rel="stylesheet" href="{{ base }}/static/style.css">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header>
+  <a href="{{ base }}/">Papers</a>
+  {% if user %}<span class="user">{{ user }} · <a href="{{ base }}/logout">sign out</a></span>{% endif %}
+</header>
+<main>
+{% block main %}{% endblock %}
+</main>
+</body>
+</html>
