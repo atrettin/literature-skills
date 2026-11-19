@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Search{% endblock %}
+{% macro hits(results) %}
+<ol class="hits">
+{% for r in results %}
+<li>
+  <a href="{{ base }}/lit/{{ r.paper }}/chapters/{{ r.chapter }}.md{% if r.anchor %}#{{ r.anchor }}{% endif %}">{{ titles[r.paper] }}</a>
+  <span class="where">{{ r.chapter }}</span>
+  <p>{{ r.marked }}</p>
+</li>
+{% endfor %}
+</ol>
+{% endmacro %}
+{% block main %}
+<h1>Search</h1>
+<form method="get" action="{{ base }}/search" class="search">
+  <input name="q" value="{{ q }}" placeholder="a phrase from the papers" required autofocus>
+  <div class="inline">
+    <label><input type="radio" name="in" value="library" {% if where == "library" %}checked{% endif %}> in library</label>
+    <select name="library">{% for l in libraries %}<option value="{{ l.name }}" {% if l.name == library %}selected{% endif %}>{{ l.name }} ({{ l.papers }})</option>{% endfor %}</select>
+    <label><input type="radio" name="in" value="collection" {% if where == "collection" %}checked{% endif %}> in the whole collection</label>
+  </div>
+  <div class="inline">
+    <label><input type="radio" name="mode" value="exact" {% if not approx %}checked{% endif %}> exact phrase</label>
+    <label><input type="radio" name="mode" value="approx" {% if approx %}checked{% endif %}> ranked by meaning (library only, slower)</label>
+    <button>Search</button>
+  </div>
+</form>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if report %}
+  {% if report.matches %}
+    <p>{{ report.matches }} match{% if report.matches != 1 %}es{% endif %} in {{ report.scope.papers|length }} paper{% if report.scope.papers|length != 1 %}s{% endif %} searched{% if report.truncated %}; the first {{ report.results|length }} are shown{% endif %}.</p>
+    {{ hits(report.results) }}
+  {% else %}
+    <p>No block holds that phrase.</p>
+    {% for p in report.partial_matches %}
+    <p>The shorter phrase <strong>{{ p.phrase }}</strong> matches {{ p.matches }} time{% if p.matches != 1 %}s{% endif %}:</p>
+    {{ hits(p.results) }}
+    {% endfor %}
+  {% endif %}
+{% endif %}
+{% endblock %}
