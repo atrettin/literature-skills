@@ -1,6 +1,6 @@
 """`litdb serve`: the shared collection, as web pages for people and MCP for agents.
 
-    litdb serve [--host H] [--port P] [--root-path /prefix]   run the server
+    litdb serve [--host H] [--port P] [--root-path /prefix] [--base-url URL]   run the server
     litdb serve add-user [--admin] <name>                     print a new user's token
 
 The server needs the `server` extra: `pip install ".[server]"`.
@@ -30,6 +30,12 @@ def build_parser():
         default=os.environ.get("ROOT_PATH", ""),
         help="the prefix a reverse proxy serves the app under, e.g. /spark/literature",
     )
+    parser.add_argument(
+        "--base-url",
+        default=os.environ.get("BASE_URL"),
+        help="the address users reach the server at, for the links in rendered "
+             "reports; default http://127.0.0.1:<port><root-path>",
+    )
     return parser
 
 
@@ -56,6 +62,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from lit.server.web import create_app
 
-    uvicorn.run(create_app(root), host=args.host, port=args.port, root_path=args.root_path,
+    base_url = args.base_url or "http://127.0.0.1:%d%s" % (args.port, args.root_path)
+    uvicorn.run(create_app(root, base_url), host=args.host, port=args.port, root_path=args.root_path,
                 proxy_headers=True)
     return 0

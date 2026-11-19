@@ -28,7 +28,7 @@ dependencies = [
 rerank = ["flashrank>=0.2.9"]
 # `litdb serve`: the shared collection as web pages and an MCP endpoint. The MCP
 # SDK brings the web framework (Starlette) and the server (uvicorn) with it.
-server = ["mcp>=1.9", "jinja2>=3.1", "markdown-it-py>=3.0", "mdit-py-plugins>=0.4"]
+server = ["mcp>=2.3,<3", "jinja2>=3.1", "markdown-it-py>=3.0", "mdit-py-plugins>=0.4"]
 dev = ["pytest>=8.0", "pyright>=1.1.390"]
 
 [project.scripts]
