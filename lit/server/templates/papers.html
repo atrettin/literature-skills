@@ -12,7 +12,7 @@
 </form>
 <p>{{ papers|length }} papers.</p>
 <table>
-<thead><tr><th>Title</th><th>Authors</th><th>Year</th>{% if library %}<th></th>{% endif %}</tr></thead>
+<thead><tr><th>Title</th><th>Authors</th><th>Year</th>{% if library or admin %}<th></th>{% endif %}</tr></thead>
 <tbody>
 {% for p in papers %}
 <tr>
@@ -20,6 +20,10 @@
   {% if library %}<td>
     <form method="post" action="{{ base }}/libraries/remove">
       <input type="hidden" name="library" value="{{ library }}"><input type="hidden" name="slug" value="{{ p.slug }}"><button title="Take it out of this library; the collection keeps it">Remove</button>
+    </form>
+  </td>{% elif admin %}<td>
+    <form method="post" action="{{ base }}/papers/remove" data-confirm="Remove {{ p.slug }} from the collection, and from every library that lists it? This deletes its files.">
+      <input type="hidden" name="slug" value="{{ p.slug }}"><button title="Delete the paper from the shared collection">Remove</button>
     </form>
   </td>{% endif %}
 </tr>

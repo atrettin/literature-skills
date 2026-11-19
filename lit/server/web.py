@@ -123,8 +123,32 @@ async def papers(request: Request, user: str) -> Response:
         if library and not state.library_exists(db, library):
             return message(request, user, "There is no library named %s." % library, 404)
         slugs = state.library_slugs(db, library) if library else paths.papers_on_disk(root)
+        admin = state.is_admin(db, user)
     return page(request, "papers.html", user, papers=paper_rows(root, slugs),
-                libraries=everything, library=library)
+                libraries=everything, library=library, admin=admin)
+
+
+@signed_in
+async def remove_paper(request: Request, user: str) -> Response:
+    """An admin takes a paper out of the collection, and so out of every library."""
+    root: Path = request.app.state.root
+    form = await request.form()
+    slug, force = str(form.get("slug", "")), bool(form.get("force"))
+    with state.connect(root) as db:
+        if not state.is_admin(db, user):
+            return message(request, user, "Only an administrator removes papers from the collection.", 403)
+        if not state.WRITE_LOCK.acquire(blocking=False):
+            return message(request, user, "An ingest is running. Try again when it has finished.", 409)
+        try:
+            code, report = state.remove_paper(db, root, slug, force)
+        finally:
+            state.WRITE_LOCK.release()
+    if code == 2 and report.get("cited_by"):
+        return page(request, "remove.html", user, slug=slug, cited_by=report["cited_by"])
+    if code != 0:
+        return message(request, user, report.get("error") or "The paper was not removed.",
+                       404 if code == 1 else 400)
+    return RedirectResponse(request.scope.get("root_path", "") + "/", status_code=303)
 
 
 def message(request: Request, user: str | None, text: str, status: int = 400) -> Response:
@@ -325,6 +349,7 @@ def create_app(root: Path) -> Starlette:
         Route("/libraries", create_library, methods=["POST"]),
         Route("/libraries/delete", delete_library, methods=["POST"]),
         Route("/libraries/{action:str}", list_in_library, methods=["POST"]),
+        Route("/papers/remove", remove_paper, methods=["POST"]),
         Route("/jobs", jobs),
         Route("/jobs/{id:int}/retry", retry, methods=["POST"]),
         Route("/lit/{path:path}", reader),

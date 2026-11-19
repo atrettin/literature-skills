@@ -67,6 +67,11 @@ NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 # with a hundred figures takes minutes; an hour means something hangs.
 INGEST_TIMEOUT_S = 3600
 
+# Held by whatever writes the shared collection: the ingest worker, and an
+# admin removing a paper. Both rewrite the collection index and the reference
+# store, and two writers at once would lose one of the two changes.
+WRITE_LOCK = threading.Lock()
+
 
 def db_path(root: Path) -> Path:
     return root / DB_NAME
@@ -303,6 +308,25 @@ def run_job(db: sqlite3.Connection, root: Path, row: sqlite3.Row) -> None:
                    (status, slug, json.dumps(report, ensure_ascii=False), now(), row["id"]))
 
 
+def remove_paper(db: sqlite3.Connection, root: Path, slug: str, force: bool) -> tuple[int, dict]:
+    """Take a paper out of the collection with `litdb remove`, and out of every library.
+
+    Returns the exit status and the report: 0 removed, 1 no such paper, 2 other
+    papers cite it and `force` was not given. The caller holds `WRITE_LOCK`.
+    """
+    command = [sys.executable, "-m", "lit", "remove", slug, "--literature-root", str(root)]
+    done = subprocess.run(command + (["--force"] if force else []),
+                          capture_output=True, text=True, timeout=300)
+    try:
+        report = json.loads(done.stdout)
+    except json.JSONDecodeError:
+        report = {"error": (done.stderr or done.stdout).strip()[-2000:] or "no output"}
+    if done.returncode == 0:
+        with db:
+            db.execute("DELETE FROM library_papers WHERE slug = ?", (slug,))
+    return done.returncode, report
+
+
 class Worker(threading.Thread):
     """The one thread that ingests, one job at a time, oldest first.
 
@@ -326,6 +350,7 @@ class Worker(threading.Thread):
                 self.wake.wait(timeout=30)
                 self.wake.clear()
                 continue
-            with db:
-                db.execute("UPDATE jobs SET status = 'running' WHERE id = ?", (row["id"],))
-            run_job(db, self.root, row)
+            with WRITE_LOCK:
+                with db:
+                    db.execute("UPDATE jobs SET status = 'running' WHERE id = ?", (row["id"],))
+                run_job(db, self.root, row)
