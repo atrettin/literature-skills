@@ -196,3 +196,42 @@ def test_only_an_admin_removes_a_paper_and_it_leaves_every_library(served):
     assert not (root / slug).exists()
     with state.connect(root) as db:
         assert state.library_slugs(db, "alice") == []
+
+
+def test_search_covers_the_library_or_the_whole_collection(served):
+    root, client, token = served
+    sign_in(client, token)
+    first, second = paths.papers_on_disk(root)[:2]
+    with state.connect(root) as db:
+        state.add_to_library(db, "alice", first, "alice")
+
+    page = client.get("/search", params={"q": "the", "in": "library", "library": "alice"}).text
+    assert "/lit/%s/chapters/" % first in page and "/lit/%s/" % second not in page
+    assert "in 1 paper searched" in page
+    page = client.get("/search", params={"q": "the", "in": "collection"}).text
+    assert "in 2 papers searched" in page
+
+    with state.connect(root) as db:
+        state.create_library(db, "empty", "alice")
+    page = client.get("/search", params={"q": "the", "library": "empty"}).text
+    assert "lists no papers yet" in page and "/chapters/" not in page
+    page = client.get("/search", params={"q": "the", "in": "collection", "mode": "approx"}).text
+    assert "Search a library instead" in page
+
+
+def test_a_library_exports_as_bibtex(served):
+    root, client, token = served
+    sign_in(client, token)
+    slug = paths.papers_on_disk(root)[0]
+    with state.connect(root) as db:
+        state.add_to_library(db, "alice", slug, "alice")
+    response = client.get("/libraries/alice/bibtex")
+    assert response.headers["content-disposition"] == 'attachment; filename="alice.bib"'
+    assert response.text.startswith("@") and "{%s," % slug in response.text
+
+
+def test_a_journal_reference_splits_into_its_fields():
+    entry = web.bibtex_entry("k", {"authors": ["A", "B"], "title": "R&D", "arxiv_id": "1",
+                                   "publication": {"journal": "Rev.Mod.Phys. 84 (2012) 1307-1341"}})
+    assert "journal = {Rev.Mod.Phys.}" in entry and "pages = {1307--1341}" in entry
+    assert "title = {{R\\&D}}" in entry and entry.startswith("@article{k,")

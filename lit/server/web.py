@@ -14,12 +14,15 @@ KaTeX's, so a `<script>` that made it through a conversion runs nowhere.
 from __future__ import annotations
 
 import contextlib
+import re
 import sqlite3
 from pathlib import Path
 
+from markupsafe import Markup, escape
 from markdown_it import MarkdownIt
 from mdit_py_plugins.dollarmath import dollarmath_plugin
 from starlette.applications import Starlette
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
@@ -27,7 +30,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-from lit import paths
+from lit import paths, scope, search_literature
 from lit.server import state
 
 HERE = Path(__file__).parent
@@ -238,6 +241,127 @@ async def add(request: Request, user: str) -> Response:
     return page(request, "add.html", user, libraries=everything, library=library, results=results)
 
 
+# How many matches the search page shows. `matches` still reports the full count.
+SEARCH_RESULTS = 50
+
+
+def highlight(sentence: str, phrase: str) -> Markup:
+    """The sentence, escaped, with each literal occurrence of the phrase marked.
+
+    The search matches on a flattened form of the text, so a match whose spacing
+    or quotation marks differ from the phrase is found and simply not marked.
+    """
+    escaped = str(escape(sentence))
+    if not phrase:
+        return Markup(escaped)
+    pattern = re.compile(re.escape(str(escape(phrase))), re.IGNORECASE)
+    return Markup(pattern.sub(lambda match: "<mark>%s</mark>" % match.group(0), escaped))
+
+
+@signed_in
+async def search(request: Request, user: str) -> Response:
+    """`litdb search` over one library, or over the whole collection.
+
+    A library is a list of slugs, and the list is the scope. An empty list must
+    not reach the search: no scope at all means the whole collection there.
+    """
+    root: Path = request.app.state.root
+    query = request.query_params
+    phrase = query.get("q", "").strip()
+    library = query.get("library") or user
+    where = "collection" if query.get("in") == "collection" else "library"
+    approx = query.get("mode") == "approx"
+    with state.connect(root) as db:
+        everything = state.libraries(db)
+        listed = state.library_slugs(db, library)
+    context = {"q": phrase, "libraries": everything, "library": library, "where": where,
+               "approx": approx, "report": None, "error": None, "titles": {}}
+
+    if phrase:
+        if where == "collection":
+            tokens = [scope.DISK]
+            if approx:
+                context["error"] = ("A ranked search reads every block it covers, which over the "
+                                    "whole collection takes minutes. Search a library instead.")
+        else:
+            held = set(paths.papers_on_disk(root))
+            tokens = [slug for slug in listed if slug in held]
+            if not tokens:
+                context["error"] = "The library %s lists no papers yet." % library
+        if not context["error"]:
+            try:
+                report = await run_in_threadpool(
+                    search_literature.search, root, phrase, scope.parse_all(tokens),
+                    SEARCH_RESULTS, approx=approx)
+            except scope.ScopeError as error:
+                context["error"] = str(error)
+            else:
+                for found in report["results"] + [r for p in report["partial_matches"] for r in p["results"]]:
+                    found["marked"] = highlight(found.get("sentence", ""), "" if approx else phrase)
+                    if found["paper"] not in context["titles"]:
+                        paper = paths.read_paper(root, found["paper"])
+                        context["titles"][found["paper"]] = paper.get("title") or found["paper"]
+                context["report"] = report
+    return page(request, "search.html", user, **context)
+
+
+# --------------------------------------------------------------------------
+# BibTeX
+# --------------------------------------------------------------------------
+
+# INSPIRE writes a journal reference as "Phys.Rev.D 108 (2023) 113010".
+JOURNAL_REF = re.compile(r"^(?P<journal>.+?)\s+(?P<volume>\S+)\s+\((?P<year>\d{4})\)\s+(?P<pages>\S+)$")
+
+
+def bibtex_value(text: str) -> str:
+    """A field value BibTeX reads as written: the characters it treats as markup escaped."""
+    return re.sub(r"(?<!\\)([&%#])", r"\\\1", text)
+
+
+def bibtex_entry(slug: str, paper: dict) -> str:
+    """One entry, keyed by the slug: the name a report and `--scope` use too.
+
+    A paper INSPIRE reports as published is an @article with its journal; any
+    other is an @misc that names its arXiv identifier.
+    """
+    publication = paper.get("publication") or {}
+    fields = [
+        ("author", " and ".join(paper.get("authors") or [])),
+        ("title", "{%s}" % bibtex_value(paper.get("title") or "")),
+    ]
+    journal = publication.get("journal") or ""
+    parts = JOURNAL_REF.match(journal)
+    if parts:
+        fields += [("journal", parts["journal"]), ("volume", parts["volume"]),
+                   ("pages", parts["pages"].replace("-", "--")), ("year", parts["year"])]
+    elif journal:
+        fields += [("journal", bibtex_value(journal)),
+                   ("year", str(publication.get("published_year") or paper.get("year") or ""))]
+    else:
+        fields.append(("year", str(paper.get("year") or "")))
+    doi = publication.get("doi") or paper.get("doi") or ""
+    if doi:
+        fields.append(("doi", doi))
+    if paper.get("arxiv_id"):
+        fields += [("eprint", paper["arxiv_id"]), ("archivePrefix", "arXiv")]
+    body = ",\n".join("  %s = {%s}" % (name, value) for name, value in fields if value)
+    return "@%s{%s,\n%s\n}\n" % ("article" if journal else "misc", slug, body)
+
+
+@signed_in
+async def bibtex(request: Request, user: str) -> Response:
+    root: Path = request.app.state.root
+    name = request.path_params["name"]
+    with state.connect(root) as db:
+        if not state.library_exists(db, name):
+            return message(request, user, "There is no library named %s." % name, 404)
+        slugs = state.library_slugs(db, name)
+    entries = [bibtex_entry(slug, paths.read_paper(root, slug))
+               for slug in slugs if paths.paper_path(root, slug).is_file()]
+    return PlainTextResponse("\n".join(entries), media_type="application/x-bibtex",
+                             headers={"content-disposition": 'attachment; filename="%s.bib"' % name})
+
+
 @signed_in
 async def jobs(request: Request, user: str) -> Response:
     status = request.query_params.get("status") or None
@@ -348,6 +472,8 @@ def create_app(root: Path) -> Starlette:
         Route("/libraries", library_list),
         Route("/libraries", create_library, methods=["POST"]),
         Route("/libraries/delete", delete_library, methods=["POST"]),
+        Route("/libraries/{name}/bibtex", bibtex),
+        Route("/search", search),
         Route("/libraries/{action:str}", list_in_library, methods=["POST"]),
         Route("/papers/remove", remove_paper, methods=["POST"]),
         Route("/jobs", jobs),

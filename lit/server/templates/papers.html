@@ -10,7 +10,7 @@
   </select>
   <button>Show</button>
 </form>
-<p>{{ papers|length }} papers.</p>
+<p>{{ papers|length }} papers.{% if library %} <a href="{{ base }}/search?library={{ library }}">Search this library</a> · <a href="{{ base }}/libraries/{{ library }}/bibtex">BibTeX</a>{% endif %}</p>
 <table>
 <thead><tr><th>Title</th><th>Authors</th><th>Year</th>{% if library or admin %}<th></th>{% endif %}</tr></thead>
 <tbody>
