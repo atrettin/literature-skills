@@ -235,3 +235,38 @@ def test_a_journal_reference_splits_into_its_fields():
                                    "publication": {"journal": "Rev.Mod.Phys. 84 (2012) 1307-1341"}})
     assert "journal = {Rev.Mod.Phys.}" in entry and "pages = {1307--1341}" in entry
     assert "title = {{R\\&D}}" in entry and entry.startswith("@article{k,")
+
+
+def mcp_call(client, token, name, arguments):
+    import json
+    response = client.post("/mcp", headers={
+        "Authorization": "Bearer %s" % token, "Accept": "application/json, text/event-stream"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+              "params": {"name": name, "arguments": arguments}})
+    result = response.json()["result"]
+    text = result["content"][0]["text"]
+    return result.get("isError", False), (text if result.get("isError") else json.loads(text))
+
+
+def test_mcp_needs_a_token_and_reads_the_callers_library(tmp_path):
+    root = tmp_path / "collection"
+    shutil.copytree(FIXTURE, root)
+    render.render_collection(root, "vscode")
+    first = paths.papers_on_disk(root)[0]
+    with state.connect(root) as db:
+        token = state.add_user(db, "alice")
+        state.add_to_library(db, "alice", first, "alice")
+        state.create_library(db, "empty", "alice")
+    with TestClient(web.create_app(root, "https://example.org/lit-server")) as client:
+        assert client.post("/mcp", json={}).status_code == 401
+
+        _, listed = mcp_call(client, token, "papers", {})
+        assert [p["slug"] for p in listed["papers"]] == [first]
+        _, found = mcp_call(client, token, "search", {"phrase": "the", "max_results": 1})
+        assert found["exit"] == 0 and found["scope"]["papers"] == [first]
+
+        failed, why = mcp_call(client, token, "search", {"phrase": "the", "library": "empty"})
+        assert failed and "lists no papers yet" in why
+
+        _, rendered = mcp_call(client, token, "render_report", {"text": "([§](lit:%s))" % first})
+        assert rendered["text"] == "([§](https://example.org/lit-server/lit/%s/INDEX.md))" % first

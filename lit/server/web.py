@@ -447,7 +447,7 @@ class SecurityHeaders:
         await self.app(scope, receive, with_csp)
 
 
-def create_app(root: Path) -> Starlette:
+def create_app(root: Path, base_url: str = "http://127.0.0.1:8000") -> Starlette:
     """The web app for one collection, which must be rendered in `vscode`.
 
     The reader relies on that flavor's relative links and HTML anchors. An
@@ -458,11 +458,29 @@ def create_app(root: Path) -> Starlette:
             "%s is rendered in %s. The server reads the vscode flavor: run "
             "`litdb render --flavor vscode` first." % (root, paths.flavor(root))
         )
+    from mcp.server.streamable_http_manager import StreamableHTTPASGIApp
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    from lit.server import tools
+
+    def wake() -> None:
+        if app.state.worker is not None:
+            app.state.worker.wake.set()
+
+    # Stateless JSON answers: no session to keep, and no stream for a proxy to
+    # buffer. The SDK's Host check would refuse the proxy's host name; the
+    # bearer token is what keeps strangers out.
+    mcp = tools.build(root, base_url, wake)
+    mcp.streamable_http_app(
+        stateless_http=True, json_response=True,
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
+
     @contextlib.asynccontextmanager
     async def lifespan(app: Starlette):
         app.state.worker = state.Worker(root)
         app.state.worker.start()
-        yield
+        async with mcp.session_manager.run():
+            yield
 
     app = Starlette(routes=[
         Route("/", papers),
@@ -479,6 +497,7 @@ def create_app(root: Path) -> Starlette:
         Route("/jobs", jobs),
         Route("/jobs/{id:int}/retry", retry, methods=["POST"]),
         Route("/lit/{path:path}", reader),
+        Route("/mcp", tools.BearerGuard(StreamableHTTPASGIApp(mcp.session_manager), root)),
         Mount("/static", StaticFiles(directory=HERE / "static"), name="static"),
     ], middleware=[Middleware(SecurityHeaders)], lifespan=lifespan)
     app.state.root = root

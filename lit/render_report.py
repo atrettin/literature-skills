@@ -106,9 +106,15 @@ class Collection:
         return self.headings[slug].get(anchor)
 
 
-def resolve(target: str, collection: Collection, report_dir: Path) -> str | None:
-    """One marker's tail as a path relative to the report, or None for unknown."""
-    root = os.path.relpath(collection.root.resolve(), report_dir.resolve())
+def resolve(target: str, collection: Collection, report_dir: Path,
+            base: str | None = None) -> str | None:
+    """One marker's tail as a path relative to the report, or None for unknown.
+
+    `base` replaces the relative path to the collection with an address, for a
+    report read beside a server rather than beside the files: `litdb serve`
+    passes the URL its reader serves the collection at.
+    """
+    root = base if base is not None else os.path.relpath(collection.root.resolve(), report_dir.resolve())
 
     if target.startswith("ref/"):
         tag = target[len("ref/"):]
@@ -147,13 +153,14 @@ def resolve(target: str, collection: Collection, report_dir: Path) -> str | None
 # --------------------------------------------------------------------------
 
 
-def render_text(text: str, collection: Collection, report_dir: Path) -> tuple[str, list[str]]:
+def render_text(text: str, collection: Collection, report_dir: Path,
+                base: str | None = None) -> tuple[str, list[str]]:
     """The report with every marker resolved, and the markers that were not."""
     unresolved: list[str] = []
 
     def replace(match: re.Match) -> str:
         target = match.group(1)
-        resolved = resolve(target, collection, report_dir)
+        resolved = resolve(target, collection, report_dir, base)
         if resolved is None:
             unresolved.append(target)
             return match.group(0)
