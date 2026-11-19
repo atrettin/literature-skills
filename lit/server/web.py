@@ -139,6 +139,26 @@ def back_to(request: Request, library: str) -> Response:
 
 
 @signed_in
+async def library_list(request: Request, user: str) -> Response:
+    with state.connect(request.app.state.root) as db:
+        everything = state.libraries(db)
+    return page(request, "libraries.html", user, libraries=everything)
+
+
+@signed_in
+async def delete_library(request: Request, user: str) -> Response:
+    name = str((await request.form()).get("name", ""))
+    with state.connect(request.app.state.root) as db:
+        try:
+            state.delete_library(db, name, user)
+        except LookupError as error:
+            return message(request, user, str(error), 404)
+        except PermissionError as error:
+            return message(request, user, str(error), 403)
+    return RedirectResponse(request.scope.get("root_path", "") + "/libraries", status_code=303)
+
+
+@signed_in
 async def create_library(request: Request, user: str) -> Response:
     name = str((await request.form()).get("name", "")).strip()
     with state.connect(request.app.state.root) as db:
@@ -148,7 +168,7 @@ async def create_library(request: Request, user: str) -> Response:
             return message(request, user, str(error))
         except sqlite3.IntegrityError:
             return message(request, user, "A library named %s exists already." % name)
-    return back_to(request, name)
+    return RedirectResponse(request.scope.get("root_path", "") + "/libraries", status_code=303)
 
 
 @signed_in
@@ -301,7 +321,9 @@ def create_app(root: Path) -> Starlette:
         Route("/login", login, methods=["GET", "POST"]),
         Route("/logout", logout),
         Route("/add", add, methods=["GET", "POST"]),
+        Route("/libraries", library_list),
         Route("/libraries", create_library, methods=["POST"]),
+        Route("/libraries/delete", delete_library, methods=["POST"]),
         Route("/libraries/{action:str}", list_in_library, methods=["POST"]),
         Route("/jobs", jobs),
         Route("/jobs/{id:int}/retry", retry, methods=["POST"]),

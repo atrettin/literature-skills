@@ -26,9 +26,4 @@
 {% endfor %}
 </tbody>
 </table>
-<h2>New library</h2>
-<form method="post" action="{{ base }}/libraries" class="inline">
-  <input name="name" placeholder="name: letters, digits, - and _" pattern="[A-Za-z0-9_-]+" required>
-  <button>Create</button>
-</form>
 {% endblock %}

@@ -154,3 +154,22 @@ def test_only_an_admin_forces_a_retry(served):
     client.post("/jobs/%s/retry" % job_id, data={"force": "1"})
     with state.connect(root) as db:
         assert job(db, job_id)["force"] == 0
+
+
+def test_only_the_owner_deletes_a_library_and_the_papers_stay(served):
+    root, client, token = served
+    slug = paths.papers_on_disk(root)[0]
+    with state.connect(root) as db:
+        bob = state.add_user(db, "bob")
+        state.create_library(db, "thesis", "alice")
+        state.add_to_library(db, "thesis", slug, "alice")
+    sign_in(client, bob)
+    assert "thesis" in client.get("/libraries").text
+    assert client.post("/libraries/delete", data={"name": "thesis"}).status_code == 403
+    sign_in(client, token)
+    assert client.post("/libraries/delete", data={"name": "alice"}).status_code == 403
+    assert client.post("/libraries/delete", data={"name": "thesis"}).status_code == 200
+    with state.connect(root) as db:
+        assert not state.library_exists(db, "thesis")
+        assert db.execute("SELECT COUNT(*) FROM library_papers").fetchone()[0] == 0
+    assert paths.paper_path(root, slug).is_file()

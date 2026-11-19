@@ -141,6 +141,24 @@ def create_library(db: sqlite3.Connection, name: str, owner: str) -> None:
         db.execute("INSERT INTO libraries (name, owner) VALUES (?, ?)", (name, owner))
 
 
+def delete_library(db: sqlite3.Connection, name: str, user: str) -> None:
+    """Delete a library its owner no longer needs. The papers stay in the collection.
+
+    A personal library cannot go: it is where a user's papers land when no other
+    library is named, on the web and over MCP.
+    """
+    row = db.execute("SELECT owner FROM libraries WHERE name = ?", (name,)).fetchone()
+    if row is None:
+        raise LookupError("There is no library named %s." % name)
+    if row["owner"] != user:
+        raise PermissionError("Only %s, who owns %s, can delete it." % (row["owner"], name))
+    if name == user:
+        raise PermissionError("Your personal library cannot be deleted.")
+    with db:
+        db.execute("DELETE FROM library_papers WHERE library = ?", (name,))
+        db.execute("DELETE FROM libraries WHERE name = ?", (name,))
+
+
 def library_exists(db: sqlite3.Connection, name: str) -> bool:
     return db.execute("SELECT 1 FROM libraries WHERE name = ?", (name,)).fetchone() is not None
 
@@ -278,7 +296,7 @@ def run_job(db: sqlite3.Connection, root: Path, row: sqlite3.Row) -> None:
             report, ok = {"error": str(error)}, False
         slug = report.get("slug") if ok else None
         status = "done" if ok and slug else "failed"
-    if slug:
+    if slug and library_exists(db, row["library"]):  # deleted while the job waited
         add_to_library(db, row["library"], slug, row["user"])
     with db:
         db.execute("UPDATE jobs SET status = ?, slug = ?, report = ?, finished = ? WHERE id = ?",
