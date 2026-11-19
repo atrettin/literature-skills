@@ -173,3 +173,26 @@ def test_only_the_owner_deletes_a_library_and_the_papers_stay(served):
         assert not state.library_exists(db, "thesis")
         assert db.execute("SELECT COUNT(*) FROM library_papers").fetchone()[0] == 0
     assert paths.paper_path(root, slug).is_file()
+
+
+def test_only_an_admin_removes_a_paper_and_it_leaves_every_library(served):
+    root, client, token = served
+    slug = paths.papers_on_disk(root)[0]
+    with state.connect(root) as db:
+        admin = state.add_user(db, "root", admin=True)
+        state.add_to_library(db, "alice", slug, "alice")
+    sign_in(client, token)
+    assert client.post("/papers/remove", data={"slug": slug}).status_code == 403
+    assert paths.paper_path(root, slug).is_file()
+
+    sign_in(client, admin)
+    assert "/papers/remove" in client.get("/").text
+    state.WRITE_LOCK.acquire()
+    try:
+        assert client.post("/papers/remove", data={"slug": slug}).status_code == 409
+    finally:
+        state.WRITE_LOCK.release()
+    assert client.post("/papers/remove", data={"slug": slug, "force": "1"}).status_code == 200
+    assert not (root / slug).exists()
+    with state.connect(root) as db:
+        assert state.library_slugs(db, "alice") == []

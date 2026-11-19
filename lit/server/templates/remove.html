@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Remove {{ slug }}{% endblock %}
+{% block main %}
+<h1>Remove {{ slug }}?</h1>
+<p>{{ cited_by|length }} other paper(s) of the collection cite it. After the removal, their citations of it name a work the collection no longer holds:</p>
+<ul>{% for other in cited_by %}<li><a href="{{ base }}/lit/{{ other }}/INDEX.md">{{ other }}</a></li>{% endfor %}</ul>
+<form method="post" action="{{ base }}/papers/remove" class="inline">
+  <input type="hidden" name="slug" value="{{ slug }}"><input type="hidden" name="force" value="1">
+  <button>Remove anyway</button> <a href="{{ base }}/">Keep it</a>
+</form>
+{% endblock %}
