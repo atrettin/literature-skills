@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Literature{% endblock %}</title>
 <link rel="stylesheet" href="{{ base }}/static/style.css">
+<script defer src="{{ base }}/static/confirm.js"></script>
 {% block head %}{% endblock %}
 </head>
 <body>
 <header>
   <a href="{{ base }}/">Papers</a>
   {% if user %}
+  <a href="{{ base }}/libraries">Libraries</a>
   <a href="{{ base }}/add">Add papers</a>
   <a href="{{ base }}/jobs">Ingests</a>
   <span class="user">{{ user }} · <a href="{{ base }}/logout">sign out</a></span>

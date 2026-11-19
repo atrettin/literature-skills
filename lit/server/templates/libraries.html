@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Libraries{% endblock %}
+{% block main %}
+<h1>Libraries</h1>
+<p>A library lists papers from the shared collection. Deleting one deletes the list; the papers stay in the collection.</p>
+<table>
+<thead><tr><th>Library</th><th>Owner</th><th>Papers</th><th></th></tr></thead>
+<tbody>
+{% for l in libraries %}
+<tr>
+  <td><a href="{{ base }}/?library={{ l.name }}">{{ l.name }}</a></td><td>{{ l.owner }}</td><td>{{ l.papers }}</td>
+  <td>{% if l.owner == user and l.name != user %}
+    <form method="post" action="{{ base }}/libraries/delete" data-confirm="Delete the library {{ l.name }}? Its {{ l.papers }} papers stay in the collection.">
+      <input type="hidden" name="name" value="{{ l.name }}"><button>Delete</button>
+    </form>
+  {% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+<h2>New library</h2>
+<form method="post" action="{{ base }}/libraries" class="inline">
+  <input name="name" placeholder="name: letters, digits, - and _" pattern="[A-Za-z0-9_-]+" required>
+  <button>Create</button>
+</form>
+{% endblock %}
