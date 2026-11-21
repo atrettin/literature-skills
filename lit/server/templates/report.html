@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="{{ base }}/static/reader.js"></script>
+{% endblock %}
+{% block main %}
+{% set here = base ~ "/reports/" ~ report.owner ~ "/" ~ report.name %}
+<nav>
+  <span>{{ report.owner }}/{{ report.name }} · {{ "public" if report.public else "private" }}</span>
+  {% if log %}<a href="{{ here }}">Report</a>{% else %}<a href="{{ here }}?part=log">Research log</a>{% endif %}
+  <a href="{{ here }}.md{% if log %}?part=log{% endif %}">Download</a>
+</nav>
+<article>
+{{ body|safe }}
+</article>
+{% endblock %}

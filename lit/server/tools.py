@@ -34,9 +34,13 @@ Start with `papers` to see what a library holds, then `toc` for one paper and
 `show` to read an address that `toc` or `search` gave you. An address is
 `<slug>`, `<slug>/<chapter>`, or `<slug>/<chapter>#<anchor>`.
 
-In a report, cite a place as ([§2](lit:<slug>/<chapter>#<anchor>)), then run
-`check_report` and `render_report` on the text. The rendered report links to
-the server's reader.
+Reports live on the server, under a name you choose. Keep a research log while
+you research: `append_log` one entry after each step (what you searched, what
+you read, what stayed open). Write the report with `write_report`, citing a
+place as ([§2](lit:<slug>/<chapter>#<anchor>)). Fix it with `edit_report`,
+which changes one passage: never send the whole report again to fix a detail.
+Then run `check_report`, fix what it lists, and run `render_report`, which
+gives the link to the rendered report that you hand to the user.
 """
 
 
@@ -64,6 +68,10 @@ async def litdb(root: Path, command: str, *args: str) -> dict:
         report = {"error": (done.stderr or done.stdout).decode(errors="replace").strip()[-2000:]}
     return {"exit": done.returncode, **report} if isinstance(report, dict) else {
         "exit": done.returncode, "result": report}
+
+
+# The parts of a report, as an agent names them, and the columns that hold them.
+PARTS = {"report": "text", "log": "log"}
 
 
 def build(root: Path, base_url: str, wake) -> MCPServer:
@@ -195,23 +203,89 @@ def build(root: Path, base_url: str, wake) -> MCPServer:
             rows = [row for row in state.jobs(db) if row["user"] == user][:20]
         return {"jobs": rows}
 
+    def own_report(user: str, name: str):
+        with state.connect(root) as db:
+            found = state.report(db, user, name)
+        if found is None:
+            raise ToolError("you have no report named %s" % name)
+        return found
+
+    def written(user: str, name: str, text: str) -> dict:
+        return {"report": name, "words": len(text.split()),
+                "url": "%s/reports/%s/%s" % (base_url.rstrip("/"), user, name)}
+
+    @mcp.tool()
+    async def write_report(ctx: Context, name: str, text: str, part: str = "report") -> dict:
+        """Create a report of yours, or replace its whole text (`part="report"`) or research log (`part="log"`). Send the full text once; fix it afterwards with `edit_report`."""
+        user = caller(ctx, root)
+        with state.connect(root) as db:
+            try:
+                state.write_report(db, user, name, PARTS.get(part, part), text)
+            except ValueError as error:
+                raise ToolError(str(error))
+        return written(user, name, text)
+
+    @mcp.tool()
+    async def append_log(ctx: Context, name: str, entry: str) -> dict:
+        """Add one entry to the end of a report's research log, creating the report if it does not exist yet."""
+        user = caller(ctx, root)
+        with state.connect(root) as db:
+            try:
+                log = state.append_log(db, user, name, entry)
+            except ValueError as error:
+                raise ToolError(str(error))
+        return written(user, name, log)
+
+    @mcp.tool()
+    async def edit_report(ctx: Context, name: str, old_text: str, new_text: str,
+                          part: str = "report") -> dict:
+        """Replace one passage of a report (or of its log, `part="log"`). `old_text` must occur exactly once; give enough of it to be unique."""
+        user = caller(ctx, root)
+        with state.connect(root) as db:
+            try:
+                text = state.edit_report(db, user, name, PARTS.get(part, part), old_text, new_text)
+            except (LookupError, ValueError) as error:
+                raise ToolError(str(error))
+        return written(user, name, text)
+
+    @mcp.tool()
+    async def read_report(ctx: Context, name: str, part: str = "report") -> dict:
+        """The source text of a report of yours, or of its log. Read it only when you need to see it again: it costs its full length."""
+        found = own_report(caller(ctx, root), name)
+        if part not in PARTS:
+            raise ToolError("a report has the parts report and log, not %r" % part)
+        return {"report": name, "part": part, "text": found[PARTS[part]]}
+
     @mcp.tool(name="check_report")
-    async def check_report_text(ctx: Context, text: str) -> dict:
-        """Check that every `lit:` citation in a report names text the collection holds."""
-        caller(ctx, root)
+    async def check_report_tool(ctx: Context, name: str) -> dict:
+        """Check that every `lit:` citation in a report of yours names text the collection holds, that its references match its citations, and that it has a research log."""
+        found = own_report(caller(ctx, root), name)
         with tempfile.TemporaryDirectory() as scratch:
-            source = Path(scratch) / "report.source.md"
-            source.write_text(text, encoding="utf-8")
-            return check_report.check(source, root)
+            source = Path(scratch) / ("report" + render_report.SOURCE_SUFFIX)
+            source.write_text(found["text"], encoding="utf-8")
+            if found["log"].strip():
+                log = Path(scratch) / ("report" + render_report.LOG_SOURCE_SUFFIX)
+                log.write_text(found["log"], encoding="utf-8")
+            report = check_report.check(source, root)
+        del report["report"], report["literature_root"]  # paths of the scratch copy
+        report["research_log"] = bool(found["log"].strip())
+        report["broken_markers_in_log"] = check_report.check_markers(
+            check_report.markers_in(found["log"]), root)
+        report["ok"] = report["ok"] and not report["broken_markers_in_log"]
+        return report
 
     @mcp.tool(name="render_report")
-    async def render_report_text(ctx: Context, text: str) -> dict:
-        """Turn the `lit:` markers of a report into links to the server's reader. Unresolved markers are left as they are and listed."""
-        caller(ctx, root)
+    async def render_report_tool(ctx: Context, name: str) -> dict:
+        """The link to the rendered report, where every `lit:` marker opens the place it cites in the server's reader. Lists the markers that resolve to nothing."""
+        user = caller(ctx, root)
+        found = own_report(user, name)
         collection = render_report.Collection(root, paths.flavor(root))
-        rendered, unresolved = render_report.render_text(
-            text, collection, root, base=base_url.rstrip("/") + "/lit")
-        return {"text": rendered, "unresolved": sorted(set(unresolved))}
+        unresolved = set()
+        for part in PARTS.values():
+            unresolved.update(render_report.render_text(found[part], collection, root)[1])
+        url = "%s/reports/%s/%s" % (base_url.rstrip("/"), user, name)
+        return {"url": url, "log": url + "?part=log", "download": url + ".md",
+                "unresolved": sorted(unresolved)}
 
     return mcp
 
