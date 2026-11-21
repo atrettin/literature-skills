@@ -1,4 +1,4 @@
-"""What the server knows beyond the papers: users, libraries and ingest jobs.
+"""What the server knows beyond the papers: users, libraries, ingest jobs and reports.
 
 The papers stay files in the collection, in the format every `litdb` command
 reads. This is the rest, in one SQLite file inside the collection directory, so
@@ -58,6 +58,16 @@ CREATE TABLE IF NOT EXISTS jobs (
     report   TEXT,                   -- the JSON add-paper printed, or the error
     created  TEXT NOT NULL,
     finished TEXT
+);
+CREATE TABLE IF NOT EXISTS reports (
+    owner   TEXT NOT NULL REFERENCES users(name),
+    name    TEXT NOT NULL,
+    text    TEXT NOT NULL DEFAULT '',  -- the report source, with its lit: markers
+    log     TEXT NOT NULL DEFAULT '',  -- the research log, appended to during the research
+    public  INTEGER NOT NULL DEFAULT 0,
+    created TEXT NOT NULL,
+    updated TEXT NOT NULL,
+    PRIMARY KEY (owner, name)
 );
 """
 
@@ -184,6 +194,86 @@ def remove_from_library(db: sqlite3.Connection, library: str, slug: str) -> None
     """Take a paper out of a library. The collection keeps it."""
     with db:
         db.execute("DELETE FROM library_papers WHERE library = ? AND slug = ?", (library, slug))
+
+
+# --------------------------------------------------------------------------
+# reports
+# --------------------------------------------------------------------------
+
+PARTS = ("text", "log")  # the report and its research log, as columns
+
+
+def report(db: sqlite3.Connection, owner: str, name: str) -> sqlite3.Row | None:
+    return db.execute("SELECT * FROM reports WHERE owner = ? AND name = ?",
+                      (owner, name)).fetchone()
+
+
+def visible_reports(db: sqlite3.Connection, user: str) -> list[sqlite3.Row]:
+    """The user's own reports and everyone's public ones, newest first."""
+    return db.execute(
+        "SELECT owner, name, public, updated, log != '' AS has_log FROM reports "
+        "WHERE owner = ? OR public ORDER BY updated DESC", (user,)).fetchall()
+
+
+def write_report(db: sqlite3.Connection, owner: str, name: str, part: str, text: str) -> None:
+    """Create a report, or replace one part of it: `text` or `log`."""
+    check_name(name)
+    if part not in PARTS:
+        raise ValueError("a report has the parts %s, not %r" % (", ".join(PARTS), part))
+    with db:
+        db.execute("INSERT OR IGNORE INTO reports (owner, name, created, updated) "
+                   "VALUES (?, ?, ?, ?)", (owner, name, now(), now()))
+        db.execute("UPDATE reports SET %s = ?, updated = ? WHERE owner = ? AND name = ?" % part,
+                   (text, now(), owner, name))
+
+
+def append_log(db: sqlite3.Connection, owner: str, name: str, entry: str) -> str:
+    """Add an entry to the end of a report's research log, and return the log."""
+    found = report(db, owner, name)
+    log = found["log"] if found else ""
+    log = (log.rstrip("\n") + "\n\n" if log.strip() else "") + entry.strip("\n") + "\n"
+    write_report(db, owner, name, "log", log)
+    return log
+
+
+def edit_report(db: sqlite3.Connection, owner: str, name: str, part: str, old: str,
+                new: str) -> str:
+    """Replace the one place in a part of a report that reads `old`, and return the part."""
+    found = report(db, owner, name)
+    if found is None:
+        raise LookupError("You have no report named %s." % name)
+    if part not in PARTS:
+        raise ValueError("a report has the parts %s, not %r" % (", ".join(PARTS), part))
+    count = found[part].count(old) if old else 0
+    if count == 0:
+        raise LookupError("The %s of %s does not contain that text." % (part, name))
+    if count > 1:
+        raise ValueError("The %s of %s contains that text %d times; give more of it."
+                         % (part, name, count))
+    text = found[part].replace(old, new, 1)
+    write_report(db, owner, name, part, text)
+    return text
+
+
+def owned_report(db: sqlite3.Connection, owner: str, name: str, user: str) -> None:
+    found = report(db, owner, name)
+    if found is None:
+        raise LookupError("There is no report %s/%s." % (owner, name))
+    if owner != user:
+        raise PermissionError("Only %s, who owns %s, can change it." % (owner, name))
+
+
+def set_public(db: sqlite3.Connection, owner: str, name: str, user: str, public: bool) -> None:
+    owned_report(db, owner, name, user)
+    with db:
+        db.execute("UPDATE reports SET public = ? WHERE owner = ? AND name = ?",
+                   (int(public), owner, name))
+
+
+def delete_report(db: sqlite3.Connection, owner: str, name: str, user: str) -> None:
+    owned_report(db, owner, name, user)
+    with db:
+        db.execute("DELETE FROM reports WHERE owner = ? AND name = ?", (owner, name))
 
 
 # --------------------------------------------------------------------------

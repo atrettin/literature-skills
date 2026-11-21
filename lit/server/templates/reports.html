@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block main %}
+<h1>Reports</h1>
+<p>Your reports and everyone's public ones. An agent writes a report over MCP; a report is private to its owner until they make it public.</p>
+{% if reports %}
+<table>
+<thead><tr><th>Report</th><th>Owner</th><th>Updated</th><th>Research log</th><th>Visibility</th><th></th></tr></thead>
+<tbody>
+{% for r in reports %}
+<tr>
+  <td><a href="{{ base }}/reports/{{ r.owner }}/{{ r.name }}">{{ r.name }}</a></td>
+  <td>{{ r.owner }}</td><td>{{ r.updated }}</td>
+  <td>{% if r.has_log %}<a href="{{ base }}/reports/{{ r.owner }}/{{ r.name }}?part=log">log</a>{% endif %}</td>
+  <td>{% if r.owner == user %}
+    <form method="post" action="{{ base }}/reports/visibility" class="inline">
+      <input type="hidden" name="owner" value="{{ r.owner }}"><input type="hidden" name="name" value="{{ r.name }}">
+      <input type="hidden" name="public" value="{{ 0 if r.public else 1 }}">
+      {{ "public" if r.public else "private" }} <button>Make {{ "private" if r.public else "public" }}</button>
+    </form>
+  {% else %}public{% endif %}</td>
+  <td>{% if r.owner == user %}
+    <form method="post" action="{{ base }}/reports/delete" data-confirm="Delete the report {{ r.name }} and its research log?">
+      <input type="hidden" name="owner" value="{{ r.owner }}"><input type="hidden" name="name" value="{{ r.name }}"><button>Delete</button>
+    </form>
+  {% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}
+<p>No reports yet.</p>
+{% endif %}
+{% endblock %}

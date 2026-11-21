@@ -280,7 +280,7 @@ def check(report_path: Path, root: Path) -> dict:
         }
     )
 
-    return {
+    report = {
         "report": str(report_path),
         "literature_root": str(root),
         # What the report cites, whether or not the collection holds it, and
@@ -300,6 +300,19 @@ def check(report_path: Path, root: Path) -> dict:
         # the report does not make has nowhere else to look.
         "research_log": research_log(report_path),
     }
+    report["ok"] = not (
+        report["broken_markers"]
+        or report["unknown_tags"]
+        or report["cite_markers"]
+        or report["cited_but_not_listed"]
+        or report["listed_but_not_cited"]
+        or report["unflagged_unverified"]
+        # A report that attributes nothing to anything has nothing to audit,
+        # and a claim about the literature that names no paper is the failure
+        # every other check here is a special case of.
+        or not report["citations"]
+    )
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -316,18 +329,6 @@ def main(argv: list[str] | None = None) -> int:
     except RuntimeError as error:
         return cli.fail(str(error), cli.ABSENT)
 
-    report["ok"] = not (
-        report["broken_markers"]
-        or report["unknown_tags"]
-        or report["cite_markers"]
-        or report["cited_but_not_listed"]
-        or report["listed_but_not_cited"]
-        or report["unflagged_unverified"]
-        # A report that attributes nothing to anything has nothing to audit,
-        # and a claim about the literature that names no paper is the failure
-        # every other check here is a special case of.
-        or not report["citations"]
-    )
     cli.emit(report)
     return 0 if report["ok"] else 1
 

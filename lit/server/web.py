@@ -1,4 +1,4 @@
-"""The web pages: sign in, the list of papers, and the reader.
+"""The web pages: sign in, the list of papers, the reader and the reports.
 
 The reader serves the collection's own `vscode` render. A chapter there is
 Markdown with `<a id>` anchors and relative links (`../../references/x.md`,
@@ -30,7 +30,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-from lit import paths, scope, search_literature
+from lit import paths, render_report, scope, search_literature
 from lit.server import state
 
 HERE = Path(__file__).parent
@@ -51,6 +51,13 @@ CSP = (
 templates = Jinja2Templates(directory=HERE / "templates")
 markdown = (
     MarkdownIt("commonmark", {"html": True})
+    .use(dollarmath_plugin, double_inline=True)
+    .enable("table")
+)
+# A report is written by a user's agent, not converted from arXiv, and a public
+# one is read by everyone: its HTML stays text.
+report_markdown = (
+    MarkdownIt("commonmark", {"html": False})
     .use(dollarmath_plugin, double_inline=True)
     .enable("table")
 )
@@ -429,6 +436,73 @@ async def reader(request: Request, user: str) -> Response:
                 title=title_of(text, target.stem), contents=contents, libraries=libraries)
 
 
+@signed_in
+async def report_list(request: Request, user: str) -> Response:
+    with state.connect(request.app.state.root) as db:
+        rows = state.visible_reports(db, user)
+    return page(request, "reports.html", user, reports=rows)
+
+
+def readable_report(request: Request, user: str):
+    """The report the path names, if this user may read it; else None.
+
+    A private report is as absent to everyone else as one that does not exist.
+    """
+    owner, name = request.path_params["owner"], request.path_params["name"]
+    with state.connect(request.app.state.root) as db:
+        found = state.report(db, owner, name)
+    if found is None or (owner != user and not found["public"]):
+        return None
+    return found
+
+
+def rendered_report(request: Request, found, base: str) -> str:
+    root: Path = request.app.state.root
+    part = "log" if request.query_params.get("part") == "log" else "text"
+    collection = render_report.Collection(root, paths.flavor(root))
+    return render_report.render_text(found[part], collection, root, base=base)[0]
+
+
+@signed_in
+async def show_report(request: Request, user: str) -> Response:
+    found = readable_report(request, user)
+    if found is None:
+        return PlainTextResponse("Not found.", status_code=404)
+    text = rendered_report(request, found, request.scope.get("root_path", "") + "/lit")
+    log = request.query_params.get("part") == "log"
+    return page(request, "report.html", user, body=report_markdown.render(text), report=found,
+                log=log, title=title_of(text, found["name"]))
+
+
+@signed_in
+async def download_report(request: Request, user: str) -> Response:
+    found = readable_report(request, user)
+    if found is None:
+        return PlainTextResponse("Not found.", status_code=404)
+    text = rendered_report(request, found, request.app.state.base_url.rstrip("/") + "/lit")
+    suffix = ".research-log.md" if request.query_params.get("part") == "log" else ".md"
+    return Response(text, media_type="text/markdown; charset=utf-8", headers={
+        "content-disposition": 'attachment; filename="%s%s"' % (found["name"], suffix)})
+
+
+@signed_in
+async def change_report(request: Request, user: str) -> Response:
+    """Make a report public or private, or delete it: its owner's choice."""
+    form = await request.form()
+    owner, name = str(form.get("owner", "")), str(form.get("name", ""))
+    with state.connect(request.app.state.root) as db:
+        try:
+            if request.path_params["action"] == "delete":
+                state.delete_report(db, owner, name, user)
+            else:
+                state.set_public(db, owner, name, user, form.get("public") == "1")
+        except LookupError as error:
+            return message(request, user, str(error), 404)
+        except PermissionError as error:
+            return message(request, user, str(error), 403)
+    return RedirectResponse(request.scope.get("root_path", "") + "/reports", status_code=303)
+
+
 class SecurityHeaders:
     """Adds the Content-Security-Policy to every HTTP response."""
 
@@ -497,9 +571,14 @@ def create_app(root: Path, base_url: str = "http://127.0.0.1:8000") -> Starlette
         Route("/jobs", jobs),
         Route("/jobs/{id:int}/retry", retry, methods=["POST"]),
         Route("/lit/{path:path}", reader),
+        Route("/reports", report_list),
+        Route("/reports/{action:str}", change_report, methods=["POST"]),
+        Route("/reports/{owner}/{name}.md", download_report),
+        Route("/reports/{owner}/{name}", show_report),
         Route("/mcp", tools.BearerGuard(StreamableHTTPASGIApp(mcp.session_manager), root)),
         Mount("/static", StaticFiles(directory=HERE / "static"), name="static"),
     ], middleware=[Middleware(SecurityHeaders)], lifespan=lifespan)
     app.state.root = root
+    app.state.base_url = base_url
     app.state.worker = None  # until the lifespan starts it; tests run without one
     return app

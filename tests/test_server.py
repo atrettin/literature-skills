@@ -268,5 +268,67 @@ def test_mcp_needs_a_token_and_reads_the_callers_library(tmp_path):
         failed, why = mcp_call(client, token, "search", {"phrase": "the", "library": "empty"})
         assert failed and "lists no papers yet" in why
 
-        _, rendered = mcp_call(client, token, "render_report", {"text": "([§](lit:%s))" % first})
-        assert rendered["text"] == "([§](https://example.org/lit-server/lit/%s/INDEX.md))" % first
+
+
+def test_an_agent_keeps_its_report_and_log_on_the_server(tmp_path):
+    root = tmp_path / "collection"
+    shutil.copytree(FIXTURE, root)
+    render.render_collection(root, "vscode")
+    first = paths.papers_on_disk(root)[0]
+    with state.connect(root) as db:
+        token = state.add_user(db, "alice")
+    with TestClient(web.create_app(root, "https://example.org/lit-server")) as client:
+        mcp_call(client, token, "append_log", {"name": "q", "entry": "searched one"})
+        _, logged = mcp_call(client, token, "append_log", {"name": "q", "entry": "read two"})
+        assert logged["words"] == 4
+        _, read = mcp_call(client, token, "read_report", {"name": "q", "part": "log"})
+        assert read["text"] == "searched one\n\nread two\n"
+
+        text = "# Q\n\nA claim ([§](lit:%s)). Another ([§](lit:nobody_1999_x)).\n" % first
+        _, written = mcp_call(client, token, "write_report", {"name": "q", "text": text})
+        assert "text" not in written
+        failed, why = mcp_call(client, token, "edit_report",
+                               {"name": "q", "old_text": "absent", "new_text": "x"})
+        assert failed and "does not contain" in why
+        failed, why = mcp_call(client, token, "edit_report",
+                               {"name": "q", "old_text": "([§]", "new_text": "x"})
+        assert failed and "2 times" in why
+
+        _, checked = mcp_call(client, token, "check_report", {"name": "q"})
+        assert not checked["ok"] and checked["research_log"] and "report" not in checked
+        assert [m["marker"] for m in checked["broken_markers"]] == ["lit:nobody_1999_x"]
+
+        mcp_call(client, token, "edit_report", {"name": "q", "old_text": " Another ([§](lit:nobody_1999_x)).",
+                                                "new_text": ""})
+        _, rendered = mcp_call(client, token, "render_report", {"name": "q"})
+        assert rendered == {"url": "https://example.org/lit-server/reports/alice/q",
+                            "log": "https://example.org/lit-server/reports/alice/q?part=log",
+                            "download": "https://example.org/lit-server/reports/alice/q.md",
+                            "unresolved": []}
+
+        sign_in(client, token)
+        download = client.get("/reports/alice/q.md").text
+        assert "(https://example.org/lit-server/lit/%s/INDEX.md)" % first in download
+
+
+def test_a_report_is_private_until_its_owner_shares_it(served):
+    root, client, token = served
+    with state.connect(root) as db:
+        bob = state.add_user(db, "bob")
+        state.write_report(db, "alice", "q", "text", "# Q\n\n<script>alert(1)</script>\n")
+    sign_in(client, bob)
+    assert client.get("/reports/alice/q").status_code == 404
+    assert "alice" not in client.get("/reports").text.split("<main>")[1]
+    assert client.post("/reports/visibility",
+                       data={"owner": "alice", "name": "q", "public": "1"}).status_code == 403
+    assert client.post("/reports/delete", data={"owner": "alice", "name": "q"}).status_code == 403
+
+    sign_in(client, token)
+    client.post("/reports/visibility", data={"owner": "alice", "name": "q", "public": "1"})
+    sign_in(client, bob)
+    shown = client.get("/reports/alice/q").text
+    assert "&lt;script&gt;" in shown and "<script>alert" not in shown
+
+    sign_in(client, token)
+    client.post("/reports/delete", data={"owner": "alice", "name": "q"})
+    assert client.get("/reports/alice/q").status_code == 404
