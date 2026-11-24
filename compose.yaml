@@ -1,0 +1,15 @@
+services:
+  literature:
+    build: .
+    restart: unless-stopped
+    environment:
+      BASE_URL: ${BASE_URL:-}
+      ROOT_PATH: ${ROOT_PATH:-}
+    ports:
+      - "${PUBLISH:-127.0.0.1:8000}:8000"
+    volumes:
+      # The collection, its users, libraries, ingest jobs and reports.
+      - literature:/data
+
+volumes:
+  literature:
