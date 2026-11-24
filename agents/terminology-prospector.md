@@ -22,19 +22,20 @@ The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
 set, it is `literature/` in the project. The paper is the directory named by the
 slug that you were given.
 
+When the caller says the paper is on the literature server, there are no files
+to look for: the tools of the `literature` server stand in for them in the
+steps below. `toc` with the slug and `all_anchors` is `paper.json`; `show` with
+`<slug>/<stem>` is a chapter, every block with its anchor. Call `show` for every
+chapter `toc` lists, and when its answer is `truncated`, again from its
+`resume_at`, until you have read them all. `search` with the slug as `scope`
+stands in for `Grep`.
+
 1. Read its `paper.json`.
 2. Read each chapter in `text/`. Read all of them. `paper.json` says how
    long each chapter is and what it is called, and neither says where the
    subject is named a second way.
 3. Read the `figures` list of `paper.json`. A caption names the thing it shows,
    and it often uses the short name where the text uses the long one.
-
-When the caller says the paper is on the literature server, you have no files:
-the tools of the `literature` server stand in for them. `toc` with the slug and
-`all_anchors` is `paper.json`; `show` with `<slug>/<stem>` is a chapter, every
-block with its anchor. Call `show` for every chapter `toc` lists, and when it
-cuts at `max_words`, again from the anchor it names, until you have read them
-all. `search` with the slug as `scope` stands in for `Grep`.
 
 Report one table, and nothing else. One row for each name, and at most
 `MAX_PROPOSED_TERMS` rows, which the caller gives you. Fill this shape:

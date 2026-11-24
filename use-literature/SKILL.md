@@ -35,7 +35,8 @@ place before the first search or ingest, and stay with it for the whole task:
    the project's `LITERATURE_LIBRARY` names a library on the server, so work
    there. An error that says the project works on its local collection means
    the local folder.
-4. Otherwise ask the user once, naming both: the folder at its path, or the
+4. Otherwise — `chosen_by: personal` is nobody's choice — ask the user once,
+   naming both: the folder at its path, or the
    server and the library `libraries` gives as default, with its number of
    papers from `papers`. Add that `LITERATURE_LIBRARY` in the project's
    environment saves the question next time.
