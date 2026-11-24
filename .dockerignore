@@ -1,0 +1,5 @@
+# The image gets the code only. Papers are copyrighted and never go into it.
+*
+!pyproject.toml
+!lit/
+**/__pycache__

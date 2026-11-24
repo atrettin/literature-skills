@@ -25,3 +25,5 @@ literature/
 *.eps
 
 /reports/
+# A server host's own settings for compose (see .env.example).
+/.env

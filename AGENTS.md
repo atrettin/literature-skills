@@ -46,6 +46,7 @@ This file provides guidance to OpenCode agents working in this repository.
 - **`README.md`**: Overview of skills and installation.
 - **`docs/commands.md`**: Detailed command reference.
 - **`docs/developing.md`**: Development guidelines and module layout.
+- **`docs/server.md`**: The literature server (`litdb serve`): Docker, users, connecting an agent.
 - **`TUNING.md`**: Parameters affecting answer quality.
 
 ## Testing Quirks

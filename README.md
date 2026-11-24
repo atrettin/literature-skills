@@ -147,6 +147,13 @@ A shared collection usually sits outside any repository. `litdb init` then
 has no `.gitignore` to write, says so, and states that the copyright still
 holds.
 
+## A literature server for a group
+
+`litdb serve` runs one collection for a group, with web pages for people and
+MCP for agents, in a Docker container. The skills work through it as well as
+on a local folder. [docs/server.md](docs/server.md) says how to run it and how
+to connect an agent.
+
 ## Ranking the search results
 
 `find-papers` orders its results with a cross-encoder when
@@ -169,6 +176,7 @@ produced it, so a reader always knows which of the two they have.
 | [docs/papers.md](docs/papers.md) | What a paper is stored as, and the anchors a citation reaches |
 | [docs/rendering.md](docs/rendering.md) | The flavors, `litdb render`, and the `lit:` markers a report cites with |
 | [docs/references.md](docs/references.md) | Citations, the reference store, and what makes one verifiable |
+| [docs/server.md](docs/server.md) | The literature server: Docker, users, the reverse proxy, and connecting an agent |
 | [docs/developing.md](docs/developing.md) | The layout of `lit/`, the tests, and the type checker |
 | [docs/evaluation.md](docs/evaluation.md) | Measuring whether a change to the skills made the answers better |
 | [TUNING.md](TUNING.md) | Every parameter that decides how good an answer is, and what moving it does |

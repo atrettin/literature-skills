@@ -229,3 +229,4 @@ echo "  OpenCode, in ~/.config/opencode/opencode.json:"
 echo '    "mcp": {"literature": {"type": "remote", "url": "<server-url>/mcp", "oauth": false,'
 echo '      "headers": {"Authorization": "Bearer {env:LITERATURE_TOKEN}",'
 echo '                  "X-Literature-Library": "{env:LITERATURE_LIBRARY}"}}}'
+echo "docs/server.md has the details, and how to run a server."
