@@ -26,34 +26,45 @@ from lit.server import state
 
 INSTRUCTIONS = """\
 A shared collection of scientific papers, converted from their arXiv TeX into
-chapters of text. Each user has libraries: lists of papers from the collection.
-Your own library is the default scope of every tool; name another with
-`library`, or give `scope` explicitly (`disk` is the whole collection).
+chapters of text, with libraries: lists of papers from the collection.
 
-Start with `papers` to see what a library holds, then `toc` for one paper and
-`show` to read an address that `toc` or `search` gave you. An address is
-`<slug>`, `<slug>/<chapter>`, or `<slug>/<chapter>#<anchor>`.
-
-Reports live on the server, under a name you choose. Keep a research log while
-you research: `append_log` one entry after each step (what you searched, what
-you read, what stayed open). Write the report with `write_report`, citing a
-place as ([§2](lit:<slug>/<chapter>#<anchor>)). Fix it with `edit_report`,
-which changes one passage: never send the whole report again to fix a detail.
-Then run `check_report`, fix what it lists, and run `render_report`, which
-gives the link to the rendered report that you hand to the user.
+The tools are the `litdb` commands the literature skills describe, under the
+same names: `litdb X --some-opt v` is the tool `X(some_opt=v)`, and the `exit`
+field of the answer is the exit status. `--scope` becomes `scope`, or
+`library` to search a library; the default library is the project's
+(`LITERATURE_LIBRARY`) or else yours, and `libraries` says which. There are no
+files here: read a paper with `toc`, then `show`. Reports and research logs
+live on the server: `append_log`, `write_report`, `edit_report`,
+`check_report`, `render_report`.
 """
+
+
+def headers_of(ctx: Context):
+    request = ctx.request_context.request  # the Starlette request, over HTTP
+    return request.headers if request is not None else {}
 
 
 def caller(ctx: Context, root: Path) -> str:
     """The user whose bearer token this request carries."""
-    request = ctx.request_context.request  # the Starlette request, over HTTP
-    headers = request.headers if request is not None else {}
+    headers = headers_of(ctx)
     scheme, _, token = (headers.get("authorization") or "").partition(" ")
     with state.connect(root) as db:
         user = state.user_for(db, token.strip()) if scheme.lower() == "bearer" else None
     if user is None:
         raise ToolError("no valid bearer token")
+    if project_library(ctx) == state.LOCAL:
+        raise ToolError("this project works on its local collection (LITERATURE_LIBRARY=local); "
+                        "use `litdb` there, not the literature server")
     return user
+
+
+def project_library(ctx: Context) -> str:
+    """The library the project chose with LITERATURE_LIBRARY, which its MCP client sends."""
+    return (headers_of(ctx).get("x-literature-library") or "").strip()
+
+
+def default_library(ctx: Context, user: str) -> str:
+    return project_library(ctx) or user
 
 
 async def litdb(root: Path, command: str, *args: str) -> dict:
@@ -70,6 +81,16 @@ async def litdb(root: Path, command: str, *args: str) -> dict:
         "exit": done.returncode, "result": report}
 
 
+def named(arxiv_id: str | None, doi: str | None, recid: str | None) -> list[str]:
+    """A paper named by arXiv id, DOI or INSPIRE record, as the commands take it."""
+    return [*(["--doi=%s" % doi] if doi else []), *(["--recid=%s" % recid] if recid else []),
+            *(["--", arxiv_id] if arxiv_id else [])]
+
+
+# The longest an `ingest_status` call waits for a job. Below the proxy's read
+# timeout, and long enough that a ten-minute ingest takes two or three calls.
+MAX_WAIT_S = 300
+
 # The parts of a report, as an agent names them, and the columns that hold them.
 PARTS = {"report": "text", "log": "log"}
 
@@ -78,13 +99,15 @@ def build(root: Path, base_url: str, wake) -> MCPServer:
     """The MCP server for one collection. `wake` starts the ingest worker."""
     mcp = MCPServer("literature", instructions=INSTRUCTIONS)
 
-    def scope_of(user: str, library: str | None, scope: list[str] | None) -> list[str]:
+    def scope_of(ctx: Context, user: str, library: str | None,
+                 scope: list[str] | None) -> list[str]:
         if scope:
             return scope
-        name = library or user
+        name = library or default_library(ctx, user)
         with state.connect(root) as db:
             if not state.library_exists(db, name):
-                raise ToolError("there is no library named %s" % name)
+                origin = "" if library or not project_library(ctx) else " (from LITERATURE_LIBRARY)"
+                raise ToolError("there is no library named %s%s" % (name, origin))
             held = set(paths.papers_on_disk(root))
             slugs = [slug for slug in state.library_slugs(db, name) if slug in held]
         if not slugs:  # an empty --scope would mean the whole collection
@@ -93,26 +116,27 @@ def build(root: Path, base_url: str, wake) -> MCPServer:
 
     @mcp.tool()
     async def libraries(ctx: Context) -> dict:
-        """Every library: its name, owner and number of papers, and which one is yours."""
+        """Every library: its name, owner and number of papers; which one is yours, and which is the default and who chose it (the project's LITERATURE_LIBRARY, or your personal one)."""
         user = caller(ctx, root)
         with state.connect(root) as db:
             rows = [dict(row) for row in state.libraries(db)]
-        return {"you": user, "default_library": user, "libraries": rows}
+        return {"you": user, "default_library": default_library(ctx, user),
+                "chosen_by": "project" if project_library(ctx) else "personal", "libraries": rows}
 
     @mcp.tool()
     async def papers(ctx: Context, library: str | None = None) -> dict:
-        """The papers a library lists (default: yours), with slug, title, authors and year."""
+        """The papers a library lists (default: the default library), with slug, title, authors and year."""
         user = caller(ctx, root)
         found = []
-        for slug in scope_of(user, library, None):
+        for slug in scope_of(ctx, user, library, None):
             paper = paths.read_paper(root, slug)
             found.append({"slug": slug, "title": paper.get("title"), "year": paper.get("year"),
                           "authors": (paper.get("authors") or [])[:3]})
-        return {"library": library or user, "papers": found}
+        return {"library": library or default_library(ctx, user), "papers": found}
 
     @mcp.tool()
     async def search(ctx: Context, phrase: str, library: str | None = None,
-                     scope: list[str] | None = None, approx: bool = False,
+                     scope: list[str] | None = None, approx: bool = False, regex: bool = False,
                      context: int = 0, max_results: int = 20) -> dict:
         """Find a phrase in the text of the papers, and give the address of every block that matches.
 
@@ -123,18 +147,19 @@ def build(root: Path, base_url: str, wake) -> MCPServer:
         which is how an equation next to a matching sentence reaches you.
         """
         user = caller(ctx, root)
-        args = ["--scope", *scope_of(user, library, scope),
-                "--context=%d" % context, "--max-results=%d" % max_results]
-        return await litdb(root, "search", *args, *(["--approx"] if approx else []), "--", phrase)
+        args = ["--scope", *scope_of(ctx, user, library, scope),
+                "--context=%d" % context, "--max-results=%d" % max_results,
+                *(["--approx"] if approx else []), *(["--regex"] if regex else [])]
+        return await litdb(root, "search", *args, "--", phrase)
 
     @mcp.tool()
-    async def show(ctx: Context, address: str, context: int = 0, anchors_only: bool = False,
+    async def show(ctx: Context, target: str, context: int = 0, anchors_only: bool = False,
                    max_words: int = 2000) -> dict:
-        """Read what stands at an address: a block, a span, a section or a whole chapter."""
+        """Read what stands at an address (`target`): a block, a span, a section or a whole chapter. When `max_words` cuts the answer, it says the anchor to resume from."""
         caller(ctx, root)
         args = ["--context=%d" % context, "--max-words=%d" % max_words]
         return await litdb(root, "show", *args, *(["--anchors-only"] if anchors_only else []),
-                           "--", address)
+                           "--", target)
 
     @mcp.tool()
     async def toc(ctx: Context, slug: str, depth: int = 2, all_anchors: bool = False) -> dict:
@@ -146,34 +171,53 @@ def build(root: Path, base_url: str, wake) -> MCPServer:
     @mcp.tool()
     async def lookup(ctx: Context, tags: list[str] | None = None, search: str | None = None,
                      doi: str | None = None, arxiv: str | None = None,
-                     cited_by: str | None = None) -> dict:
+                     cited_by: str | None = None, all_authors: bool = False) -> dict:
         """What the collection knows about a cited work: by citation tag, by DOI or arXiv id, by a substring of its title or authors, or every work a paper cites (`cited_by=<slug>`)."""
         caller(ctx, root)
         args = ["--%s=%s" % (name, value) for name, value in
                 (("search", search), ("doi", doi), ("arxiv", arxiv), ("cited-by", cited_by)) if value]
+        args += ["--all-authors"] if all_authors else []
         return await litdb(root, "lookup", *args, "--", *(tags or []))
 
     @mcp.tool()
-    async def citations(ctx: Context, arxiv_id: str, direction: str = "citing",
+    async def citations(ctx: Context, arxiv_id: str | None = None, doi: str | None = None,
+                        recid: str | None = None, direction: str = "citing",
                         sort: str = "mostcited", max_results: int = 20) -> dict:
         """The papers that cite a paper (`citing`), the works it draws on (`cited`), or `both`, from INSPIRE-HEP. Marks the ones the collection holds."""
         caller(ctx, root)
         return await litdb(root, "citations", "--direction=%s" % direction, "--sort=%s" % sort,
-                           "--max-results=%d" % max_results, "--", arxiv_id)
+                           "--max-results=%d" % max_results, *named(arxiv_id, doi, recid))
 
     @mcp.tool()
-    async def find(ctx: Context, topic: str, categories: list[str] | None = None,
+    async def overlap(ctx: Context, arxiv_id: str | None = None, doi: str | None = None,
+                      recid: str | None = None, library: str | None = None,
+                      scope: list[str] | None = None, resolve: bool = False) -> dict:
+        """How much a candidate paper adds to a library (default: the default library): which of its references and citers the library already holds. Uses INSPIRE-HEP."""
+        user = caller(ctx, root)
+        return await litdb(root, "overlap", "--scope", *scope_of(ctx, user, library, scope),
+                           *(["--resolve"] if resolve else []), *named(arxiv_id, doi, recid))
+
+    @mcp.tool()
+    async def terminology(ctx: Context, topic: str, library: str | None = None,
+                          scope: list[str] | None = None, corpus: str = "both") -> dict:
+        """The other names the papers of a library use for a subject, with where each one occurs."""
+        user = caller(ctx, root)
+        return await litdb(root, "terminology", "--topic=%s" % topic, "--corpus=%s" % corpus,
+                           "--scope", *scope_of(ctx, user, library, scope))
+
+    @mcp.tool()
+    async def find(ctx: Context, topic: str, category: list[str] | None = None,
                    since: int | None = None, max_results: int = 15, kind: str = "any",
                    sort: str = "relevance") -> dict:
         """Search arXiv abstracts for a subject, ranked against it, and mark the papers the collection holds. Write the topic as a full phrase. Takes several seconds."""
         caller(ctx, root)
         args = ["--topic=%s" % topic, "--max-results=%d" % max_results, "--kind=%s" % kind,
-                "--sort=%s" % sort, *["--category=%s" % c for c in categories or []]]
+                "--sort=%s" % sort, *["--category=%s" % c for c in category or []]]
         return await litdb(root, "find", *args, *(["--since=%d" % since] if since else []))
 
     @mcp.tool()
     async def add(ctx: Context, arxiv_ids: list[str], library: str | None = None) -> dict:
-        """Add papers to a library (default: yours) by arXiv identifier.
+        """Add papers to a library (default: the default library) by arXiv identifier.
 
         A paper the collection holds is listed at once. Any other is queued for
         ingest, which takes minutes; poll `ingest_status` with the job id.
@@ -183,23 +227,30 @@ def build(root: Path, base_url: str, wake) -> MCPServer:
         with state.connect(root) as db:
             for argument in arxiv_ids:
                 try:
-                    outcome, what = state.add_paper(db, root, argument, library or user, user)
+                    outcome, what = state.add_paper(db, root, argument,
+                                                    library or default_library(ctx, user), user)
                 except ValueError as error:
                     outcome, what = "refused", str(error)
                 results.append({"arxiv_id": argument, "outcome": outcome,
                                 ("slug" if outcome == "listed" else "job" if outcome == "queued"
                                  else "error"): what})
         wake()
-        return {"library": library or user, "results": results}
+        return {"library": library or default_library(ctx, user), "results": results}
 
     @mcp.tool()
-    async def ingest_status(ctx: Context, job: int | None = None) -> dict:
-        """The state of one ingest job (queued, running, done or failed), or of your 20 most recent."""
+    async def ingest_status(ctx: Context, job: int | None = None, wait: int = 0) -> dict:
+        """The state of one ingest job (queued, running, done or failed), or of your 20 most recent. With `job`, `wait` waits up to that many seconds (at most 300) for the job to finish, so one call replaces many polls."""
         user = caller(ctx, root)
+        if job is not None:
+            deadline = anyio.current_time() + min(max(wait, 0), MAX_WAIT_S)
+            while True:
+                with state.connect(root) as db:
+                    found = state.job(db, job)
+                if not found or found["status"] in ("done", "failed") \
+                        or anyio.current_time() >= deadline:
+                    return {"jobs": [found] if found else []}
+                await anyio.sleep(2)
         with state.connect(root) as db:
-            if job is not None:
-                found = state.job(db, job)
-                return {"jobs": [found] if found else []}
             rows = [row for row in state.jobs(db) if row["user"] == user][:20]
         return {"jobs": rows}
 

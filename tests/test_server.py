@@ -237,10 +237,12 @@ def test_a_journal_reference_splits_into_its_fields():
     assert "title = {{R\\&D}}" in entry and entry.startswith("@article{k,")
 
 
-def mcp_call(client, token, name, arguments):
+def mcp_call(client, token, name, arguments, library=None):
     import json
-    response = client.post("/mcp", headers={
-        "Authorization": "Bearer %s" % token, "Accept": "application/json, text/event-stream"},
+    headers = {"Authorization": "Bearer %s" % token, "Accept": "application/json, text/event-stream"}
+    if library is not None:
+        headers["X-Literature-Library"] = library
+    response = client.post("/mcp", headers=headers,
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
               "params": {"name": name, "arguments": arguments}})
     result = response.json()["result"]
@@ -332,3 +334,73 @@ def test_a_report_is_private_until_its_owner_shares_it(served):
     sign_in(client, token)
     client.post("/reports/delete", data={"owner": "alice", "name": "q"})
     assert client.get("/reports/alice/q").status_code == 404
+
+
+# The tool each command is, and the module whose parser defines the command.
+WRAPPED = {"search": "search_literature", "show": "show_text", "toc": "toc",
+           "lookup": "reference_lookup", "citations": "inspire_citations", "find": "arxiv_discover",
+           "overlap": "collection_overlap", "terminology": "terminology_scan"}
+
+
+def test_every_tool_parameter_is_an_option_of_its_command(served):
+    """`litdb X --some-opt v` is the tool `X(some_opt=v)`: the skills rely on it."""
+    import importlib
+    _, client, token = served
+    with client:  # the MCP session manager runs in the lifespan
+        listed = client.post("/mcp", headers={
+            "Authorization": "Bearer %s" % token, "Accept": "application/json, text/event-stream"},
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()["result"]["tools"]
+    params = {tool["name"]: set(tool["inputSchema"]["properties"]) for tool in listed}
+    for tool, module in WRAPPED.items():
+        parser = importlib.import_module("lit." + module).build_parser()
+        names = {action.dest for action in parser._actions if not action.option_strings}
+        names |= {option[2:].replace("-", "_") for action in parser._actions
+                  for option in action.option_strings if option.startswith("--")}
+        assert params[tool] - {"library"} <= names, (tool, params[tool] - {"library"} - names)
+
+
+def test_the_project_chooses_the_default_library(tmp_path):
+    root = tmp_path / "collection"
+    shutil.copytree(FIXTURE, root)
+    render.render_collection(root, "vscode")
+    first, second = paths.papers_on_disk(root)[:2]
+    with state.connect(root) as db:
+        token = state.add_user(db, "alice")
+        state.add_to_library(db, "alice", first, "alice")
+        state.create_library(db, "thesis", "alice")
+        state.add_to_library(db, "thesis", second, "alice")
+        with pytest.raises(ValueError):
+            state.create_library(db, "local", "alice")
+    with TestClient(web.create_app(root)) as client:
+        _, listed = mcp_call(client, token, "papers", {}, library="thesis")
+        assert [p["slug"] for p in listed["papers"]] == [second]
+        _, found = mcp_call(client, token, "search", {"phrase": "the", "max_results": 1},
+                            library="thesis")
+        assert found["scope"]["papers"] == [second]
+        _, chosen = mcp_call(client, token, "libraries", {}, library="thesis")
+        assert (chosen["default_library"], chosen["chosen_by"]) == ("thesis", "project")
+
+        _, listed = mcp_call(client, token, "papers", {}, library="")
+        assert [p["slug"] for p in listed["papers"]] == [first]
+
+        failed, why = mcp_call(client, token, "papers", {}, library="nowhere")
+        assert failed and "LITERATURE_LIBRARY" in why
+        failed, why = mcp_call(client, token, "papers", {}, library="local")
+        assert failed and "local collection" in why
+
+        _, terms = mcp_call(client, token, "terminology", {"topic": "neural network"})
+        assert terms["exit"] in (0, 1) and "error" not in terms
+        failed, why = mcp_call(client, token, "overlap", {"arxiv_id": "1706.03762"},
+                               library="empty-and-absent")
+        assert failed and "no library named" in why
+
+
+def test_ingest_status_waits_for_the_job(served, monkeypatch):
+    root, client, token = served
+    slug = paths.papers_on_disk(root)[0]
+    monkeypatch.setattr(state, "ingest_command", fake_ingest(0, {"status": "ingested", "slug": slug}))
+    with client:  # the lifespan starts the worker
+        _, added = mcp_call(client, token, "add", {"arxiv_ids": ["2401.00003"]})
+        queued = added["results"][0]["job"]
+        _, status = mcp_call(client, token, "ingest_status", {"job": queued, "wait": 30})
+        assert status["jobs"][0]["status"] == "done"

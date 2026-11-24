@@ -22,6 +22,35 @@ set, it is `literature/` in the project. `litdb` reads the variable itself, thus
 you do not give `--literature-root`. Read and write the collection's files at
 that path.
 
+## The local folder or the literature server
+
+The papers can be in two places: the local folder above, or a shared server
+whose tools appear in your tool list under the name `literature`. Choose one
+place before the first search or ingest, and stay with it for the whole task:
+
+1. Only one of them exists: use it.
+2. The user named one in the task ("on the server", "in this project", a
+   library): use it.
+3. The project chose. Call the `libraries` tool: `chosen_by: project` means
+   the project's `LITERATURE_LIBRARY` names a library on the server, so work
+   there. An error that says the project works on its local collection means
+   the local folder.
+4. Otherwise ask the user once, naming both: the folder at its path, or the
+   server and the library `libraries` gives as default, with its number of
+   papers from `papers`. Add that `LITERATURE_LIBRARY` in the project's
+   environment saves the question next time.
+
+On the server, every `litdb` command in these skills is the tool of the same
+name: `litdb X --some-opt v` is the tool `X(some_opt=v)`, and the `exit` field
+of its answer is the exit status. `--scope` is `scope`, or `library` for a
+library; without either, a tool reads the default library. The server holds no
+files for you: where a skill says to read `paper.json` or a chapter, call `toc`
+and then `show`, and when `show` cuts at `max_words`, call it again from the
+anchor it names. A figure gives you its caption, not its image. Skip `litdb
+init`, `litdb render`, the flavor and `$LITERATURE_ROOT`: the server keeps its
+own collection. When you start a subagent to read a paper, tell it that the
+paper is on the literature server.
+
 ## The structure
 
 ```

@@ -3,6 +3,7 @@ name: terminology-prospector
 description: Reads one paper of the local collection in full and reports the names it uses for a subject, with the place that shows each one. Give it the subject and the slug, and the terms a scan already found. It calls no API, thus several can run at the same time.
 model-tier: large
 tools: Read, Grep, Glob
+mcp: toc, show, search
 edit: deny
 bash: deny
 ---
@@ -27,6 +28,13 @@ slug that you were given.
    subject is named a second way.
 3. Read the `figures` list of `paper.json`. A caption names the thing it shows,
    and it often uses the short name where the text uses the long one.
+
+When the caller says the paper is on the literature server, you have no files:
+the tools of the `literature` server stand in for them. `toc` with the slug and
+`all_anchors` is `paper.json`; `show` with `<slug>/<stem>` is a chapter, every
+block with its anchor. Call `show` for every chapter `toc` lists, and when it
+cuts at `max_words`, again from the anchor it names, until you have read them
+all. `search` with the slug as `scope` stands in for `Grep`.
 
 Report one table, and nothing else. One row for each name, and at most
 `MAX_PROPOSED_TERMS` rows, which the caller gives you. Fill this shape:

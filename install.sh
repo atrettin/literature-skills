@@ -124,7 +124,7 @@ install_skills() {  # $1=skills dir
 }
 
 install_agents() {  # $1=backend  $2=agents dir
-    local backend="$1" dest="$2" agent src name tier tools desc edit bash_perm model
+    local backend="$1" dest="$2" agent src name tier tools mcp desc edit bash_perm model
     for agent in "${agents[@]}"; do
         src="$repo/agents/$agent.md"
         if [[ ! -f "$src" ]]; then
@@ -146,6 +146,12 @@ install_agents() {  # $1=backend  $2=agents dir
         {
             if [[ "$backend" == claude ]]; then
                 tools="$(fm_field "$src" tools)"
+                # The literature server's tools, for a paper on the server.
+                # OpenCode gives a subagent every MCP tool without being told.
+                mcp="$(fm_field "$src" mcp)"
+                if [[ -n "$mcp" ]]; then
+                    tools="$tools, mcp__literature__${mcp//, /, mcp__literature__}"
+                fi
                 echo "---"
                 echo "name: $name"
                 echo "description: $desc"
@@ -210,3 +216,16 @@ echo "Some figures need two more programs, which pip does not install:"
 echo "    ghostscript   (gs)            converts an EPS figure"
 echo "    librsvg       (rsvg-convert)  converts an SVG figure"
 echo "On macOS: brew install ghostscript librsvg"
+
+echo
+echo "To work on a shared literature server as well, register it under the name"
+echo "literature, with your token in LITERATURE_TOKEN; LITERATURE_LIBRARY, set per"
+echo "project, names the library agents work in there (local: the project's folder)."
+echo "  Claude Code:"
+echo "    claude mcp add --scope user --transport http literature <server-url>/mcp \\"
+echo "      --header 'Authorization: Bearer \${LITERATURE_TOKEN}' \\"
+echo "      --header 'X-Literature-Library: \${LITERATURE_LIBRARY:-}'"
+echo "  OpenCode, in ~/.config/opencode/opencode.json:"
+echo '    "mcp": {"literature": {"type": "remote", "url": "<server-url>/mcp", "oauth": false,'
+echo '      "headers": {"Authorization": "Bearer {env:LITERATURE_TOKEN}",'
+echo '                  "X-Literature-Library": "{env:LITERATURE_LIBRARY}"}}}'
