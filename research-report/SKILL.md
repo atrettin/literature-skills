@@ -48,6 +48,25 @@ a reader opens every link in the report, and it is a choice the user makes,
 not one you make for them. Write the path down: the header of the report and
 each link in it depend on it.
 
+**Or work on the literature server.** When the literature tools are in your
+tool list too, decide between the folder and the server first, with the rule
+in `use-literature`; ask the user if the rule leaves it open, because every
+paper you ingest stays where you put it. On the server:
+
+- Each `litdb` command below is the tool of the same name, as `use-literature`
+  says. There is no flavor to ask for and nothing to `init`.
+- The report and the research log live on the server, under a name you choose:
+  the task slug. `append_log` an entry wherever this skill says to write to the
+  log, `write_report` the report once, fix it with `edit_report`, which changes
+  one passage, and never send the whole report again. Step 6 is `check_report`
+  and `render_report`; give the user the URL `render_report` answers. The
+  header's **Literature root** is the server's URL and the library.
+- `add` queues an ingest and answers at once; follow it with `ingest_status`,
+  with `wait` so a poll waits for the job. A failed ingest stays on the server's
+  Ingests page for its admin: report it, and do not start `paper-ingestor`.
+- Tell each `paper-scout` and `terminology-prospector` that the paper is on the
+  literature server.
+
 **Delegate the heavy reading.** Your own context is the limit on this work, and
 the full text of a paper is large. Three agents keep that text out of it:
 

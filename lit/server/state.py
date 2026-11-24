@@ -103,9 +103,16 @@ def now() -> str:
     return datetime.now().isoformat(sep=" ", timespec="seconds")
 
 
+# What a project sets LITERATURE_LIBRARY to when it works on its local
+# collection; so no library, user or report may be called that.
+LOCAL = "local"
+
+
 def check_name(name: str) -> str:
     if not NAME.match(name or ""):
         raise ValueError("a name is letters, digits, - and _: %r" % name)
+    if name == LOCAL:
+        raise ValueError("%r is reserved: LITERATURE_LIBRARY=local means a local collection" % name)
     return name
 
 

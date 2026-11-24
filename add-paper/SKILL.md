@@ -24,6 +24,15 @@ The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
 set, it is `literature/` in the project. `litdb` reads the variable itself, thus
 you do not give `--literature-root`.
 
+**On the literature server** (which place to use: see `use-literature`), the
+ingest is the `add` tool with the arXiv identifiers. A title is not enough:
+find the identifier with `find` first. `add` answers at once: a paper the
+collection holds is listed in the library, any other is queued as a job. Call
+`ingest_status` with the job and `wait` (up to 300 seconds) until it is `done`
+or `failed`; its `report` is the JSON this skill describes below. A failed
+ingest stays on the server's Ingests page for its admin to resolve: report the
+`exception.code` to the user, and do not handle it yourself.
+
 ## Step 1. Run the ingest
 
 ```bash

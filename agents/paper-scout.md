@@ -3,6 +3,7 @@ name: paper-scout
 description: Reads one paper of the local collection in full, against numbered sub-questions, and reports the locations that bear on them. Give it the slug of the paper and the sub-questions. It calls no API, thus several scouts can run at the same time.
 model-tier: small
 tools: Read, Grep, Glob
+mcp: toc, show, search
 edit: deny
 bash: deny
 ---
@@ -18,6 +19,13 @@ slug that you were given.
 2. Read each chapter in `text/`. Read all of them. `paper.json` says how
    long each chapter is and what it is called, and neither answers these
    questions, so nothing there lets you choose chapters and skip the rest.
+
+When the caller says the paper is on the literature server, you have no files:
+the tools of the `literature` server stand in for them. `toc` with the slug and
+`all_anchors` is `paper.json`; `show` with `<slug>/<stem>` is a chapter, every
+block with its anchor. Call `show` for every chapter `toc` lists, and when it
+cuts at `max_words`, again from the anchor it names, until you have read them
+all. `search` with the slug as `scope` stands in for `Grep`.
 3. For each sub-question, find each location that bears on it.
 
 Report one line for each location:
