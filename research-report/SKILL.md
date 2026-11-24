@@ -49,9 +49,22 @@ not one you make for them. Write the path down: the header of the report and
 each link in it depend on it.
 
 **Or work on the literature server.** When the literature tools are in your
-tool list too, decide between the folder and the server first, with the rule
-in `use-literature`; ask the user if the rule leaves it open, because every
-paper you ingest stays where you put it. On the server:
+tool list too, decide between the folder and the server before anything else,
+the research log included, because every paper you ingest stays where you put
+it:
+
+1. Look for the local collection, as above, and call the `libraries` tool.
+2. The user named a place in the task: use it.
+3. `libraries` answers that the project works on its local collection: use the
+   folder. It answers `chosen_by: project`: use the server.
+4. Only one of the two exists: use it.
+5. Otherwise — a local collection exists and `libraries` says
+   `chosen_by: personal` — nobody has chosen. Ask the user, naming the folder at
+   its path and the server's default library with its number of papers, and do
+   nothing else until they answer. Add that setting `LITERATURE_LIBRARY` in the
+   project saves the question next time.
+
+On the server:
 
 - Each `litdb` command below is the tool of the same name, as `use-literature`
   says. There is no flavor to ask for and nothing to `init`.
