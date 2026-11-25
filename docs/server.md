@@ -45,10 +45,39 @@ location /literature/ {
 }
 ```
 
-MCP answers are plain
-JSON, never a stream, so the proxy needs no special buffering settings. The
-proxy's read timeout must exceed five minutes, the longest an `ingest_status`
-call waits.
+MCP answers are plain JSON, never a stream, so the proxy needs no special
+buffering settings. The proxy's read timeout must exceed five minutes, the
+longest an `ingest_status` call waits.
+
+#### A proxy on another machine
+
+When the proxy runs on a different host than the server, it cannot reach a
+port published on `127.0.0.1`. Publish the port on the server's network
+interface, and use the proxy's public address in `BASE_URL`:
+
+```
+BASE_URL=https://proxy.example.org/gpu/literature
+ROOT_PATH=/gpu/literature
+PUBLISH=0.0.0.0:8084
+```
+
+The proxy then forwards to the server's host name instead of `127.0.0.1`:
+
+```nginx
+location /gpu/literature/ {
+    proxy_pass http://gpu-host.example.org:8084/;
+    proxy_read_timeout 360s;
+}
+```
+
+- **The open port:** `0.0.0.0` lets the whole network reach the server
+  directly, without the proxy, over plain HTTP. A request still needs a token,
+  but the token travels unencrypted on that path. Where the host has a
+  firewall, open the port to the proxy host only.
+- **A proxy that also serves an LLM API:** such a proxy may route requests by
+  the `model` field in the request body, not by path. A browser request has
+  no such field, so the server needs its own path rule like the one above.
+  Adding it to the proxy's table of models has no effect.
 
 ### Users
 
