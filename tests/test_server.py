@@ -270,6 +270,13 @@ def test_mcp_needs_a_token_and_reads_the_callers_library(tmp_path):
         failed, why = mcp_call(client, token, "search", {"phrase": "the", "library": "empty"})
         assert failed and "lists no papers yet" in why
 
+        _, made = mcp_call(client, token, "create_library", {"name": "thesis"})
+        assert made == {"library": "thesis", "owner": "alice"}
+        failed, why = mcp_call(client, token, "create_library", {"name": "thesis"})
+        assert failed and "exists already" in why
+        failed, why = mcp_call(client, token, "create_library", {"name": "local"})
+        assert failed and "reserved" in why
+
 
 
 def test_an_agent_keeps_its_report_and_log_on_the_server(tmp_path):
