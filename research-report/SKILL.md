@@ -244,7 +244,8 @@ whole queue. It prints one JSON report per paper, as one object per line. It
 exits 2 when any paper raised an exception.
 
 **Start a `paper-ingestor` agent only for a paper whose report carries an
-`exception`.** Give that agent the identifier of that paper and the fields of
+`exception`, and never for `NO_ARXIV_SOURCE`:** that paper is PDF-only, nothing
+can ingest it today, and it leaves the queue. Give that agent the identifier of that paper and the fields of
 its exception. The exception is the one part of an ingest that needs
 judgement, and a judgement it cannot make it brings back to you.
 

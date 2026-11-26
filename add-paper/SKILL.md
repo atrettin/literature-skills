@@ -65,7 +65,10 @@ collection. Then go to the section for that place. Do not read the other one.
 6. `jobs[0].status` is `failed`: report `report.exception.code` and
    `report.exception.detail` when the report has them, and `report.error`
    otherwise. The server's admin resolves it on the Ingests page. Do not try to
-   fix it, and do not add a different paper instead.
+   fix it, do not start a `paper-ingestor` agent (it works on the local
+   collection only), and do not add a different paper instead. The code
+   `NO_ARXIV_SOURCE` means the paper is PDF-only: nobody can fix that today,
+   so say that it cannot be ingested.
 
 The rest of this skill is about the local collection.
 
@@ -118,7 +121,9 @@ must report and never guess at.**
 
 arXiv served a PDF, an empty archive or an HTTP error. `http_status` and
 `reason` say which. A PDF-only submission carries no TeX, so this paper cannot
-be ingested. Report it as not ingestable. **Substitute no other paper.**
+be ingested. **Nothing fixes this today**: no command reads a PDF, and the
+`paper-ingestor` agent cannot help. Do not start it, and do not retry the
+ingest. Report the paper as not ingestable. **Substitute no other paper.**
 
 #### `TAG_COLLISION`
 
