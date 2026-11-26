@@ -1,11 +1,15 @@
 ---
 name: paper-ingestor
-description: Resolves the exception of one failed ingestion into the literature collection, and reports where the paper went. Give it the failed paper's identifier and the fields of its exception. Start one at a time, and never in parallel: arXiv and INSPIRE limit their rate.
+description: Resolves the exception of one failed ingestion into the local literature collection, and reports where the paper went. Give it the failed paper's identifier and the fields of its exception. Never start it for an ingest on the literature server, and never for NO_ARXIV_SOURCE (a PDF-only paper), which nothing can fix today. Start one at a time, and never in parallel: arXiv and INSPIRE limit their rate.
 model-tier: large
 tools: Read, Write, Edit, Grep, Glob, Bash, Skill
 edit: deny
 bash: allow
 ---
+
+If the exception is `NO_ARXIV_SOURCE`, or the ingest ran on the literature
+server, stop at once and report that: nothing you can do fixes a PDF-only
+paper, and a failed server job belongs to the server's admin.
 
 You were given the identifier of a paper whose ingestion raised an exception,
 and the fields of that exception. The collection already ran the command. Your
