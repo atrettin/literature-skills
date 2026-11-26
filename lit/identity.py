@@ -4,10 +4,8 @@
 Two questions stand between a request and a download, and both have an answer
 that a script can reach:
 
-  * **Which paper?** An arXiv identifier answers it directly. A title, an author
-    and a year answer it only when the search comes back with one exact match
-    and nothing else exact. Anything less is a judgement, and this module raises
-    `AmbiguousTitle` with the candidates rather than guessing.
+  * **Which paper?** An arXiv identifier answers it. A title does not: the
+    caller settles which paper a title means with `litdb find --title` first.
   * **What is it called here?** A work the collection already cites has a tag,
     and that tag is written into the chapters of every paper citing it. Reusing
     it as the directory name is what makes those citations resolve to the paper
@@ -21,7 +19,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from lit import arxiv_search
 from lit import reference_store
 from lit import text
 
@@ -30,22 +27,10 @@ from lit import text
 # name.
 SLUG_TITLE_WORDS = 2
 
-# How many candidates an `AmbiguousTitle` carries for the agent to choose from.
-CANDIDATES_SHOWN = 5
-
 # What an arXiv identifier looks like, in both styles arXiv has used:
 # `2307.09241`, with an optional version, and `hep-ph/0207172`.
 ARXIV_ID = re.compile(r"^(?:arxiv:)?(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(v\d+)?$",
                       re.IGNORECASE)
-
-
-class AmbiguousTitle(RuntimeError):
-    """The search found no single exact match. Only judgement settles it."""
-
-    def __init__(self, message: str, candidates: list[dict], match: str = "none") -> None:
-        super().__init__(message)
-        self.candidates = candidates
-        self.match = match
 
 
 class TagCollision(RuntimeError):
@@ -78,66 +63,17 @@ def normalize(argument: str) -> str:
     return reference_store.normalize_arxiv(argument)
 
 
-def candidate(entry: dict) -> dict:
-    """One search hit, as much of it as a choice between papers needs."""
-    return {
-        "arxiv_id": entry.get("arxiv_id", ""),
-        "title": entry.get("title", ""),
-        "authors": entry.get("authors", [])[:3],
-        "year": entry.get("year"),
-        "doi": entry.get("doi", ""),
-        "journal": entry.get("journal_ref", ""),
-        "score": entry.get("score"),
-        "match": entry.get("match", ""),
-    }
+def resolve(argument: str) -> str:
+    """The arXiv identifier, normalised, of a paper whose identity is settled.
 
-
-def resolve(
-    argument: str | None = None,
-    title: str | None = None,
-    author: str | None = None,
-    year: int | None = None,
-) -> str:
-    """The arXiv identifier of the paper the caller means.
-
-    An argument that looks like an identifier is taken as one, and no search
-    runs: the caller already knows which paper it wants. Otherwise the query
-    ladder of `arxiv_search` runs, and one result is accepted only when its
-    `match` is `exact` and no second result is exact too. A second exact match
-    means two papers agree with the query, which no rule here can choose
-    between.
+    Only an identifier is taken. Finding a paper by its title is `litdb find
+    --title`'s work, and it reports how well each hit agrees, so that the
+    caller decides which paper is meant before anything is downloaded.
     """
-    if argument:
-        if not looks_like_arxiv_id(argument):
-            raise AmbiguousTitle(
-                "%r is not an arXiv identifier; give --title, --author and "
-                "--year to search for it instead" % argument,
-                candidates=[],
-            )
-        return normalize(argument)
-
-    if not (title or author or year):
-        raise ValueError("give an arXiv identifier, or --title, --author or --year")
-
-    report = arxiv_search.run_search(title, author, year)
-    results = report["results"]
-    exact = [entry for entry in results if entry.get("match") == "exact"]
-
-    if len(exact) == 1:
-        return normalize(exact[0]["arxiv_id"])
-
-    if len(exact) > 1:
-        reason = "%d results match this query exactly" % len(exact)
-    elif results:
-        reason = "no result matches this query exactly; %d resemble it" % len(results)
-    else:
-        reason = "arXiv returned nothing for this query"
-
-    raise AmbiguousTitle(
-        reason,
-        candidates=[candidate(entry) for entry in results[:CANDIDATES_SHOWN]],
-        match=report["match"],
-    )
+    if not looks_like_arxiv_id(argument):
+        raise ValueError("%r is not an arXiv identifier; find the paper's identifier "
+                         "with `litdb find --title` first" % argument)
+    return normalize(argument)
 
 
 # --------------------------------------------------------------------------

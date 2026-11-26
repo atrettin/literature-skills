@@ -10,9 +10,9 @@ it.
 
 | Skill | What it does |
 |---|---|
-| [add-paper](add-paper/SKILL.md) | Finds a paper on arXiv, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, asks INSPIRE-HEP where it was published, resolves its bibliography and indexes the result. The skill handles the exceptions the ingest raises. |
+| [add-paper](add-paper/SKILL.md) | Takes a paper whose arXiv identifier is known, downloads its TeX source, splits it into per-chapter Markdown, converts the figures to cropped PNGs, asks INSPIRE-HEP where it was published, resolves its bibliography and indexes the result. The skill handles the exceptions the ingest raises. |
 | [use-literature](use-literature/SKILL.md) | How to find and read a paper already in the collection. |
-| [find-papers](find-papers/SKILL.md) | Searches arXiv by the subject of a paper's abstract, ranks the hits against the question with a local cross-encoder, describes each hit with its length and its citation count, and marks the ones the collection already holds. It then weighs a candidate you mean to ingest against the papers you hold for the question, from the works the two have in common. |
+| [find-papers](find-papers/SKILL.md) | Finds one paper you can name by its title, author or year, and settles which paper it is before it is added. Searches arXiv by the subject of a paper's abstract, ranks the hits against the question with a local cross-encoder, describes each hit with its length and its citation count, and marks the ones the collection already holds. It then weighs a candidate you mean to ingest against the papers you hold for the question, from the works the two have in common. |
 | [find-terms](find-terms/SKILL.md) | Finds the other names the field uses for a subject, so the search runs on the papers' words instead of the asker's. It runs inside the research-report loop, when the question arrived as a description rather than the field's name. |
 | [follow-citations](follow-citations/SKILL.md) | Finds the papers that cite a given paper, with INSPIRE-HEP, and the works it draws on, from the reference store. |
 | [research-report](research-report/SKILL.md) | Answers a task that needs a literature review, in a bounded loop of search, read and assess, and writes a report whose every claim links to the chapter it came from. |

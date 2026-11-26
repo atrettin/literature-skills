@@ -13,6 +13,8 @@ from pathlib import Path
 import pytest
 
 from lit import arxiv_discover
+from lit import arxiv_search
+from lit.paths import papers_on_disk as paths_on_disk
 from lit import inspire_lookup
 from lit import references
 from lit.arxiv_discover import Options
@@ -210,3 +212,58 @@ def test_a_review_preprint_escapes_the_filter(
 
     assert report["results"] == []
     assert report["kind_filter"]["dropped_unknown"] > 0
+
+
+# --------------------------------------------------------------------------
+# the short report, and the title mode
+# --------------------------------------------------------------------------
+
+
+def test_the_short_report_keeps_what_chooses_a_paper(
+    feed_quasielastic: str, no_sleep: None, inspire: FakeInspire
+) -> None:
+    full = arxiv_discover.search(options(), fetch=FakeFetch([feed_quasielastic]))
+    short = arxiv_discover.shorten(full)
+
+    assert "abs_url" in full["results"][0] and "term_weights" in full["query"]
+    assert "abs_url" not in short["results"][0] and "term_weights" not in short["query"]
+    assert set(short["results"][0]) == set(arxiv_discover.SHORT_FIELDS)
+    assert short["counts"] == full["counts"]
+
+
+def test_a_resorted_short_report_keeps_the_relevance_rank(
+    feed_quasielastic: str, no_sleep: None, inspire: FakeInspire
+) -> None:
+    full = arxiv_discover.search(options(sort="recent"), fetch=FakeFetch([feed_quasielastic]))
+
+    assert "relevance_rank" in arxiv_discover.shorten(full)["results"][0]
+
+
+def test_the_title_mode_reports_the_match_and_what_is_held(
+    monkeypatch: pytest.MonkeyPatch, collection: Path
+) -> None:
+    held = next(iter(paths_on_disk(collection)))
+    arxiv_id = json.loads((collection / held / "paper.json").read_text())["arxiv_id"]
+    found = {"query": {"title": "x"}, "match": "exact", "results": [
+        {"arxiv_id": arxiv_id, "title": "x", "authors": ["A", "B", "C", "D"], "year": 2020,
+         "summary": "s", "doi": "", "journal_ref": "", "match": "exact", "score": 1.0,
+         "abs_url": "u"}]}
+    monkeypatch.setattr(arxiv_search, "run_search", lambda *a, **k: found)
+
+    report = arxiv_discover.find_by_title("x", None, None, 10, collection)
+
+    assert report["match"] == "exact"
+    assert report["results"][0]["held_as"] == held
+    assert set(report["results"][0]) == set(arxiv_discover.TITLE_FIELDS)
+    assert len(report["results"][0]["authors"]) == 3
+
+
+@pytest.mark.parametrize("argv", [
+    ["--topic", "a subject", "--title", "A Title"],
+    ["--title", "A Title", "--category", "hep-ph"],
+    ["--title", "A Title", "--sort", "recent"],
+    [],
+])
+def test_the_two_modes_do_not_mix(argv: list[str], capsys: pytest.CaptureFixture) -> None:
+    assert arxiv_discover.main(argv) == 2
+    assert json.loads(capsys.readouterr().out)["error"]

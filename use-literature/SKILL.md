@@ -1,6 +1,6 @@
 ---
 name: use-literature
-description: How to find and read published scientific papers in the local literature database. Use when a question is about the science behind the project — physical models, methods, experimental results — that the code and the project's own documentation do not answer.
+description: How to find and read published scientific papers in the literature collection — the local folder or the literature server — and how to choose between the two. Use when a question is about the science behind the project — physical models, methods, experimental results — that the code and the project's own documentation do not answer.
 ---
 
 # Read the literature database
@@ -42,7 +42,9 @@ place before the first search or ingest, and stay with it for the whole task:
    environment saves the question next time.
 
 On the server, every `litdb` command in these skills is the tool of the same
-name: `litdb X --some-opt v` is the tool `X(some_opt=v)`, and the `exit` field
+name, with one rename: `litdb add-paper` is `add`. `litdb inspire`, `litdb
+init` and `litdb render` have no tool. Otherwise `litdb X --some-opt v` is the
+tool `X(some_opt=v)`, and the `exit` field
 of its answer is the exit status. `--scope` is `scope`, or `library` for a
 library; without either, a tool reads the default library. The server holds no
 files for you: where a skill says to read `paper.json` or a chapter, call `toc`
@@ -136,7 +138,7 @@ be redone; never read it, and never delete it.
 
 ## To answer a question
 
-1. Read `literature/README.md`.
+1. Local: read `literature/README.md`. Server: call `papers`.
 2. Select the papers that cover the subject.
 3. Climb the ladder below on each paper, and stop at the rung that answers.
 
@@ -332,20 +334,23 @@ and 3b when the paper drew it as panels.
 1. Search the references first: `litdb lookup --search "<author or title word>"`.
    A paper the collection does not hold may still be cited by one that it does,
    and the answer gives you the arXiv identifier to fetch it by.
-2. Search arXiv with the `find-papers` skill. It reads abstracts, and so it
-   finds a paper on the subject of the question; give it a title and it asks
-   arXiv for that one named paper too. It marks the results the collection
-   already holds. Use it when the question names a subject, or a paper the
-   collection does not cite.
+2. Search arXiv with the `find-papers` skill. It marks the results the
+   collection already holds.
+   - The question names one paper (a title, part of one, an author, a year):
+     follow its section "Find one paper you can name". It settles the
+     paper's arXiv identifier.
+   - The question names a subject: follow its subject search (step 1).
 3. Otherwise tell the user that the database has no paper on the subject.
-4. Offer the `add-paper` skill.
+4. Offer the `add-paper` skill. It needs the arXiv identifier from point 1 or
+   point 2.
 
 You may add a cited work yourself, without asking, when answering the question
 needs the source rather than the citing paper's summary of it — a number you
 must check, a derivation the citing paper only names. Take the `arxiv_id` from
-the lookup and follow `add-paper` from its step 1, with `--slug` set to the
-record's `tag`, so the work keeps the name its citations already use. Say that
-you did it and why.
+the lookup (when it has none, find it with `find-papers`, section "Find one
+paper you can name") and follow `add-paper` from its start. Do not pass
+`--slug`: the ingest keeps the record's tag as the name by itself, so the work
+keeps the name its citations already use. Say that you did it and why.
 
 ## Rules
 

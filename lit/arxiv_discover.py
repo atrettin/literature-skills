@@ -15,10 +15,17 @@ length, its citation count and whether a review venue published it. One INSPIRE
 request describes the shortlist, after the arXiv requests. None of those facts
 enters the score. `--kind` and `--sort` let the caller act on them.
 
+It has two modes. `--topic` searches abstracts for a subject. `--title`,
+`--author` and `--year` look for one paper you can name, with the tolerant title
+match of `arxiv_search`, and report how well each hit agrees: that is how a
+paper's identity is settled before it is added. The report is short by default;
+`--full` gives every field.
+
 Usage:
     arxiv_discover.py --topic "how meson exchange currents change the cross section"
     arxiv_discover.py --topic "neutrino oscillation" --category hep-ph --since 2020
     arxiv_discover.py --topic "we review the status of type II superconductors" --kind review
+    arxiv_discover.py --title "Zeitgeist Report on Coastal Erosion" --year 2019
 """
 
 from __future__ import annotations
@@ -34,7 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from lit import cli, paper_facts, paths
+from lit import arxiv_search, cli, paper_facts, paths
 from lit import rate_gate
 from lit import reference_store
 from lit import rerank
@@ -53,11 +60,6 @@ MIN_RESULTS = 5
 AUTHORS_SHOWN = 3
 MAX_TERMS = 12
 MIN_TERM_CHARS = 3
-
-# A topic of at most this many words could be the title of a paper, and the
-# title rung then asks arXiv for that title. A longer topic is a question, no
-# title reads like it, and the request would buy nothing.
-PHRASE_MAX_WORDS = 6
 
 # How many of the ranked candidates one INSPIRE request describes. `--kind` and
 # `--sort` work over this shortlist. `references.BATCH_SIZE` is 40, so this
@@ -179,25 +181,6 @@ def build_strict_query(terms: list[str], options: Options) -> str:
     return " AND ".join(["abs:%s" % term for term in terms] + build_filters(options))
 
 
-def build_phrase_query(topic: str, options: Options) -> str:
-    """The topic as a title, quoted.
-
-    For the caller who names a paper rather than a subject. `ti:"NuSTEC White
-    Paper"` returns that one paper. The same three words in the broad rung
-    become `(all:nustec OR all:white OR all:paper)`, which returns a hundred
-    white papers about everything else and leaves the wanted one outside the
-    window: `white` and `paper` are common enough that arXiv's own relevance
-    order buries the paper that carries all three.
-
-    Here a quoted phrase is right where `build_strict_query` explains that it
-    is wrong. Scoped to an abstract it is far too strict, because an abstract
-    states a subject in whatever words it likes. A title is a fixed string, and
-    a caller who quotes one quotes it as it stands.
-    """
-    phrase = " ".join(query_words(topic).split())
-    return " AND ".join(['ti:"%s"' % phrase] + build_filters(options))
-
-
 def build_broad_query(terms: list[str], options: Options) -> str:
     """Any term, anywhere in the record.
 
@@ -251,17 +234,15 @@ def climb(
 def gather(terms: list[str], options: Options, fetch: Fetch) -> tuple[list[dict], list[dict]]:
     """Run the ladder. Returns (entries, the queries that ran).
 
-    Three rungs, each wider than the last, and the climb stops as soon as one
-    of them has said enough:
+    Two rungs, the second wider than the first, and the climb stops as soon as
+    the first has said enough:
 
         strict  every term, each scoped to the abstract
-        title   the topic, quoted, as the title of a paper
         broad   any term, anywhere in the record
 
-    The title rung sits in the middle because it answers a caller who names a
-    paper. That caller fails the strict rung — the words of a title are rarely
-    all in the abstract — and the broad rung answers them worst of all, by
-    dragging in every paper that shares a common word with the title.
+    A paper the caller can name is found by its title, with `--title`, and not
+    here: a subject search that also guessed at titles would answer two
+    questions at once and say clearly which of them it answered for neither.
 
     Every query that ran is reported, because each shaped the result and each
     result says which rung found it.
@@ -274,14 +255,8 @@ def gather(terms: list[str], options: Options, fetch: Fetch) -> tuple[list[dict]
     if len(entries) >= MIN_RESULTS:
         return entries, queries
 
-    # Each rung waits behind the last at the gate, which is where the pace
-    # arXiv asks for is kept.
-    words = query_words(options.topic).split()
-    if 1 < len(words) <= PHRASE_MAX_WORDS:
-        climb(entries, queries, "title", build_phrase_query(options.topic, options), fetch)
-        if len(entries) >= MIN_RESULTS:
-            return entries, queries
-
+    # The broad rung waits behind the strict one at the gate, which is where
+    # the pace arXiv asks for is kept.
     broad = build_broad_query(terms, options)
     if broad != strict:
         climb(entries, queries, "broad", broad, fetch)
@@ -358,6 +333,54 @@ def present(entry: dict) -> dict:
         "held_as": entry["held_as"],
         "known_as": entry["known_as"],
         "cited_by": entry["cited_by"],
+    }
+
+
+# What a report keeps without `--full`: the fields that choose a paper and say
+# whether the collection has it. The rest — URLs, INSPIRE ids, term weights, the
+# query of each rung — answers rarer questions, and costs the reader's context
+# on every search.
+SHORT_FIELDS = ("arxiv_id", "title", "authors", "year", "summary", "journal",
+                "citation_count", "kind", "score", "missing_terms", "found_by",
+                "held_as", "known_as", "cited_by")
+TITLE_FIELDS = ("arxiv_id", "title", "authors", "authors_total", "year", "summary", "doi",
+                "journal_ref", "match", "held_as", "known_as", "cited_by")
+
+
+def shorten(report: dict) -> dict:
+    """A topic report with only the fields that choose a paper."""
+    keep = SHORT_FIELDS + (("relevance_rank",) if report["ranking"]["sort"] != "relevance" else ())
+    short = {
+        "query": {key: report["query"][key] for key in ("topic", "terms", "meta_terms_dropped")},
+        "ranking": report["ranking"],
+        "counts": report["counts"],
+        "results": [{key: entry[key] for key in keep} for entry in report["results"]],
+    }
+    if report.get("kind_filter"):
+        short["kind_filter"] = report["kind_filter"]
+    return short
+
+
+def find_by_title(title: str | None, author: str | None, year: int | None,
+                  max_results: int, root: Path, full: bool = False) -> dict:
+    """One paper the caller can name: the hits, how well each agrees, and what is held.
+
+    `match` is `exact` when one hit agrees with every field given, `approximate`
+    when hits resemble the query and none (or more than one) agrees closely, and
+    `none` when nothing resembles it.
+    """
+    found = arxiv_search.run_search(title, author, year, max_results)
+    results = found["results"]
+    counts = annotate_local(results, root)
+    for entry in results:
+        entry["authors_total"] = len(entry["authors"])
+        entry["authors"] = entry["authors"][:AUTHORS_SHOWN]
+    return {
+        "query": found["query"],
+        "match": found["match"],
+        "counts": dict(counts, total=len(results)),
+        "results": results if full else [
+            {key: entry.get(key) for key in TITLE_FIELDS} for entry in results],
     }
 
 
@@ -480,6 +503,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="the subject to search for, written as a full phrase; the search "
         "reads its words and the ranking reads the whole of it",
     )
+    parser.add_argument("--title", help="find one paper by its title, or a part of it")
+    parser.add_argument("--author", help="with --title, or alone: one author; the surname is what matters")
+    parser.add_argument("--year", type=int, help="with --title: the year of the paper, preprint or journal")
+    parser.add_argument("--full", action="store_true",
+                        help="report every field, not only the ones that choose a paper")
     parser.add_argument(
         "--category",
         action="append",
@@ -516,9 +544,24 @@ def fail(message: str, code: int) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = cli.parse(build_parser(), argv)
-    if not args.topic:
-        return fail("give --topic", 2)
+    by_title = bool(args.title or args.author or args.year)
+    if by_title and args.topic:
+        return fail("give --topic for a subject, or --title/--author/--year for one "
+                    "paper, not both", 2)
+    if not by_title and not args.topic:
+        return fail("give --topic for a subject, or --title/--author/--year for one paper", 2)
+    if by_title and (args.categories or args.since or args.kind != "any"
+                     or args.sort != DEFAULT_SORT):
+        return fail("--category, --since, --kind and --sort go with --topic, not --title", 2)
     rate_gate.use_root(args.literature_root)
+    if by_title:
+        try:
+            report = find_by_title(args.title, args.author, args.year, args.max_results,
+                                   args.literature_root, args.full)
+        except (RuntimeError, ET.ParseError, urllib.error.URLError) as error:
+            return fail(str(error), 1)
+        cli.emit(report)
+        return 0
     for name in args.categories:
         if not CATEGORY.match(name):
             return fail("'%s' is not an arXiv category, such as hep-ph" % name, 2)
@@ -539,7 +582,7 @@ def main(argv: list[str] | None = None) -> int:
     except (RuntimeError, ET.ParseError, urllib.error.URLError) as error:
         return fail(str(error), 1)
 
-    cli.emit(report)
+    cli.emit(report if args.full else shorten(report))
     return 0
 
 

@@ -31,7 +31,7 @@ WARNING_CODES = {
 }
 
 EXCEPTION_CODES = {
-    "AMBIGUOUS_TITLE", "NO_ARXIV_SOURCE", "TAG_COLLISION", "PARSER_FAILURE",
+    "NO_ARXIV_SOURCE", "TAG_COLLISION", "PARSER_FAILURE",
     "SLUG_EXISTS", "REFERENCE_CHECK_FAILED", "COLLECTION_INDEX_UNREADABLE",
     "NETWORK_UNAVAILABLE",
 }
@@ -158,7 +158,6 @@ def test_an_exception_sets_the_status_and_the_next_action() -> None:
 
 
 @pytest.mark.parametrize("code,extra", [
-    ("AMBIGUOUS_TITLE", {"candidates": []}),
     ("NO_ARXIV_SOURCE", {"http_status": 403, "reason": "a PDF"}),
     ("TAG_COLLISION", {"slug": "a_2020_b", "held_by": "the paper directory",
                        "held_arxiv_id": "1111.11111", "suggested_slug": "a_2020_b_c"}),
@@ -219,13 +218,14 @@ def test_a_slug_and_several_papers_is_a_usage_error(tmp_path: Path) -> None:
     assert status == 1
 
 
-def test_an_argument_that_is_not_an_identifier_is_an_exception(
+def test_an_argument_that_is_not_an_identifier_is_a_usage_error(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
+    """A title is found with `litdb find --title` first; the ingest takes identifiers."""
     status = add_paper.main(
         ["--auto", "not-an-identifier", "--literature-root", str(tmp_path)]
     )
     report = json.loads(capsys.readouterr().out.splitlines()[0])
 
-    assert status == 2
-    assert report["exception"]["code"] == "AMBIGUOUS_TITLE"
+    assert status == 1
+    assert "find --title" in report["error"]

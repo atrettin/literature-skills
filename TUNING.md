@@ -39,7 +39,6 @@ section before you change a delay.
 |---|---|---|
 | `CANDIDATES` | 100 | How many papers arXiv returns for the ranking to choose from. A higher value finds a good paper that arXiv put far down. It costs one larger response, and more work for the cross-encoder. |
 | `MIN_RESULTS` | 5 | A rung gives too little below this number of hits, and the next rung then runs. A higher value widens the search more often. The search then finds more papers, and a larger part of what it finds is noise. **Change this one first.** |
-| `PHRASE_MAX_WORDS` | 6 | The longest topic that the title rung asks arXiv for as a quoted title. A caller who names a paper fails the strict rung, because an abstract rarely carries every word of a title. A higher value spends a request on a topic that no title reads like, and the rung then returns nothing. A lower value drops a caller who names a paper by its full title. |
 | `MAX_TERMS` | 12 | How many words of the topic reach the query. A longer question sends its first twelve terms only. |
 | `MIN_TERM_CHARS` | 3 | The query drops a shorter word. A higher value drops `pion`. A lower value keeps `of`, and `TOPIC_STOPWORDS` must then remove it. |
 | `TOPIC_STOPWORDS` | 81 words | The words that the script removes from a topic before the topic becomes a query. This set is not `reference_store.TAG_STOPWORDS`: that set drops `measurement` and `effect`, and a search needs those words. It is not `META_TERMS` either: that set holds the words that describe the wanted kind of paper. Add a word here when questions use it and it never separates one paper from another. |
@@ -203,7 +202,7 @@ the default there. A cheaper model costs less and reads less well.
 
 | Agent | Tier | What it does |
 |---|---|---|
-| `paper-ingestor` | large | The model that handles an exception of the ingest script. The script does the mechanical work. Two judgements are left: the identity of a paper, and a name that two works want. Each one decides what the collection holds from then on. `haiku` is the cheaper value to try. A wrong paper, or a tag given to the wrong work, costs more than the saving. |
+| `paper-ingestor` | large | The model that handles an exception of the ingest script. The script does the mechanical work. Two judgements are left: whether the paper an identifier serves is the one asked for, and a name that two works want. Each one decides what the collection holds from then on. `haiku` is the cheaper value to try. A wrong paper, or a tag given to the wrong work, costs more than the saving. |
 | `terminology-prospector` | large | The model that reads a whole paper for the names it gives the subject. It must separate a name for the subject from a topic the paper discusses beside it, and then judge the referent. `haiku` is the cheaper value to try, and a smaller model returns the paper's subject headings as names. |
 | `paper-scout` | small | The model that reads one paper against the sub-questions. This is targeted extraction, and not synthesis. `sonnet` is the value to try when scouts miss a passage that answers a question. |
 
@@ -252,7 +251,6 @@ the default there. A cheaper model costs less and reads less well.
 | `ROW_AUTHORS_SHOWN` | `lit/collection_index.py` | 1 | How many authors a collection row names before `et al.`. The column is narrow, and the row is a pointer to the paper rather than a citation. A higher value makes the table wider and says little a reader could not get by opening the paper. |
 | `ABBREVIATIONS` | `lit/text.py` | 40 words | The words that end in a full stop without ending a sentence, so that `Phys. Rev. D 108` is one reference and not three sentences. A word missing from this set splits a sentence that no author ended, which cuts a quotation short and divides a clause a terminology scan reads. A word wrongly in it joins two sentences into one long quotation. Nobody measured the set; it is the journal names and the citation shorthands that these papers write. |
 | `REPORT_WARNINGS_SHOWN` | `lit/add_paper.py` | 10 | How many warnings the compact report prints. The full manifest holds them all. |
-| `CANDIDATES_SHOWN` | `lit/identity.py` | 5 | How many candidates an `AMBIGUOUS_TITLE` exception carries for an agent to choose between. A higher value describes more papers, and each one costs the agent context at the moment it has to decide. |
 | `AUTHORS_SHOWN` | `lit/write_index.py` and `lit/add_paper.py` | 3 | How many authors the identity table and the report name before `et al.`. `authors_total` gives the count of the rest. |
 
 ## Not tunable

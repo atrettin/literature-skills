@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from lit import arxiv_search
 from lit import identity
 from lit import reference_store
 
@@ -29,62 +28,16 @@ def metadata(**overrides) -> dict:
 # --------------------------------------------------------------------------
 
 
-def test_an_identifier_resolves_with_no_search(monkeypatch: pytest.MonkeyPatch) -> None:
-    def never(*arguments, **keywords):
-        raise AssertionError("an identifier needs no search")
-
-    monkeypatch.setattr(arxiv_search, "run_search", never)
-
+def test_an_identifier_resolves_normalised() -> None:
     assert identity.resolve("2307.09241") == "2307.09241"
     assert identity.resolve("arXiv:2307.09241v3") == "2307.09241"
     assert identity.resolve("hep-ph/0207172") == "hep-ph/0207172"
 
 
-def hits(*matches: str) -> dict:
-    return {
-        "match": "exact" if matches.count("exact") == 1 else "approximate",
-        "results": [
-            {"arxiv_id": "2501.0000%d" % number, "title": "Paper %d" % number,
-             "authors": ["A. Author"], "year": 2025, "doi": "", "journal_ref": "",
-             "score": 1.0, "match": match}
-            for number, match in enumerate(matches, start=1)
-        ],
-    }
-
-
-def test_one_exact_hit_resolves(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(arxiv_search, "run_search",
-                        lambda *a, **k: hits("exact", "approximate"))
-
-    assert identity.resolve(None, title="Paper 1") == "2501.00001"
-
-
-def test_no_exact_hit_raises_with_the_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(arxiv_search, "run_search",
-                        lambda *a, **k: hits("approximate", "approximate"))
-
-    with pytest.raises(identity.AmbiguousTitle) as raised:
-        identity.resolve(None, title="Paper 1")
-
-    assert len(raised.value.candidates) == 2
-    assert raised.value.candidates[0]["arxiv_id"] == "2501.00001"
-
-
-def test_two_exact_hits_raise(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(arxiv_search, "run_search", lambda *a, **k: hits("exact", "exact"))
-
-    with pytest.raises(identity.AmbiguousTitle):
-        identity.resolve(None, title="Paper 1")
-
-
-def test_nothing_found_raises_with_no_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(arxiv_search, "run_search",
-                        lambda *a, **k: {"match": "none", "results": []})
-
-    with pytest.raises(identity.AmbiguousTitle) as raised:
-        identity.resolve(None, title="Nothing")
-
-    assert raised.value.candidates == []
+def test_anything_but_an_identifier_is_refused() -> None:
+    """A title is settled with `litdb find --title`, before anything is added."""
+    with pytest.raises(ValueError, match="find --title"):
+        identity.resolve("A Small Paper on Quasielastic Scattering")
 
 
 # --------------------------------------------------------------------------

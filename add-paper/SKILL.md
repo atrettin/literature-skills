@@ -1,55 +1,94 @@
 ---
 name: add-paper
-description: Adds a paper from arXiv to the local literature database in literature/. Use when the user gives a paper title, an author or a year and asks to add, ingest or download the paper.
+description: Adds a paper to the literature collection when its arXiv identifier is known, locally or on the literature server, and handles what the ingest reports. Use when the user asks to add, ingest or download a paper. Without an arXiv identifier, find it with the find-papers skill first.
 ---
 
 # Add a paper to the literature
 
+This skill adds a paper **whose arXiv identifier you have**. It does not search.
+
+**Start here.** Which of these is true?
+
+1. **You have the arXiv identifier, and it comes from a search result, from
+   `litdb lookup`, or from the user.** Go to step 1 below.
+2. **You have a link to arXiv**, such as `arxiv.org/abs/2307.09241` or
+   `arxiv.org/pdf/2307.09241`. The part after `abs/` or `pdf/` is the
+   identifier. Do not open the link. Go to point 1.
+3. **You have a title, part of a title, an author, a year or a DOI, but no
+   identifier.** Stop here. Load the `find-papers` skill and follow its section
+   "Find one paper you can name". Come back with the identifier it settles.
+4. **You remember an identifier, and nothing you read gave it to you.** Treat it
+   as unknown, in both places: a remembered identifier is often the identifier
+   of another paper. Go to point 3.
+
+**A paper the collection holds already** (`held_as` in a `find` result names a
+directory): locally, there is nothing to add. Report its `held_as` and stop. Do
+not run `litdb add-paper` on it. On the server, `add` it: it is `listed` in your
+library at once, with no ingest.
+
+Never search arXiv any other way: no `curl`, no web fetch, no script of your
+own. `find` and `add` are the only ways in.
+
 The literature database holds papers as plain text, split into chapters. Agents
-read it with the `use-literature` skill. This skill puts a new paper into it.
+read it with the `use-literature` skill. The paper comes from arXiv, because
+arXiv is the only source that carries the TeX. INSPIRE-HEP says where it was
+published, and the ingest asks it. Never read a chapter during an ingest: the
+ingest measures every number that `paper.json` holds.
 
-`litdb add-paper` does the ingest. You handle its exceptions. Never read a
-chapter: the command measures every number that `paper.json` holds.
+## Step 1. Which place?
 
-The paper comes from arXiv, because arXiv is the only source that carries the
-TeX. arXiv does not say where the paper was published — its `journal_ref` field
-is written by the authors and is empty for most records. INSPIRE-HEP does say,
-and `litdb add-paper` asks it.
+`use-literature` says how to choose between the literature server and the local
+collection. Then go to the section for that place. Do not read the other one.
 
-## Before you start
+## On the literature server
+
+1. Call `add` with the identifiers of every paper the user asked for:
+   `add(arxiv_ids=[...])`. Give `library` only when the user named a library
+   that is not the default one.
+2. Read each entry of `results`:
+
+   | `outcome` | What it means | What you do |
+   |---|---|---|
+   | `listed` | The collection held the paper. It is now in the library. | Report the `slug`. Done. |
+   | `queued` | An ingest job started. `job` is its number. | Go to point 3. |
+   | `refused` | `error` says why. | If `error` says "not an arXiv identifier": go back to "Start here", point 3, for that paper. If it says there is no library of that name: call `libraries`, and use a name it lists, or `create_library` when the user asked for a new library. Otherwise report the error. |
+
+3. Call `ingest_status(job=..., wait=300)`. The job is `jobs[0]` of the
+   answer. If `jobs` is empty, report that the server does not know the job,
+   and stop.
+4. While `jobs[0].status` is `queued` or `running`, call it again, at most 12
+   times in all. After that, tell the user the job number and that it is still
+   running, and stop.
+5. `jobs[0].status` is `done`: report `jobs[0].slug`, and those fields of
+   `jobs[0].report` that the local section lists under "exit 0" (a paper that
+   was there already has only `slug`). Done.
+6. `jobs[0].status` is `failed`: report `report.exception.code` and
+   `report.exception.detail` when the report has them, and `report.error`
+   otherwise. The server's admin resolves it on the Ingests page. Do not try to
+   fix it, and do not add a different paper instead.
+
+The rest of this skill is about the local collection.
+
+## On the local collection
 
 Run every command from the root of the project, so that `literature/` resolves.
-
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
 set, it is `literature/` in the project. `litdb` reads the variable itself, thus
 you do not give `--literature-root`.
 
-**On the literature server** (which place to use: see `use-literature`), the
-ingest is the `add` tool with the arXiv identifiers. A title is not enough:
-find the identifier with `find` first. `add` answers at once: a paper the
-collection holds is listed in the library, any other is queued as a job. Call
-`ingest_status` with the job and `wait` (up to 300 seconds) until it is `done`
-or `failed`; its `report` is the JSON this skill describes below. A failed
-ingest stays on the server's Ingests page for its admin to resolve: report the
-`exception.code` to the user, and do not handle it yourself.
-
-## Step 1. Run the ingest
+### Step 2. Run the ingest
 
 ```bash
-litdb add-paper --auto <arxiv-id> [<arxiv-id> …]
+litdb add-paper --auto ARXIV_ID [ARXIV_ID …]
 ```
 
-Give the identifiers of every paper the user asked for, in one command. Give a
-title instead when the user has no identifier:
+Give the identifiers of every paper the user asked for, in one command. The
+command takes identifiers only. A title is refused with exit 1.
 
-```bash
-litdb add-paper --auto \
-    --title "<title>" --author "<author>" --year <year>
-```
-
-Give an identifier you recalled rather than read `--expect-title <part of the
-title>`: the ingest refuses the paper unless the arXiv title holds that text,
-and raises `TITLE_MISMATCH` when it does not.
+For an identifier from a `litdb lookup` record marked `verified: false`, add
+`--expect-title "PART OF THE TITLE"`: such a record may carry a wrong
+identifier. The ingest then refuses the paper unless its arXiv title holds that
+text, and raises `TITLE_MISMATCH`.
 
 It prints one JSON object per paper, one object per line. **The exit
 code says who acts:**
@@ -58,7 +97,7 @@ code says who acts:**
 |---|---|---|
 | 0 | The collection holds the paper. | Report the fields below. Stop. Open no chapter. |
 | 2 | A structured exception. | Read `exception.code`. Go to the section for it. |
-| 1 | A usage error. | Report the error. Ingest no other paper. |
+| 1 | A usage error. Nothing was ingested. | If `error` says "not an arXiv identifier": go to "Start here", point 3, for that entry. Fix it or remove it, then run the command again with the queue. Otherwise report the error. |
 
 On exit 0, report these fields of the report, and nothing else:
 
@@ -69,61 +108,19 @@ and how many words, `parser`, every entry of `warnings`, the counts of
 `checks.elsewhere` counts the defects of the other papers. Leave those alone.
 They belong to papers this run did not touch.
 
-## Step 2. Handle an exception
+### Step 3. Handle an exception
 
 The report carries `exception`, with a `code` and a `detail`. Each code below
-says what it means and what to do. **A code that is not in this table is one you
+says what it means and what to do. **A code that is not in this list is one you
 must report and never guess at.**
 
-### `AMBIGUOUS_TITLE`
-
-The search found no single exact match. `candidates` holds up to five results,
-each with `arxiv_id`, `title`, `authors`, `year`, `doi`, `journal` and `match`.
-
-The `match` field is a title-similarity heuristic. It is wrong in three known
-ways, each of which has hidden a paper that arXiv held all along:
-
-1. **The year is the journal year.** `--year` filters on the arXiv submission
-   date. The search covers that year and the year before it. A preprint can come
-   more than a year before its journal, and a proceedings volume often does. Run
-   the search again with no `--year` at all.
-2. **Notation differs.** `$C_5^A$` against `C(5)_A`, or `medium nuclei` against
-   `medium-mass nuclei`, drops a true match below the threshold.
-3. **The preprint carries a different title.** Authors retitle papers between
-   arXiv and the journal. Phys. Rev. C91 045501 is "Investigation of recent weak
-   single-pion production data"; its preprint is "On Recent Weak Single Pion
-   Production Data". The title then tells you nothing. Check the DOI.
-
-**The DOI, the journal reference and the author list decide identity — not the
-title, and not the `match` field.** When those three agree, the paper is the
-paper. When the DOI disagrees, no title similarity makes it the right paper.
-
-Cross-check against INSPIRE-HEP when the arXiv record alone does not settle it:
-
-```bash
-litdb inspire <arxiv_id>
-litdb inspire --doi <doi>
-```
-
-`"found": false` for a candidate you found on arXiv usually means a paper
-outside high-energy physics, and not a wrong identifier. A record whose title
-agrees and whose `arxiv_id` comes back empty is strong evidence that nobody
-posted the paper to arXiv. Many theses and older conference proceedings are of
-that kind. **That is a real answer. Report it, and substitute no other paper.**
-[Crossref](https://api.crossref.org/works/) takes a DOI directly, and it reaches
-outside high-energy physics.
-
-When you have settled the identity, run the ingest again with the identifier.
-Ask the user with `AskUserQuestion` only when the checks above leave the answer
-still in doubt.
-
-### `NO_ARXIV_SOURCE`
+#### `NO_ARXIV_SOURCE`
 
 arXiv served a PDF, an empty archive or an HTTP error. `http_status` and
 `reason` say which. A PDF-only submission carries no TeX, so this paper cannot
 be ingested. Report it as not ingestable. **Substitute no other paper.**
 
-### `TAG_COLLISION`
+#### `TAG_COLLISION`
 
 The name this paper wants belongs to a different work. `slug` is the name,
 `held_by` says what holds it, `held_arxiv_id` names the work that has it, and
@@ -133,32 +130,36 @@ Nothing reassigns a tag once a work has it. The tag sits in the chapter files of
 every paper that cites that work. Decide which work owns the name. Then run the
 ingest again with `--slug <name>` for the other work.
 
-### `PARSER_FAILURE`
+#### `PARSER_FAILURE`
 
 TexSoup failed and the regex fallback found no section, or the conversion
 produced no chapter holding text. `main_tex` names the file it tried, and
 `sections_found` says how many sections it found. Report the failure. The paper
 needs a conversion by hand, or none.
 
-### `TITLE_MISMATCH`
+#### `TITLE_MISMATCH`
 
 You gave `--expect-title`, and the paper the identifier serves is not the one
 you went looking for: `arxiv_id` is the identifier, `title` is what it is, and
 `expected` is the text you asked the title to hold. A remembered identifier
-resolves to a real paper, and every stage after this would succeed on it. Find
-the right identifier — run the title search of step 1, or check the DOI — and
-run the ingest again with it.
+resolves to a real paper, and every stage after this would succeed on it. Do
+not ingest it. Find the right identifier with the `find-papers` skill, section
+"Find one paper you can name", and run the ingest again with that identifier.
 
-### `SLUG_EXISTS`
+#### `SLUG_EXISTS`
 
 The paper directory is already there, and the caller gave no `--force`.
-`existing_arxiv_id` says which paper it holds. Ask the user whether to replace
-it. Re-run with `--force` when the answer is yes.
+`existing_arxiv_id` says which paper it holds.
+
+- `existing_arxiv_id` is the identifier you gave: the collection holds this
+  paper already. Report `slug` and stop. Never use `--force` for this.
+- It is another identifier: ask the user whether to replace that paper. Re-run
+  with `--force` only when the answer is yes.
 
 `--force` empties the paper directory first, which deletes `paper.json` with
 everything else. Every value in it is derived, so the ingest writes it again.
 
-### `REFERENCE_CHECK_FAILED`
+#### `REFERENCE_CHECK_FAILED`
 
 The paper is on disk and the collection lists it. Its citations are what failed.
 The exception carries `unresolved`, `duplicates`, `missing_pages` and `residue`,
@@ -184,18 +185,18 @@ writes the directory again.
   else, or a control character. Nothing repairs the text in place. Re-run the
   ingest with `--force`.
 
-### `COLLECTION_INDEX_UNREADABLE`
+#### `COLLECTION_INDEX_UNREADABLE`
 
 `literature/README.md` holds no table with a Title column and a Year column
 under a separator row. `path` and `reason` say what was read. Repair the table
 by hand, then re-run with `--index-only <slug>`.
 
-### `NETWORK_UNAVAILABLE`
+#### `NETWORK_UNAVAILABLE`
 
 An API did not answer after its retries. `host` and `reason` say which. Report
 it and try again later. This is not a fault of the paper.
 
-## What the ingest writes
+## What the ingest writes (local collection)
 
 ### `literature/<slug>/`
 
@@ -275,7 +276,7 @@ Resolve a tag with `litdb lookup`, and never by reading `REFERENCES.md`:
 litdb lookup <tag>
 ```
 
-## Refresh a paper that is already there
+## Refresh a paper that is already there (local collection)
 
 A preprint gets published later. Look it up again:
 
@@ -302,8 +303,9 @@ Only what is known about it did.
 - Never read a chapter during an ingest. The ingest measures every number that
   `paper.json` holds. A paper that you read to restate those numbers costs the
   context that the task itself needs.
-- Work through `AMBIGUOUS_TITLE` before you report a paper as missing. Most such
-  results are one of the three known false negatives.
+- Before you report a paper as missing from arXiv, work through the identity
+  checks of `find-papers` ("Find one paper you can name"). Most papers that
+  look missing are one of its three known false negatives.
 - Never ingest a paper other than the one asked for. When only a similar paper
   exists, report the difference and add nothing.
 - Never delete `figures_raw/`. It is the only copy of the paper's own figure
