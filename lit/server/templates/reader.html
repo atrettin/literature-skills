@@ -19,4 +19,12 @@
 <article>
 {{ body|safe }}
 </article>
+{% if ingest and libraries %}
+<form method="post" action="{{ base }}/add" class="inline">
+  <input type="hidden" name="ids" value="{{ ingest }}">
+  <label>Add arXiv:{{ ingest }} to library
+  <select name="library">{% for l in libraries %}<option value="{{ l.name }}" {% if l.name == user %}selected{% endif %}>{{ l.name }}</option>{% endfor %}</select></label>
+  <button>Ingest</button>
+</form>
+{% endif %}
 {% endblock %}

@@ -30,7 +30,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-from lit import paths, render_report, scope, search_literature
+from lit import paths, reference_store, render_report, scope, search_literature
 from lit.server import state
 
 HERE = Path(__file__).parent
@@ -428,12 +428,27 @@ async def reader(request: Request, user: str) -> Response:
     text = target.read_text(encoding="utf-8")
     slug = Path(relative).parts[0]
     contents = slug if paths.paper_path(root, slug).is_file() else None
+    ingest = unheld_arxiv(root, relative)
     libraries = []
-    if contents and relative == "%s/%s" % (slug, paths.INDEX_NAME):
+    if ingest or (contents and relative == "%s/%s" % (slug, paths.INDEX_NAME)):
         with state.connect(root) as db:
             libraries = state.libraries(db)
     return page(request, "reader.html", user, body=markdown.render(text),
-                title=title_of(text, target.stem), contents=contents, libraries=libraries)
+                title=title_of(text, target.stem), contents=contents, libraries=libraries,
+                ingest=ingest)
+
+
+def unheld_arxiv(root: Path, relative: str) -> str:
+    """The arXiv identifier of the cited work a reference page shows, if the collection lacks it."""
+    parts = Path(relative).parts
+    if len(parts) != 2 or parts[0] != paths.RECORDS_DIR:
+        return ""
+    tag = Path(parts[1]).stem
+    # ponytail: reads the whole store per reference page; index it if the store grows large
+    record = next((r for r in reference_store.load(root) if r.get("tag") == tag), None)
+    if record is None or record.get("held_as"):
+        return ""
+    return reference_store.normalize_arxiv(record.get("arxiv_id", ""))
 
 
 @signed_in
