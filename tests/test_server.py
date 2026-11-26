@@ -10,7 +10,7 @@ import pytest
 pytest.importorskip("starlette")
 from starlette.testclient import TestClient  # noqa: E402
 
-from lit import paths, render  # noqa: E402
+from lit import paths, reference_store, render  # noqa: E402
 from lit.server import state, web  # noqa: E402
 
 FIXTURE = Path(__file__).parent / "data" / "collection_fixture"
@@ -411,3 +411,15 @@ def test_ingest_status_waits_for_the_job(served, monkeypatch):
         queued = added["results"][0]["job"]
         _, status = mcp_call(client, token, "ingest_status", {"job": queued, "wait": 30})
         assert status["jobs"][0]["status"] == "done"
+
+
+def test_an_unheld_reference_offers_an_ingest_and_a_held_one_does_not(served):
+    root, client, token = served
+    store = reference_store.load(root)
+    reference_store.mark_held(store, root)
+    reference_store.save(root, store)
+    sign_in(client, token)
+    page = client.get("/lit/references/lipari_2002_neutrino_oscillation_neutrino_cross.md").text
+    assert 'name="ids" value="hep-ph/0207172"' in page and 'action="/add"' in page
+    held = client.get("/lit/references/jeong_2023_shallow_deep_inelastic.md")
+    assert held.status_code == 200 and 'name="ids"' not in held.text
