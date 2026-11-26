@@ -49,7 +49,8 @@ files for you: where a skill says to read `paper.json` or a chapter, call `toc`
 and then `show`, and when `show` cuts at `max_words`, call it again from the
 anchor it names. A figure gives you its caption, not its image. Skip `litdb
 init`, `litdb render`, the flavor and `$LITERATURE_ROOT`: the server keeps its
-own collection. When you start a subagent to read a paper, tell it that the
+own collection. To start a new library, call `create_library`, then `add`
+the papers to it. When you start a subagent to read a paper, tell it that the
 paper is on the literature server.
 
 ## The structure

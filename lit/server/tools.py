@@ -12,6 +12,7 @@ library is the default scope. A library is a list of slugs, so it becomes
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 import tempfile
 from pathlib import Path
@@ -32,8 +33,9 @@ The tools are the `litdb` commands the literature skills describe, under the
 same names: `litdb X --some-opt v` is the tool `X(some_opt=v)`, and the `exit`
 field of the answer is the exit status. `--scope` becomes `scope`, or
 `library` to search a library; the default library is the project's
-(`LITERATURE_LIBRARY`) or else yours, and `libraries` says which. There are no
-files here: read a paper with `toc`, then `show`. Reports and research logs
+(`LITERATURE_LIBRARY`) or else yours, and `libraries` says which;
+`create_library` starts a new one. There are no files here: read a paper with
+`toc`, then `show`. Reports and research logs
 live on the server: `append_log`, `write_report`, `edit_report`,
 `check_report`, `render_report`.
 """
@@ -122,6 +124,19 @@ def build(root: Path, base_url: str, wake) -> MCPServer:
             rows = [dict(row) for row in state.libraries(db)]
         return {"you": user, "default_library": default_library(ctx, user),
                 "chosen_by": "project" if project_library(ctx) else "personal", "libraries": rows}
+
+    @mcp.tool()
+    async def create_library(ctx: Context, name: str) -> dict:
+        """Create an empty library that you own; fill it with `add`. A name is letters, digits, - and _."""
+        user = caller(ctx, root)
+        with state.connect(root) as db:
+            try:
+                state.create_library(db, name, user)
+            except ValueError as error:
+                raise ToolError(str(error))
+            except sqlite3.IntegrityError:
+                raise ToolError("a library named %s exists already" % name)
+        return {"library": name, "owner": user}
 
     @mcp.tool()
     async def papers(ctx: Context, library: str | None = None) -> dict:
