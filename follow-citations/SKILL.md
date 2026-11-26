@@ -15,6 +15,10 @@ answer is frequently one step along the graph.
 
 ## Before you start
 
+On the literature server (which place to use: see `use-literature`),
+`litdb citations` is the `citations` tool and `litdb lookup` is `lookup`; skip
+the rest of this section.
+
 Run every command from the root of the project, so that `literature/` resolves.
 
 The collection is at `$LITERATURE_ROOT` when that variable is set. If it is not
@@ -80,8 +84,8 @@ you asked for.
 | The result | What you do |
 |---|---|
 | `held_as` holds a directory name | The collection holds the paper. Read it with `use-literature`. |
-| `known_as` holds a tag, `held_as` is `null` | A paper here cites this work. Run `litdb lookup <tag>` for the record. Ingest it with `add-paper` when the question needs the work itself. |
-| both are `null` | The collection does not know this paper. Report it, and offer `add-paper` with the arXiv identifier. |
+| `known_as` holds a tag, `held_as` is `null` | A paper here cites this work. Run `litdb lookup <tag>` for the record. Ingest it with `add-paper` when the question needs the work itself. If the record has no `arxiv_id`, find it first with `find-papers`, section "Find one paper you can name". |
+| both are `null` | The collection does not know this paper. Report it, and offer `add-paper` with the arXiv identifier. A result with no arXiv identifier: find it first with `find-papers`, section "Find one paper you can name". |
 
 ## Rules
 

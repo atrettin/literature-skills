@@ -34,9 +34,15 @@ file below the literature root.
 
 ## Before you start
 
-The papers being ingested are stored in a persistent collection on disk.
+The papers being ingested are stored in a persistent collection: a local
+folder, or the literature server.
 
-**Find the collection first.** It is at `$LITERATURE_ROOT` when that variable is
+**Choose the place first**, before anything else, the research log included,
+because every paper you ingest stays where you put it. The `use-literature`
+skill, section "The local folder or the literature server", says how. Follow
+it exactly.
+
+**Only for the local folder:** it is at `$LITERATURE_ROOT` when that variable is
 set. If it is not set, it is `literature/` in the project. `litdb` reads the
 variable itself, thus you do not give `--literature-root`. If neither is there,
 ask the user which flavor the collection should be rendered in — `vscode` for
@@ -48,23 +54,7 @@ a reader opens every link in the report, and it is a choice the user makes,
 not one you make for them. Write the path down: the header of the report and
 each link in it depend on it.
 
-**Or work on the literature server.** When the literature tools are in your
-tool list too, decide between the folder and the server before anything else,
-the research log included, because every paper you ingest stays where you put
-it:
-
-1. Look for the local collection, as above, and call the `libraries` tool.
-2. The user named a place in the task: use it.
-3. `libraries` answers that the project works on its local collection: use the
-   folder. It answers `chosen_by: project`: use the server.
-4. Only one of the two exists: use it.
-5. Otherwise — a local collection exists and `libraries` says
-   `chosen_by: personal` — nobody has chosen. Ask the user, naming the folder at
-   its path and the server's default library with its number of papers, and do
-   nothing else until they answer. Add that setting `LITERATURE_LIBRARY` in the
-   project saves the question next time.
-
-On the server:
+**Only for the literature server:**
 
 - Each `litdb` command below is the tool of the same name, as `use-literature`
   says. There is no flavor to ask for and nothing to `init`.
@@ -74,7 +64,9 @@ On the server:
   one passage, and never send the whole report again. Step 6 is `check_report`
   and `render_report`; give the user the URL `render_report` answers. The
   header's **Literature root** is the server's URL and the library.
-- `add` queues an ingest and answers at once; follow it with `ingest_status`,
+- `add` takes arXiv identifiers only; a paper known by its title is found with
+  `find(title=...)` first (`find-papers`, "Find one paper you can name").
+  `add` queues an ingest and answers at once; follow it with `ingest_status`,
   with `wait` so a poll waits for the job. A failed ingest stays on the server's
   Ingests page for its admin: report it, and do not start `paper-ingestor`.
 - Tell each `paper-scout` and `terminology-prospector` that the paper is on the
@@ -226,6 +218,10 @@ search arXiv, one search at a time:
 litdb find --topic "<the question, as a full phrase>" --max-results 15
 ```
 
+A seed paper named by its title is not searched with `--topic`: use
+`litdb find --title "…"` and settle it as `find-papers` says, in its section
+"Find one paper you can name".
+
 That is the command the `find-papers` skill documents. Read that skill for how
 to write the topic and how to read the ranking.
 
@@ -288,7 +284,10 @@ Write the number in the log beside the choice it decided, and write the scope yo
 gave beside it. A band with no scope beside it cannot be checked later.
 
 **Order the queue by value, and read while it runs.** Put the paper that answers
-the most open sub-questions first. Then run the queue in two commands:
+the most open sub-questions first. On the server, one `add` with the whole
+queue is enough: it answers at once, and you read each paper when
+`ingest_status(job=..., wait=300)` says `done`. Locally, run the queue in two
+commands:
 
 1. Ingest the first paper alone, and wait for its report.
 2. Start the command for the rest of the queue in the background.
@@ -721,7 +720,8 @@ Then tell the user:
 - **Ingest within the budget, without asking per paper.** The task the user
   accepted is to read the literature, and the budget of step 3 is the consent
   for it. The `find-papers` skill finds and reports; it does not ask, and
-  neither do you.
+  neither do you. One exception: a title search where two or more results fit
+  a seed paper equally. Ask the user then, as `find-papers` says.
 - **Check for later work before you call a sub-question answered.** Step 4 says
   how, and the log says that you did it.
 - **Keep the full text out of your context.** Read `litdb toc` for what a paper

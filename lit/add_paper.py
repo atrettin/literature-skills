@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Ingest a paper from arXiv into the collection, and report what happened.
 
-Every step of an ingest is already a script: the search, the conversion, the
-reference merge, the citation check. This drives them in order, so that an agent
-spends its context on the one thing no script can do — deciding which paper a
-request means, and which work owns a name that two works want.
+Every step of an ingest is already a script: the conversion, the reference
+merge, the citation check. This drives them in order, so that an agent spends
+its context on the one thing no script can do — deciding which work owns a name
+that two works want. Which paper a request means is settled before this runs,
+with `litdb find`: this takes arXiv identifiers only.
 
     add_paper.py --auto 2307.09241
 
@@ -25,7 +26,6 @@ render, the reference merge, the citation check — reads `paper.json`.
 
 Usage:
     add_paper.py --auto 2307.09241 1706.03621
-    add_paper.py --auto --title "NuSTEC White Paper" --author "Alvarez-Ruso"
     add_paper.py --index-only jeong_2023_shallow_deep_inelastic
 """
 
@@ -224,13 +224,6 @@ class Options:
         self.no_references = args.no_references
         self.dry_run = False
         self.keep_source = None
-
-
-def resolve_identity(argument: str | None, args) -> str:
-    try:
-        return identity.resolve(argument, args.title, args.author, args.year)
-    except identity.AmbiguousTitle as error:
-        raise Exception2("AMBIGUOUS_TITLE", str(error), candidates=error.candidates)
 
 
 def held_arxiv_id(root: Path, slug: str) -> str:
@@ -586,9 +579,6 @@ def build_parser() -> argparse.ArgumentParser:
                         help="ingest the papers named, and report what happened")
     parser.add_argument("--index-only", metavar="SLUG",
                         help="write INDEX.md again from the manifest and the files")
-    parser.add_argument("--title", help="search arXiv for this title instead")
-    parser.add_argument("--author", help="one author name; the surname is what matters")
-    parser.add_argument("--year", type=int, help="the year of the paper")
     parser.add_argument("--slug", help="the directory name to use, rather than a derived one")
     parser.add_argument(
         "--expect-title", metavar="TEXT",
@@ -631,11 +621,10 @@ def run_auto(args) -> int:
     identifiers.
     """
     try:
-        arxiv_ids = [resolve_identity(argument, args)
-                     for argument in (args.arxiv_ids or [None])]
-    except Exception2 as error:
-        emit(failed(blank_report(), error))
-        return 2
+        arxiv_ids = [identity.resolve(argument) for argument in args.arxiv_ids]
+    except ValueError as error:
+        print(json.dumps({"error": str(error)}))
+        return 1
 
     if args.slug and len(arxiv_ids) > 1:
         print(json.dumps({"error": "--slug names one directory, so it takes one paper"}))
@@ -688,10 +677,10 @@ def main(argv: list[str] | None = None) -> int:
     rate_gate.use_root(args.literature_root)
 
     if args.auto:
-        if not args.arxiv_ids and not (args.title or args.author or args.year):
+        if not args.arxiv_ids:
             print(json.dumps(
-                {"error": "--auto needs an arXiv identifier, or --title, "
-                          "--author or --year"}))
+                {"error": "--auto needs an arXiv identifier; find it with "
+                          "`litdb find --title` first"}))
             return 1
         return run_auto(args)
 

@@ -11,6 +11,7 @@ unreadable, `2` a bad argument or a judgement for the caller to make.
 | `litdb init` | starts an empty collection: creates the directory with its index, records its flavor (the `--flavor` you give, else `$LITERATURE_FLAVOR`, else `vscode`), makes git ignore it, and renders the reference index. Refuses if one already exists |
 | `litdb add-paper --auto <arxiv-id> …` | **the entry point.** Ingests each paper end to end, and prints one report per paper |
 | `litdb find --topic "…"` | searches arXiv abstracts for a subject, ranks the hits against it, describes each hit with its length and its citation count, and marks the ones the collection holds |
+| `litdb find --title "…"` | finds one paper you can name, by its title or a part of it (with `--author`, `--year`), says how well each hit agrees, and marks the ones the collection holds. This is how a paper's identifier is found before `add-paper` |
 | `litdb overlap <arxiv-id> --scope <slug> …` | says how much of what a candidate paper cites the collection already knows |
 | `litdb citations <arxiv-id>` | finds the papers that cite one paper, and the works it draws on |
 | `litdb lookup <tag>` | resolves one citation, or searches the reference store |
@@ -103,11 +104,20 @@ what survives. It refuses `--scope disk` without `--force`, because scoring
 every block of a collection is minutes of model time and a command that appears
 to hang is worse than one that refuses.
 
-`litdb find` climbs three rungs, and stops at the first that answers: every term
-scoped to the abstract, then the topic quoted as the title of a paper, then any
-term anywhere in the record. The title rung is what answers a caller who names
-a paper rather than a subject; it runs only for a topic short enough to be a
-title. Each result says in `found_by` which rung found it.
+`litdb find --topic` climbs two rungs, and stops at the first that answers:
+every term scoped to the abstract, then any term anywhere in the record. Each
+result says in `found_by` which rung found it. A paper you can name is not
+searched for here but with `--title`, which runs the tolerant title match of
+`arxiv_search` and reports `match` (`exact`, `approximate`, `none`) for the
+search and for each hit; `--category`, `--since`, `--kind` and `--sort` do not
+apply to it.
+
+Both modes answer short by default: the fields that choose a paper and say
+whether the collection has it. `--full` adds the rest — URLs, INSPIRE ids,
+`pages`, `coverage`, `query.term_weights`, `query.queries`, `enrichment`.
+
+`litdb add-paper` takes arXiv identifiers only. A title is a usage error (exit
+1) that points to `litdb find --title`.
 
 The order weighs each term of the topic by how rare it is among the candidates.
 A term that nearly every candidate carries separated none of them, and counts

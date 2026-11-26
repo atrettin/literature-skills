@@ -45,12 +45,13 @@ reader never has to tell a missing value from an unknown one:
 | `exception` | `{code, detail, …}`, or `null` |
 | `next_action` | `none` or `handle_exception` |
 
-The exception codes are `AMBIGUOUS_TITLE`, `NO_ARXIV_SOURCE`, `TAG_COLLISION`,
+The exception codes are `NO_ARXIV_SOURCE`, `TAG_COLLISION`, `TITLE_MISMATCH`,
 `PARSER_FAILURE`, `SLUG_EXISTS`, `REFERENCE_CHECK_FAILED`,
 `COLLECTION_INDEX_UNREADABLE` and `NETWORK_UNAVAILABLE`. Each one names a
 question with no mechanical answer, and carries the fields the answer needs —
-`AMBIGUOUS_TITLE` carries the candidates, `TAG_COLLISION` carries the work that
-holds the name. `add-paper/SKILL.md` has a section for each code.
+`TAG_COLLISION` carries the work that holds the name. Which paper a title means
+is settled before the ingest, with `litdb find --title`: the ingest takes arXiv
+identifiers only. `add-paper/SKILL.md` has a section for each code.
 
 A warning names something the ingest went on past. The collection holds the
 paper, and the report says what is imperfect about it:

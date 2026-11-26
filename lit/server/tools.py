@@ -34,7 +34,8 @@ same names: `litdb X --some-opt v` is the tool `X(some_opt=v)`, and the `exit`
 field of the answer is the exit status. `--scope` becomes `scope`, or
 `library` to search a library; the default library is the project's
 (`LITERATURE_LIBRARY`) or else yours, and `libraries` says which;
-`create_library` starts a new one. There are no files here: read a paper with
+`create_library` starts a new one. `find` finds a paper, by subject or by
+title; `add` adds one whose arXiv identifier `find` gave. There are no files here: read a paper with
 `toc`, then `show`. Reports and research logs
 live on the server: `append_log`, `write_report`, `edit_report`,
 `check_report`, `render_report`.
@@ -221,20 +222,35 @@ def build(root: Path, base_url: str, wake) -> MCPServer:
                            "--scope", *scope_of(ctx, user, library, scope))
 
     @mcp.tool()
-    async def find(ctx: Context, topic: str, category: list[str] | None = None,
-                   since: int | None = None, max_results: int = 15, kind: str = "any",
-                   sort: str = "relevance") -> dict:
-        """Search arXiv abstracts for a subject, ranked against it, and mark the papers the collection holds. Write the topic as a full phrase. Takes several seconds."""
+    async def find(ctx: Context, topic: str | None = None, title: str | None = None,
+                   author: str | None = None, year: int | None = None,
+                   category: list[str] | None = None, since: int | None = None,
+                   max_results: int = 15, kind: str = "any", sort: str = "relevance",
+                   full: bool = False) -> dict:
+        """Find papers on arXiv, and mark the ones the collection holds. Takes several seconds.
+
+        Two modes. `topic`: a subject, written as a full phrase, ranked against
+        the abstracts. `title` (with `author`, `year`): one paper you can name,
+        even by part of its title; `match` says how well the hits agree. Use this
+        to settle a paper's identity before `add`. `full` gives every field.
+        """
         caller(ctx, root)
-        args = ["--topic=%s" % topic, "--max-results=%d" % max_results, "--kind=%s" % kind,
-                "--sort=%s" % sort, *["--category=%s" % c for c in category or []]]
-        return await litdb(root, "find", *args, *(["--since=%d" % since] if since else []))
+        args = ["--max-results=%d" % max_results, *(["--full"] if full else [])]
+        if topic is not None:
+            args += ["--topic=%s" % topic, "--kind=%s" % kind, "--sort=%s" % sort,
+                     *["--category=%s" % c for c in category or []],
+                     *(["--since=%d" % since] if since else [])]
+        args += [*(["--title=%s" % title] if title else []),
+                 *(["--author=%s" % author] if author else []),
+                 *(["--year=%d" % year] if year else [])]
+        return await litdb(root, "find", *args)
 
     @mcp.tool()
     async def add(ctx: Context, arxiv_ids: list[str], library: str | None = None) -> dict:
         """Add papers to a library (default: the default library) by arXiv identifier.
 
-        A paper the collection holds is listed at once. Any other is queued for
+        Only for a paper whose identity is settled: find its identifier with
+        `find` first (`title` for a paper you can name). A paper the collection holds is listed at once. Any other is queued for
         ingest, which takes minutes; poll `ingest_status` with the job id.
         """
         user = caller(ctx, root)

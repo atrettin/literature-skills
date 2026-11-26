@@ -16,12 +16,12 @@ set, it is `literature/` in the project. `litdb` reads the variable itself.
 
 Load the `add-paper` skill, and work through the section for the code the
 exception names. That section says what the fields mean and what resolves the
-code. When the caller already resolved the exception — for example by picking
-the right identifier out of the `AMBIGUOUS_TITLE` candidates — run the ingest
-and stop there.
+code. When the caller already resolved the exception — for example by giving
+the right identifier after a `TITLE_MISMATCH` — run the ingest and stop there.
 
-Some resolutions are yours: re-run the title search without `--year`, check a
-DOI against `litdb inspire`, take the `suggested_slug`. Some are not:
+Some resolutions are yours: find the right identifier with `litdb find --title`
+and settle it the way the `find-papers` skill says, check a DOI against
+`litdb inspire`, take the `suggested_slug`. Some are not:
 `SLUG_EXISTS` asks the user whether to replace the paper in the directory, and
 `TAG_COLLISION` asks which work owns the name. You cannot ask the user. Report
 the question to the caller, with the fields that answer it, and stop. Do not
